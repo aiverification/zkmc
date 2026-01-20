@@ -1,7 +1,10 @@
 // Grammar for guarded commands
 // Example: [] y < z -> y = y + 1
+// Constants: const received = 1
 
-start: guarded_command+
+start: const_def* guarded_command+
+
+const_def: "const" CONST_NAME "=" NUMBER
 
 guarded_command: "[]" guard "->" assignments
 
@@ -27,8 +30,13 @@ assignment: VAR "=" expr
        | "(" expr ")"
        | "-" factor    -> neg
 
+CONST_NAME: /[a-zA-Z_][a-zA-Z_0-9]*/
 VAR: /[a-zA-Z_][a-zA-Z_0-9]*/
 NUMBER: /[0-9]+/
 
 %import common.WS
 %ignore WS
+
+// Single-line comments
+COMMENT: "//" /[^\n]/*
+%ignore COMMENT

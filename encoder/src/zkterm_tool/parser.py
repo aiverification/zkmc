@@ -1,5 +1,6 @@
 """Parser for guarded commands using Lark."""
 
+from dataclasses import dataclass
 from pathlib import Path
 from lark import Lark, Transformer, v_args
 
@@ -13,11 +14,32 @@ from .ast_types import (
 GRAMMAR_PATH = Path(__file__).parent / "grammar.lark"
 
 
+@dataclass
+class ParseResult:
+    """Result of parsing, including constants and commands."""
+    constants: dict[str, int]
+    commands: list[GuardedCommand]
+
+
 class ASTTransformer(Transformer):
-    """Transform Lark parse tree into our AST types."""
+    """Transform Lark parse tree into our AST types.
     
-    def start(self, items: list) -> list[GuardedCommand]:
-        return list(items)
+    Constants are collected first, then substituted in expressions.
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.constants: dict[str, int] = {}
+    
+    def start(self, items: list) -> ParseResult:
+        # Items are a mix of None (from const_def) and GuardedCommands
+        commands = [item for item in items if isinstance(item, GuardedCommand)]
+        return ParseResult(constants=self.constants, commands=commands)
+    
+    def const_def(self, items: list) -> None:
+        name, value = items
+        self.constants[str(name)] = int(value)
+        return None
     
     def guarded_command(self, items: list) -> GuardedCommand:
         guard_comparisons = items[0]  # list of comparisons from guard
@@ -74,16 +96,31 @@ class ASTTransformer(Transformer):
     
     @v_args(inline=True)
     def var(self, token) -> Var:
-        return Var(name=str(token))
+        name = str(token)
+        # Substitute constants immediately
+        if name in self.constants:
+            return Num(value=self.constants[name])
+        return Var(name=name)
 
 
 def create_parser() -> Lark:
     """Create a Lark parser for guarded commands."""
     grammar = GRAMMAR_PATH.read_text()
-    return Lark(grammar, parser="lalr", transformer=ASTTransformer())
+    return Lark(grammar, parser="lalr")
 
 
 def parse(text: str) -> list[GuardedCommand]:
     """Parse guarded commands text into AST."""
     parser = create_parser()
-    return parser.parse(text)
+    tree = parser.parse(text)
+    transformer = ASTTransformer()
+    result = transformer.transform(tree)
+    return result.commands
+
+
+def parse_with_constants(text: str) -> ParseResult:
+    """Parse guarded commands text into AST, returning constants too."""
+    parser = create_parser()
+    tree = parser.parse(text)
+    transformer = ASTTransformer()
+    return transformer.transform(tree)

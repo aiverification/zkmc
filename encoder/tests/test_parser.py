@@ -1,7 +1,7 @@
 """Tests for the guarded command parser."""
 
 import pytest
-from zkterm_tool import parse, GuardedCommand, Comparison, Assignment, CompOp, Var, Num, BinOp
+from zkterm_tool import parse, parse_with_constants, GuardedCommand, Comparison, Assignment, CompOp, Var, Num, BinOp
 
 
 class TestParser:
@@ -83,3 +83,51 @@ class TestParser:
         cmd = result[0]
         assert cmd.guards[0].op == CompOp.LE
         assert cmd.guards[1].op == CompOp.GE
+
+
+class TestConstants:
+    def test_constant_substitution(self):
+        """Test that constants are substituted in expressions."""
+        result = parse("""
+            const received = 1
+            const wait = 0
+            [] ack = received && status = wait -> status = received
+        """)
+        
+        cmd = result[0]
+        # Constants should be substituted with their values
+        assert cmd.guards[0].right == Num(1)  # received -> 1
+        assert cmd.guards[1].right == Num(0)  # wait -> 0
+        assert cmd.assignments[0].expr == Num(1)  # received -> 1
+    
+    def test_constants_in_expressions(self):
+        """Test constants in arithmetic expressions."""
+        result = parse("""
+            const inc = 2
+            [] x < 10 -> x = x + inc
+        """)
+        
+        cmd = result[0]
+        assert cmd.assignments[0].expr == BinOp("+", Var("x"), Num(2))
+    
+    def test_parse_with_constants_returns_constants(self):
+        """Test that parse_with_constants returns the constant definitions."""
+        result = parse_with_constants("""
+            const a = 1
+            const b = 2
+            [] x = a -> x = b
+        """)
+        
+        assert result.constants == {"a": 1, "b": 2}
+        assert len(result.commands) == 1
+    
+    def test_comments(self):
+        """Test that comments are ignored."""
+        result = parse("""
+            // This is a comment
+            const x = 1  // inline comment
+            [] y = x -> y = 0  // another comment
+        """)
+        
+        assert len(result) == 1
+        assert result[0].guards[0].right == Num(1)
