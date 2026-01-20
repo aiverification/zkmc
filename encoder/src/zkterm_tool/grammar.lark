@@ -1,0 +1,34 @@
+// Grammar for guarded commands
+// Example: [] y < z -> y = y + 1
+
+start: guarded_command+
+
+guarded_command: "[]" guard "->" assignments
+
+guard: comparison (("&&" | "∧") comparison)*
+
+comparison: expr COMP_OP expr
+
+COMP_OP: "<" | "<=" | "≤" | "=" | "==" | ">=" | "≥" | ">"
+
+assignments: assignment (";" assignment)* ";"?
+
+assignment: VAR "=" expr
+
+?expr: term
+     | expr "+" term   -> add
+     | expr "-" term   -> sub
+
+?term: factor
+     | term "*" factor -> mul
+
+?factor: NUMBER        -> number
+       | VAR           -> var
+       | "(" expr ")"
+       | "-" factor    -> neg
+
+VAR: /[a-zA-Z_][a-zA-Z_0-9]*/
+NUMBER: /[0-9]+/
+
+%import common.WS
+%ignore WS
