@@ -42,7 +42,21 @@ zkterm -v program.gc
 
 # Symbolic output (human-readable inequalities)
 zkterm -s program.gc
+
+# Non-strict mode (convert x < c to x ≤ c-1)
+zkterm -n program.gc
+
+# Combine options
+zkterm -vsn program.gc
 ```
+
+### CLI Options
+
+| Option | Long | Description |
+|--------|------|-------------|
+| `-v` | `--verbose` | Show parsed commands before encoding |
+| `-s` | `--symbolic` | Output inequalities with variable names (e.g., `2x - x' <= 2`) |
+| `-n` | `--non-strict` | Convert strict inequalities to non-strict using integer semantics (`x < c` → `x ≤ c-1`) |
 
 ### Example
 
@@ -74,14 +88,42 @@ Symbolic output (`zkterm -s`):
 Variables x = [y, z, y', z']
 
 Non-strict inequalities Ax ≤ b:
-  -y + y' <= -1
-  y - y' <= 1
+  -y + y' <= 1
+  y - y' <= -1
   -z + z' <= 0
   z - z' <= 0
 
 Strict inequalities Cx < d:
   y - z < 0
 ```
+
+Non-strict mode (`zkterm -sn`):
+```
+Variables x = [y, z, y', z']
+
+Non-strict inequalities Ax ≤ b:
+  y - z <= -1
+  -y + y' <= 1
+  y - y' <= -1
+  -z + z' <= 0
+  z - z' <= 0
+
+No strict inequalities
+```
+
+### Constants
+
+Define named constants for readability:
+
+```
+const received = 1
+const wait = 0
+const success = 1
+
+[] ack = received && status = wait -> status = success
+```
+
+Constants are substituted at parse time. Comments (starting with `//`) are also supported.
 
 ### Multiple Transitions
 
@@ -110,6 +152,21 @@ for enc in encodings:
 ```
 
 ## Syntax
+
+### Constants
+
+```
+const name = value
+```
+
+Constants are substituted into expressions at parse time.
+
+### Comments
+
+```
+// This is a comment
+const x = 1  // inline comment
+```
 
 ### Guarded Commands
 
