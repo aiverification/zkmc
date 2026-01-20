@@ -27,13 +27,13 @@ class TestEncoder:
         assert enc.variables == ["y", "z"]
         assert enc.full_variables() == ["y", "z", "y'", "z'"]
         
-        # Check strict inequalities (A, a)
+        # Check strict inequalities (C, d)
         # y - z < 0  =>  [1, -1, 0, 0] < 0
-        assert enc.A.shape == (1, 4)
-        assert_array_equal(enc.A[0], [1, -1, 0, 0])
-        assert_array_equal(enc.a, [0])
+        assert enc.C.shape == (1, 4)
+        assert_array_equal(enc.C[0], [1, -1, 0, 0])
+        assert_array_equal(enc.d, [0])
         
-        # Check non-strict inequalities (C, c)
+        # Check non-strict inequalities (A, b)
         # Should have 4 rows:
         # y' - y = 1 encoded as:
         #   y' - y ≤ 1   =>  [-1, 0, 1, 0] ≤ 1
@@ -41,13 +41,13 @@ class TestEncoder:
         # z' - z = 0 encoded as:
         #   z' - z ≤ 0     =>  [0, -1, 0, 1] ≤ 0
         #   -(z' - z) ≤ 0  =>  [0, 1, 0, -1] ≤ 0
-        assert enc.C.shape == (4, 4)
+        assert enc.A.shape == (4, 4)
         
         # Find the rows (order may vary)
-        rows = {tuple(row): val for row, val in zip(enc.C, enc.c)}
+        rows = {tuple(row): val for row, val in zip(enc.A, enc.b)}
         
-        assert rows[(-1, 0, 1, 0)] == -1  # y' - y ≤ 1 (const is -expr.const = -1)
-        assert rows[(1, 0, -1, 0)] == 1   # y - y' ≤ -1
+        assert rows[(-1, 0, 1, 0)] == 1   # y' - y ≤ 1
+        assert rows[(1, 0, -1, 0)] == -1  # y - y' ≤ -1
         assert rows[(0, -1, 0, 1)] == 0   # z' - z ≤ 0
         assert rows[(0, 1, 0, -1)] == 0   # z - z' ≤ 0
     
@@ -63,12 +63,12 @@ class TestEncoder:
         enc = encodings[0]
         
         # No strict inequalities
-        assert enc.A.shape[0] == 0
+        assert enc.C.shape[0] == 0
         
         # 4 non-strict inequalities: 2 for guard, 2 for assignment
-        assert enc.C.shape[0] == 4
+        assert enc.A.shape[0] == 4
         
-        rows = {tuple(row): val for row, val in zip(enc.C, enc.c)}
+        rows = {tuple(row): val for row, val in zip(enc.A, enc.b)}
         
         # Guard: x = 5 => x - 5 <= 0, -x + 5 <= 0
         # Variables are [x, x'], so coefficients are 2D
@@ -81,9 +81,9 @@ class TestEncoder:
         enc = encode_program(commands)[0]
         
         # x ≤ 10 is non-strict
-        assert enc.A.shape[0] == 0  # no strict
+        assert enc.C.shape[0] == 0  # no strict
         
-        rows = {tuple(row): val for row, val in zip(enc.C, enc.c)}
+        rows = {tuple(row): val for row, val in zip(enc.A, enc.b)}
         assert (1, 0) in rows  # x ≤ 10  =>  [1, 0] ≤ 10
     
     def test_gt_guard(self):
@@ -92,9 +92,9 @@ class TestEncoder:
         enc = encode_program(commands)[0]
         
         # x > 0  =>  -x < 0  =>  [-1, 0] < 0
-        assert enc.A.shape[0] == 1
-        assert_array_equal(enc.A[0], [-1, 0])
-        assert enc.a[0] == 0
+        assert enc.C.shape[0] == 1
+        assert_array_equal(enc.C[0], [-1, 0])
+        assert enc.d[0] == 0
     
     def test_multiple_transitions(self):
         """Test multiple guarded commands produce separate encodings."""
@@ -117,7 +117,7 @@ class TestEncoder:
         assert enc.variables == ["x", "y"]
         
         # y should have identity: y' = y
-        rows = {tuple(row): val for row, val in zip(enc.C, enc.c)}
+        rows = {tuple(row): val for row, val in zip(enc.A, enc.b)}
         assert rows[(0, -1, 0, 1)] == 0  # y' - y ≤ 0
         assert rows[(0, 1, 0, -1)] == 0  # -y' + y ≤ 0
     
@@ -126,13 +126,13 @@ class TestEncoder:
         commands = parse("[] x < 10 -> x = 2 * x + 1")
         enc = encode_program(commands)[0]
         
-        # x' = 2*x + 1  =>  x' - 2x - 1 = 0
-        # =>  x' - 2x ≤ 1 (which is -2x + x' ≤ 1)
-        # =>  -x' + 2x ≤ -1 (which is 2x - x' ≤ -1)
-        rows = {tuple(row): val for row, val in zip(enc.C, enc.c)}
+        # x' = 2*x + 1  =>  x' - 2x = 1
+        # =>  x' - 2x ≤ 1 (which is [-2, 1] ≤ 1)
+        # =>  -x' + 2x ≤ -1 (which is [2, -1] ≤ -1)
+        rows = {tuple(row): val for row, val in zip(enc.A, enc.b)}
         
-        assert rows[(-2, 1)] == -1   # x' - 2x ≤ 1  =>  [-2, 1] ≤ -1 (const = -expr.const)
-        assert rows[(2, -1)] == 1    # -x' + 2x ≤ -1  =>  [2, -1] ≤ 1
+        assert rows[(-2, 1)] == 1    # x' - 2x ≤ 1
+        assert rows[(2, -1)] == -1   # -x' + 2x ≤ -1
 
 
 class TestEncoderEdgeCases:
@@ -142,21 +142,21 @@ class TestEncoderEdgeCases:
         commands = parse("[] x >= 0 -> x = 5")
         enc = encode_program(commands)[0]
         
-        # x' = 5  =>  x' - 5 = 0
-        # =>  x' ≤ 5 (which is [0, 1] ≤ 5), but const comes from -expr.const
+        # x' = 5  =>  x' = 5
+        # =>  x' ≤ 5 (which is [0, 1] ≤ 5)
         # =>  -x' ≤ -5 (which is [0, -1] ≤ -5)
-        rows = {tuple(row): val for row, val in zip(enc.C, enc.c)}
-        assert rows[(0, 1)] == -5   # x' - 5 ≤ 0  =>  [0, 1] ≤ -(-5) => actually x' ≤ 5
-        assert rows[(0, -1)] == 5   # -x' + 5 ≤ 0  =>  [0, -1] ≤ 5
+        rows = {tuple(row): val for row, val in zip(enc.A, enc.b)}
+        assert rows[(0, 1)] == 5    # x' ≤ 5
+        assert rows[(0, -1)] == -5  # -x' ≤ -5
     
     def test_subtraction_in_assignment(self):
         """Test subtraction: [] x > 0 -> x = x - 1"""
         commands = parse("[] x > 0 -> x = x - 1")
         enc = encode_program(commands)[0]
         
-        # x' = x - 1  =>  x' - (x - 1) = 0  =>  x' - x + 1 = 0
+        # x' = x - 1  =>  x' - x = -1
         # =>  x' - x ≤ -1 (which is [-1, 1] ≤ -1)
         # =>  -x' + x ≤ 1 (which is [1, -1] ≤ 1)
-        rows = {tuple(row): val for row, val in zip(enc.C, enc.c)}
-        assert rows[(-1, 1)] == 1   # x' - x ≤ -1 => const = -(-1) = 1
-        assert rows[(1, -1)] == -1  # -x' + x ≤ 1 => const = -1
+        rows = {tuple(row): val for row, val in zip(enc.A, enc.b)}
+        assert rows[(-1, 1)] == -1  # x' - x ≤ -1
+        assert rows[(1, -1)] == 1   # -x' + x ≤ 1

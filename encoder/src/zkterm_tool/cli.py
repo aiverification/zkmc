@@ -8,7 +8,42 @@ from .parser import parse
 from .encoder import encode_program, TransitionEncoding
 
 
-def format_encoding(enc: TransitionEncoding, index: int | None = None) -> str:
+def format_inequality(coeffs: list[int], variables: list[str], const: int, strict: bool) -> str:
+    """Format a single inequality with variable names.
+    
+    E.g., coeffs=[2, -1], vars=[x, x'], const=2 -> "2x - x' <= 2"
+    """
+    terms = []
+    for coeff, var in zip(coeffs, variables):
+        if coeff == 0:
+            continue
+        if coeff == 1:
+            term = var
+        elif coeff == -1:
+            term = f"-{var}"
+        else:
+            term = f"{coeff}{var}"
+        terms.append(term)
+    
+    if not terms:
+        lhs = "0"
+    else:
+        # Build LHS with proper +/- signs
+        lhs_parts = []
+        for i, term in enumerate(terms):
+            if i == 0:
+                lhs_parts.append(term)
+            elif term.startswith("-"):
+                lhs_parts.append(f" - {term[1:]}")
+            else:
+                lhs_parts.append(f" + {term}")
+        lhs = "".join(lhs_parts)
+    
+    op = "<" if strict else "<="
+    return f"{lhs} {op} {const}"
+
+
+def format_encoding(enc: TransitionEncoding, index: int | None = None, symbolic: bool = False) -> str:
     """Format a transition encoding as readable text."""
     lines = []
     
@@ -18,21 +53,29 @@ def format_encoding(enc: TransitionEncoding, index: int | None = None) -> str:
     full_vars = enc.full_variables()
     lines.append(f"Variables x = [{', '.join(full_vars)}]")
     
-    if enc.C.shape[0] > 0:
-        lines.append(f"\nNon-strict inequalities Cx ≤ c:")
-        lines.append(f"C =")
-        for row in enc.C:
-            lines.append(f"  [{' '.join(f'{v:3d}' for v in row)}]")
-        lines.append(f"c = [{' '.join(f'{v:3d}' for v in enc.c)}]")
+    if enc.A.shape[0] > 0:
+        lines.append(f"\nNon-strict inequalities Ax ≤ b:")
+        if symbolic:
+            for row, const in zip(enc.A, enc.b):
+                lines.append(f"  {format_inequality(list(row), full_vars, int(const), strict=False)}")
+        else:
+            lines.append(f"A =")
+            for row in enc.A:
+                lines.append(f"  [{' '.join(f'{v:3d}' for v in row)}]")
+            lines.append(f"b = [{' '.join(f'{v:3d}' for v in enc.b)}]")
     else:
         lines.append("\nNo non-strict inequalities")
     
-    if enc.A.shape[0] > 0:
-        lines.append(f"\nStrict inequalities Ax < a:")
-        lines.append(f"A =")
-        for row in enc.A:
-            lines.append(f"  [{' '.join(f'{v:3d}' for v in row)}]")
-        lines.append(f"a = [{' '.join(f'{v:3d}' for v in enc.a)}]")
+    if enc.C.shape[0] > 0:
+        lines.append(f"\nStrict inequalities Cx < d:")
+        if symbolic:
+            for row, const in zip(enc.C, enc.d):
+                lines.append(f"  {format_inequality(list(row), full_vars, int(const), strict=True)}")
+        else:
+            lines.append(f"C =")
+            for row in enc.C:
+                lines.append(f"  [{' '.join(f'{v:3d}' for v in row)}]")
+            lines.append(f"d = [{' '.join(f'{v:3d}' for v in enc.d)}]")
     else:
         lines.append("\nNo strict inequalities")
     
@@ -47,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
 Example:
   echo '[] y < z -> y = y + 1' | zkterm
   zkterm program.gc
+  zkterm -s program.gc  # symbolic output with variable names
         """
     )
     parser.add_argument(
@@ -60,6 +104,11 @@ Example:
         "-v", "--verbose",
         action="store_true",
         help="Show parsed commands"
+    )
+    parser.add_argument(
+        "-s", "--symbolic",
+        action="store_true",
+        help="Output inequalities with variable names (e.g., 2x - x' <= 2)"
     )
     
     args = parser.parse_args(argv)
@@ -83,7 +132,7 @@ Example:
         for i, enc in enumerate(encodings):
             if i > 0:
                 print("\n")
-            print(format_encoding(enc, index=i if len(encodings) > 1 else None))
+            print(format_encoding(enc, index=i if len(encodings) > 1 else None, symbolic=args.symbolic))
         
         return 0
     

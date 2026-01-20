@@ -2,8 +2,8 @@
 
 Given a guarded command: [] guard -> assignments
 We encode the transition relation as two matrix-vector pairs:
-  - (C, c) for non-strict inequalities: Cx ≤ c  
-  - (A, a) for strict inequalities: Ax < a
+  - (A, b) for non-strict inequalities: Ax ≤ b  
+  - (C, d) for strict inequalities: Cx < d
 
 Where x = [vars, vars'] represents current and next-state variables.
 """
@@ -178,18 +178,23 @@ def assignment_to_inequalities(assign: Assignment) -> List[Inequality]:
     """Convert an assignment var = expr to equalities var' = expr.
     
     This encodes: var' = expr (where expr uses unprimed variables)
-    As: var' - expr = 0  =>  var' - expr ≤ 0 AND -var' + expr ≤ 0
+    As: var' - expr = 0  =>  var' - expr ≤ 0 AND expr - var' ≤ 0
+    
+    Rearranging: (coeffs of var' - expr) · x ≤ (constant from expr)
     """
     expr_lin = expr_to_linear(assign.expr)
     
-    # var' - expr = 0
+    # var' = expr  =>  var' - expr = 0
+    # Rearranged: (var' - linear_part) = const
     # coeffs: var' has coeff 1, expr variables have negated coeffs
     coeffs1: Dict[str, int] = {f"{assign.var}'": 1}
     for v, c in expr_lin.coeffs.items():
         coeffs1[v] = coeffs1.get(v, 0) - c
-    const1 = -expr_lin.const
+    # var' - linear_part ≤ const  AND  var' - linear_part ≥ const
+    # i.e., coeffs1 · x ≤ const  AND  -coeffs1 · x ≤ -const
+    const1 = expr_lin.const
     
-    # -(var' - expr) = 0  =>  -var' + expr = 0
+    # Negated version for the other direction
     coeffs2 = {v: -c for v, c in coeffs1.items()}
     const2 = -const1
     
@@ -226,16 +231,16 @@ def identity_constraints(variables: List[str], assigned_vars: set[str]) -> List[
 class TransitionEncoding:
     """Encoded transition relation as matrix-vector pairs.
     
-    Cx ≤ c  (non-strict inequalities)
-    Ax < a  (strict inequalities)
+    Ax ≤ b  (non-strict inequalities)
+    Cx < d  (strict inequalities)
     
     where x = [var1, var2, ..., var1', var2', ...]
     """
     variables: List[str]  # ordered list of variable names (unprimed)
-    C: NDArray[np.int64]  # coefficient matrix for ≤ constraints
-    c: NDArray[np.int64]  # constant vector for ≤ constraints
-    A: NDArray[np.int64]  # coefficient matrix for < constraints
-    a: NDArray[np.int64]  # constant vector for < constraints
+    A: NDArray[np.int64]  # coefficient matrix for ≤ constraints
+    b: NDArray[np.int64]  # constant vector for ≤ constraints
+    C: NDArray[np.int64]  # coefficient matrix for < constraints
+    d: NDArray[np.int64]  # constant vector for < constraints
     
     def full_variables(self) -> List[str]:
         """Get full variable list including primed versions."""
@@ -243,14 +248,14 @@ class TransitionEncoding:
     
     def __repr__(self) -> str:
         lines = [f"Variables: {self.full_variables()}"]
-        if self.C.shape[0] > 0:
-            lines.append(f"\nCx ≤ c where:")
-            lines.append(f"C =\n{self.C}")
-            lines.append(f"c = {self.c}")
         if self.A.shape[0] > 0:
-            lines.append(f"\nAx < a where:")
+            lines.append(f"\nAx ≤ b where:")
             lines.append(f"A =\n{self.A}")
-            lines.append(f"a = {self.a}")
+            lines.append(f"b = {self.b}")
+        if self.C.shape[0] > 0:
+            lines.append(f"\nCx < d where:")
+            lines.append(f"C =\n{self.C}")
+            lines.append(f"d = {self.d}")
         return "\n".join(lines)
 
 
@@ -262,7 +267,7 @@ def encode_transition(cmd: GuardedCommand, variables: List[str] | None = None) -
         variables: Optional ordered list of variables. If None, extracted from command.
     
     Returns:
-        TransitionEncoding with (C, c) for ≤ and (A, a) for < constraints
+        TransitionEncoding with (A, b) for ≤ and (C, d) for < constraints
     """
     # Get variables
     if variables is None:
@@ -309,10 +314,10 @@ def encode_transition(cmd: GuardedCommand, variables: List[str] | None = None) -
         
         return mat, vec
     
-    C, c = build_matrix(nonstrict_ineqs)
-    A, a = build_matrix(strict_ineqs)
+    A, b = build_matrix(nonstrict_ineqs)
+    C, d = build_matrix(strict_ineqs)
     
-    return TransitionEncoding(variables=variables, C=C, c=c, A=A, a=a)
+    return TransitionEncoding(variables=variables, A=A, b=b, C=C, d=d)
 
 
 def encode_program(commands: List[GuardedCommand]) -> List[TransitionEncoding]:
