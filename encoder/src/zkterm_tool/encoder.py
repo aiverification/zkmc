@@ -101,6 +101,16 @@ class Inequality:
     const: int
     is_strict: bool  # True for <, False for ≤
     
+    def to_nonstrict(self) -> "Inequality":
+        """Convert strict inequality to non-strict using integer semantics.
+        
+        x < c  becomes  x ≤ c - 1
+        x ≤ c  stays    x ≤ c
+        """
+        if self.is_strict:
+            return Inequality(coeffs=self.coeffs, const=self.const - 1, is_strict=False)
+        return self
+    
     def __repr__(self) -> str:
         terms = []
         for var, coeff in sorted(self.coeffs.items()):
@@ -259,12 +269,18 @@ class TransitionEncoding:
         return "\n".join(lines)
 
 
-def encode_transition(cmd: GuardedCommand, variables: List[str] | None = None) -> TransitionEncoding:
+def encode_transition(
+    cmd: GuardedCommand,
+    variables: List[str] | None = None,
+    nonstrict_only: bool = False,
+) -> TransitionEncoding:
     """Encode a guarded command as matrix-vector inequality constraints.
     
     Args:
         cmd: The guarded command to encode
         variables: Optional ordered list of variables. If None, extracted from command.
+        nonstrict_only: If True, convert all strict inequalities to non-strict
+                        using integer semantics (x < c → x ≤ c-1)
     
     Returns:
         TransitionEncoding with (A, b) for ≤ and (C, d) for < constraints
@@ -293,6 +309,10 @@ def encode_transition(cmd: GuardedCommand, variables: List[str] | None = None) -
     var_idx = {v: i for i, v in enumerate(full_vars)}
     n_vars = len(full_vars)
     
+    # Handle non-strict only mode
+    if nonstrict_only:
+        all_ineqs = [iq.to_nonstrict() for iq in all_ineqs]
+    
     # Separate strict and non-strict
     strict_ineqs = [iq for iq in all_ineqs if iq.is_strict]
     nonstrict_ineqs = [iq for iq in all_ineqs if not iq.is_strict]
@@ -320,10 +340,18 @@ def encode_transition(cmd: GuardedCommand, variables: List[str] | None = None) -
     return TransitionEncoding(variables=variables, A=A, b=b, C=C, d=d)
 
 
-def encode_program(commands: List[GuardedCommand]) -> List[TransitionEncoding]:
+def encode_program(
+    commands: List[GuardedCommand],
+    nonstrict_only: bool = False,
+) -> List[TransitionEncoding]:
     """Encode multiple guarded commands with consistent variable ordering.
     
-    Returns one TransitionEncoding per guarded command.
+    Args:
+        commands: List of guarded commands to encode
+        nonstrict_only: If True, convert all strict inequalities to non-strict
+    
+    Returns:
+        One TransitionEncoding per guarded command.
     """
     # Collect all variables from all commands
     all_vars: set[str] = set()
@@ -332,4 +360,4 @@ def encode_program(commands: List[GuardedCommand]) -> List[TransitionEncoding]:
     
     variables = sorted(all_vars)
     
-    return [encode_transition(cmd, variables) for cmd in commands]
+    return [encode_transition(cmd, variables, nonstrict_only) for cmd in commands]

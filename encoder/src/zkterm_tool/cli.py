@@ -110,6 +110,11 @@ Example:
         action="store_true",
         help="Output inequalities with variable names (e.g., 2x - x' <= 2)"
     )
+    parser.add_argument(
+        "-n", "--non-strict",
+        action="store_true",
+        help="Convert strict inequalities to non-strict using integer semantics (x < c → x ≤ c-1)"
+    )
     
     args = parser.parse_args(argv)
     
@@ -127,7 +132,7 @@ Example:
                 print(f"  {i + 1}. {cmd}")
             print()
         
-        encodings = encode_program(commands)
+        encodings = encode_program(commands, nonstrict_only=args.non_strict)
         
         for i, enc in enumerate(encodings):
             if i > 0:
