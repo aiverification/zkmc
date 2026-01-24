@@ -473,6 +473,104 @@ for enc in aut_encodings:
         print(f"F: A_fair = {enc.A_fair}, b_fair = {enc.b_fair}")
 ```
 
+## Verification (zkverify)
+
+The `zkverify` tool verifies termination obligations for guarded command programs using Farkas lemma and Z3 SMT solver.
+
+### Command Line
+
+```bash
+# Verify a program
+zkverify program.gc
+
+# Verbose mode (shows Farkas witnesses)
+zkverify --verbose program.gc
+```
+
+### Verification Obligations
+
+The tool checks four types of obligations:
+
+1. **Initial Condition**: A_0 x ≤ b_0 ⟹ V(x,q) well-defined and > 0
+   - Ensures initial states have positive ranking values
+
+2. **Well-Definedness**: T(x,x') ∧ σ(x) ∧ V(x,q) defined ⟹ V(x',q') well-defined and > 0
+   - Ensures transitions preserve ranking function well-definedness
+
+3. **Non-Increasing**: T(x,x') ∧ σ(x) ∧ V(x,q) defined ⟹ V(x,q) ≥ V(x',q')
+   - Ensures ranking doesn't increase on any transition
+
+4. **Strictly Decreasing** (fair transitions only): T(x,x') ∧ σ(x) ∧ V(x,q) defined ⟹ V(x,q) > V(x',q')
+   - Ensures ranking strictly decreases on fair/accepting transitions
+
+### Example
+
+Input file `counter.gc`:
+```
+const maxVal = 10
+
+init: x = 0
+
+[] x < maxVal -> x = x + 1
+
+rank(q0):
+  [] x >= 0 && x < maxVal + 1 -> maxVal + 1 - x
+
+trans(q0, q0): x < maxVal
+```
+
+Verification:
+```bash
+$ zkverify counter.gc
+3/3 obligations verified
+```
+
+With verbose output:
+```bash
+$ zkverify --verbose counter.gc
+Verification Results for counter.gc
+============================================================
+
+[1/3] ✓ PASS: initial
+     Ranking state: q0
+     Witness: {'lambda_s_0': 1, 'lambda_s_1': 0, ...}
+
+[2/3] ✓ PASS: well_defined
+     Program transition: 0
+     Automaton transition: q0 → q0
+     Ranking state: q0
+
+[3/3] ✓ PASS: non_increasing
+     Program transition: 0
+     Automaton transition: q0 → q0
+     Ranking state: q0
+
+============================================================
+3/3 obligations verified
+```
+
+### Python API (Verification)
+
+```python
+from zkterm_tool import parse_with_constants, verify_termination
+
+# Parse and verify
+result = parse_with_constants(text)
+verification = verify_termination(result)
+
+# Check results
+if verification.passed:
+    print(verification.summary())  # "5/5 obligations verified"
+else:
+    for obl in verification.failed_obligations():
+        print(f"Failed: {obl}")
+
+# Get Farkas witnesses (proof certificates)
+witnesses = verification.get_witnesses()
+for w in witnesses:
+    print(f"Witness: {w}")  # {'lambda_s_0': 1, 'mu_p_0': 2, ...}
+```
+
 ## Syntax
 
 ### Constants
