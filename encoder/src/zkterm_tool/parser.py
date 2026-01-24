@@ -70,6 +70,15 @@ class ASTTransformer(Transformer):
         return GuardedCommand(guards=guard_comparisons, assignments=assignments)
     
     def guard(self, items: list) -> list[Comparison]:
+        # items will be either a list with "true" token, or list of Comparison objects
+        # Lark may pass the keyword as a Token object
+        if items and hasattr(items[0], 'type'):
+            # It's a Token object - check if it's "true"
+            if items[0].value == "true":
+                return []  # Empty guard list = always true
+        elif items and isinstance(items[0], str) and items[0] == "true":
+            # It's a string "true"
+            return []
         return list(items)
     
     def comparison(self, items: list) -> Comparison:

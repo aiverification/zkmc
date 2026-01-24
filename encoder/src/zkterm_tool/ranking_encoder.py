@@ -125,7 +125,11 @@ def encode_ranking_function(
 
     Args:
         rf: The ranking function to encode
-        variables: Optional ordered list of variables. If None, extracted from ranking function.
+        variables: Optional ordered list of variables. If None, extracted from ranking function only.
+                   IMPORTANT: When verifying against program transitions, provide the full program
+                   variable set to ensure matrix dimensions align correctly. Guards mentioning only
+                   a subset of variables will have coefficient 0 for unmentioned variables (meaning
+                   those variables are unconstrained).
 
     Returns:
         RankingFunctionEncoding with all case encodings

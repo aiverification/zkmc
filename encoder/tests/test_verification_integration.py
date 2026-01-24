@@ -230,3 +230,98 @@ def test_verification_with_constants():
     verification = verify_termination(result)
 
     assert verification.passed is True
+
+
+def test_partial_guard_verification_pass():
+    """Test verification with guard mentioning only subset of variables."""
+    program = """
+        init: x = 0 && y = 0
+
+        [] x < 10 && y < 10 -> x = x + 1; y = y + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 10 -> 11 - x
+
+        trans(q0, q0): x < 10 && y < 10
+    """
+
+    result = parse_with_constants(program)
+    verification = verify_termination(result)
+
+    # Should pass - y is implicitly unconstrained in ranking guard
+    # The ranking function only constrains x, so as long as x decreases, termination holds
+    assert verification.passed is True
+
+
+def test_true_keyword_in_ranking_function():
+    """Test verification with 'true' keyword in ranking function."""
+    program = """
+        init: x = 0
+
+        [] x < 10 -> x = x + 1
+
+        rank(q0):
+            [] true -> 10 - x
+
+        trans(q0, q0): x < 10
+    """
+
+    result = parse_with_constants(program)
+    verification = verify_termination(result)
+
+    # This should pass because:
+    # - Ranking function is always defined (guard is 'true')
+    # - Initial obligation: x=0 => 10-x = 10 > 0 ✓
+    # - Non-increasing: x < 10 ∧ x' = x+1 => (10-x) >= (10-x') = (10-x-1)
+    #   => 10-x >= 9-x => 1 >= 0 ✓
+    assert verification.passed is True
+
+
+def test_true_keyword_in_init_condition():
+    """Test verification with 'true' init condition (always initialized)."""
+    program = """
+        init: true
+
+        [] x < 10 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x < 11 -> 11 - x
+
+        trans(q0, q0): x < 10
+    """
+
+    result = parse_with_constants(program)
+    verification = verify_termination(result)
+
+    # With 'init: true', there are no constraints on the initial state.
+    # The initial obligation checks: true ∧ (x >= 0 && x < 11) => 11 - x > 0
+    # This simplifies to: (x >= 0 && x < 11) => 11 - x > 0
+    # which is valid (when x is in [0, 10], 11-x is in [1, 11], all positive)
+    # So verification should pass
+    assert verification.passed is True
+
+    # Should have initial obligation (and it should pass)
+    initial_obls = [o for o in verification.obligations if o.obligation_type == "initial"]
+    assert len(initial_obls) == 1
+    assert initial_obls[0].passed is True
+
+
+def test_multiple_variables_partial_ranking_guards():
+    """Test program with multiple variables where ranking guards mention only some."""
+    program = """
+        init: x = 0 && y = 0 && z = 0
+
+        [] x < 5 && y < 5 && z < 5 -> x = x + 1; y = y + 1; z = z + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 5 -> 6 - x
+
+        trans(q0, q0): x < 5 && y < 5 && z < 5
+    """
+
+    result = parse_with_constants(program)
+    verification = verify_termination(result)
+
+    # The ranking function only mentions x, but y and z are also program variables
+    # This should pass because x is always decreasing, regardless of y and z
+    assert verification.passed is True

@@ -21,7 +21,7 @@ automaton_trans: "trans" fair_mark? "(" STATE_NAME "," STATE_NAME ")" ":" guard
 
 fair_mark: "!"
 
-guard: comparison (("&&" | "∧") comparison)*
+guard: "true" | comparison (("&&" | "∧") comparison)*
 
 comparison: expr COMP_OP expr
 

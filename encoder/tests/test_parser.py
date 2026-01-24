@@ -3,7 +3,8 @@
 import pytest
 from zkterm_tool import (
     parse, parse_with_constants, GuardedCommand, Comparison, Assignment, CompOp,
-    Var, Num, BinOp, RankingCase, RankingFunction, AutomatonTransition
+    Var, Num, BinOp, RankingCase, RankingFunction, AutomatonTransition,
+    encode_ranking_function
 )
 
 
@@ -374,3 +375,95 @@ class TestAutomatonTransitions:
         assert len(result.commands) == 1
         assert len(result.ranking_functions) == 1
         assert len(result.automaton_transitions) == 2
+
+
+class TestTrueKeyword:
+    """Tests for the 'true' keyword in guards."""
+
+    def test_true_in_ranking_function(self):
+        """Test parsing: rank(q0): [] true -> 1"""
+        result = parse_with_constants("""
+            rank(q0):
+                [] true -> 1
+        """)
+
+        assert len(result.ranking_functions) == 1
+        rf = result.ranking_functions["q0"]
+        assert rf.state == "q0"
+        assert len(rf.cases) == 1
+        assert len(rf.cases[0].guards) == 0  # Empty guard = true
+        assert rf.cases[0].expression == Num(1)
+
+    def test_true_in_init_condition(self):
+        """Test parsing: init: true"""
+        result = parse_with_constants("init: true")
+
+        assert result.init_condition is not None
+        assert len(result.init_condition) == 0  # Empty guard list
+
+    def test_true_in_guarded_command(self):
+        """Test parsing: [] true -> x = 1"""
+        result = parse_with_constants("[] true -> x = 1")
+
+        assert len(result.commands) == 1
+        assert len(result.commands[0].guards) == 0  # Empty guard list
+        assert result.commands[0].assignments[0].var == "x"
+        assert result.commands[0].assignments[0].expr == Num(1)
+
+    def test_true_in_automaton_transition(self):
+        """Test parsing: trans(q0, q1): true"""
+        result = parse_with_constants("trans(q0, q1): true")
+
+        assert len(result.automaton_transitions) == 1
+        trans = result.automaton_transitions[0]
+        assert trans.from_state == "q0"
+        assert trans.to_state == "q1"
+        assert len(trans.guards) == 0  # Empty guard list
+        assert trans.is_fair == False
+
+    def test_true_equivalent_to_empty_guard(self):
+        """Verify 'true' behaves identically to programmatically created empty guard."""
+        # Parse with 'true' keyword
+        result1 = parse_with_constants("rank(q0): [] true -> 1")
+
+        # Create programmatically with empty guards
+        result2_rf = RankingFunction(
+            state="q0",
+            cases=[RankingCase(guards=[], expression=Num(1))]
+        )
+
+        enc1 = encode_ranking_function(result1.ranking_functions["q0"])
+        enc2 = encode_ranking_function(result2_rf)
+
+        # Both should have empty guard matrices (0 rows)
+        assert enc1.cases[0].A_j.shape == enc2.cases[0].A_j.shape
+        assert enc1.cases[0].A_j.shape[0] == 0  # 0 rows = no constraints
+        assert enc1.cases[0].b_j.shape == enc2.cases[0].b_j.shape
+        assert enc1.cases[0].b_j.shape[0] == 0
+
+    def test_fair_automaton_with_true(self):
+        """Test fair automaton transition with true guard."""
+        result = parse_with_constants("trans!(q0, q1): true")
+
+        assert len(result.automaton_transitions) == 1
+        trans = result.automaton_transitions[0]
+        assert trans.is_fair == True
+        assert len(trans.guards) == 0
+
+    def test_multiple_cases_with_true(self):
+        """Test ranking function with multiple cases including true."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x >= 0 && x < 10 -> 10 - x
+                [] true -> 1
+        """)
+
+        rf = result.ranking_functions["q0"]
+        assert len(rf.cases) == 2
+
+        # First case has guards
+        assert len(rf.cases[0].guards) == 2
+
+        # Second case has no guards (true)
+        assert len(rf.cases[1].guards) == 0
+        assert rf.cases[1].expression == Num(1)

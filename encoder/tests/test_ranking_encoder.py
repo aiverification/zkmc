@@ -198,3 +198,98 @@ class TestRankingEncoder:
         # Expression: -2*x + 5  =>  C_j = [-2], d_j = 5
         assert np.array_equal(case_enc.C_j, np.array([-2]))
         assert case_enc.d_j == 5
+
+
+class TestVariableAlignment:
+    """Tests for variable alignment in ranking function encoding."""
+
+    def test_single_function_explicit_variables(self):
+        """Test that explicit variables parameter overrides extracted variables."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x > 0 -> x
+        """)
+
+        # Encode with explicit variable list including y
+        rf = result.ranking_functions["q0"]
+        enc = encode_ranking_function(rf, variables=["x", "y"])
+
+        # Should use provided variables, not just ["x"]
+        assert enc.variables == ["x", "y"]
+
+        # Guard matrix should have 2 columns (for x and y)
+        assert enc.cases[0].A_j.shape[1] == 2
+
+        # Expression vector should have 2 elements
+        assert enc.cases[0].C_j.shape[0] == 2
+        assert enc.cases[0].C_j[0] == 1  # coefficient of x
+        assert enc.cases[0].C_j[1] == 0  # coefficient of y (unconstrained)
+
+    def test_partial_guard_encoding(self):
+        """Test guard mentioning only subset of variables."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x > 0 -> x + y
+        """)
+
+        rf = result.ranking_functions["q0"]
+        enc = encode_ranking_function(rf, variables=["x", "y", "z"])
+
+        # Guard only mentions x, should have 0 coefficient for y and z
+        case = enc.cases[0]
+        assert case.A_j.shape[1] == 3  # Three columns
+
+        # Check that y and z columns are all zeros in guard matrix
+        # (meaning they're unconstrained by the guard)
+        if case.A_j.shape[0] > 0:  # If there are any rows (guards)
+            assert all(case.A_j[:, 1] == 0)  # y column (index 1)
+            assert all(case.A_j[:, 2] == 0)  # z column (index 2)
+
+        # Expression should have correct coefficients
+        assert case.C_j.shape[0] == 3
+        assert case.C_j[0] == 1  # x coefficient
+        assert case.C_j[1] == 1  # y coefficient
+        assert case.C_j[2] == 0  # z coefficient (not in expression)
+
+    def test_union_of_variables_multiple_functions(self):
+        """Test that encode_ranking_functions uses union correctly."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x > 0 -> x
+
+            rank(q1):
+                [] y > 0 -> y
+        """)
+
+        encodings = encode_ranking_functions(result.ranking_functions)
+
+        # Both should use same variable set (union)
+        assert encodings["q0"].variables == encodings["q1"].variables
+        assert set(encodings["q0"].variables) == {"x", "y"}
+
+        # Verify matrix dimensions are consistent
+        assert encodings["q0"].cases[0].A_j.shape[1] == 2
+        assert encodings["q1"].cases[0].A_j.shape[1] == 2
+
+        # Verify expression vectors have correct structure
+        # q0's expression is 'x', so C_j should be [1, 0] for [x, y]
+        assert encodings["q0"].cases[0].C_j.shape[0] == 2
+        # q1's expression is 'y', so C_j should be [0, 1] for [x, y]
+        assert encodings["q1"].cases[0].C_j.shape[0] == 2
+
+    def test_no_variables_in_guard(self):
+        """Test guard with no variables (constant comparison)."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] true -> x
+        """)
+
+        rf = result.ranking_functions["q0"]
+        enc = encode_ranking_function(rf, variables=["x", "y"])
+
+        # Guard is empty (true), so matrix has 0 rows
+        assert enc.cases[0].A_j.shape[0] == 0
+        assert enc.cases[0].A_j.shape[1] == 2  # But still 2 columns for variables
+
+        # Expression should be just x
+        assert np.array_equal(enc.cases[0].C_j, np.array([1, 0]))

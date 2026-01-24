@@ -27,8 +27,7 @@ class Verifier:
         Raises:
             ValueError: If required components are missing
         """
-        # Encode all components
-        self.init_enc = encode_init(result.init_condition) if result.init_condition else None
+        # Encode components (except init, which needs the variable list first)
         self.trans_encs = encode_program(result.commands, nonstrict_only=True) if result.commands else []
         self.rank_encs = encode_ranking_functions(result.ranking_functions) if result.ranking_functions else {}
         self.aut_encs = encode_automaton_transitions(result.automaton_transitions) if result.automaton_transitions else []
@@ -45,6 +44,10 @@ class Verifier:
         else:
             first_rank = next(iter(self.rank_encs.values()))
             self.variables = first_rank.variables
+
+        # Now encode init condition with the correct variable list
+        # Note: Use 'is not None' because empty list [] is falsy but valid (means 'true')
+        self.init_enc = encode_init(result.init_condition, self.variables) if result.init_condition is not None else None
 
     def _align_and_expand(
         self,
@@ -64,11 +67,14 @@ class Verifier:
         Returns:
             (A_expanded, b_expanded) in [x, x'] space
         """
-        if A.size == 0:
-            return A, b
-
         m = A.shape[0]
         n = len(self.variables)
+
+        # Handle empty constraints (0 rows) - still need proper column count
+        if m == 0:
+            # Return empty matrix with correct dimensions for [x, x'] space
+            A_exp = np.zeros((0, 2*n), dtype=np.int64)
+            return A_exp, b
 
         # First, align to full variable space if needed
         if constraint_vars != self.variables:
