@@ -3,7 +3,7 @@
 import pytest
 from zkterm_tool import (
     parse, parse_with_constants, GuardedCommand, Comparison, Assignment, CompOp,
-    Var, Num, BinOp, RankingCase, RankingFunction
+    Var, Num, BinOp, RankingCase, RankingFunction, AutomatonTransition
 )
 
 
@@ -253,3 +253,124 @@ class TestRankingFunctions:
         # Parsed as: (2*x + 3*y) - 1
         assert isinstance(case.expression, BinOp)
         assert case.expression.op == "-"
+
+
+class TestInitialConditions:
+    """Tests for initial condition parsing."""
+    
+    def test_simple_init_condition(self):
+        """Test parsing: init: x = 0"""
+        result = parse_with_constants("init: x = 0")
+
+        assert result.init_condition is not None
+        assert len(result.init_condition) == 1  # One comparison: x = 0
+        assert result.init_condition[0].op == CompOp.EQ
+        
+    def test_init_with_conjunctive_guards(self):
+        """Test parsing: init: x >= 0 && x < 10"""
+        result = parse_with_constants("init: x >= 0 && x < 10")
+        
+        assert result.init_condition is not None
+        assert len(result.init_condition) == 2
+        
+    def test_init_with_multiple_variables(self):
+        """Test parsing: init: x = 0 && y >= 0 && y < 5"""
+        result = parse_with_constants("init: x = 0 && y >= 0 && y < 5")
+
+        assert result.init_condition is not None
+        assert len(result.init_condition) == 3  # Three comparisons: x=0, y>=0, y<5
+        
+    def test_init_with_constants(self):
+        """Test init using constants."""
+        result = parse_with_constants("""
+            const maxVal = 10
+            init: x = 0 && y < maxVal
+        """)
+        
+        assert result.init_condition is not None
+        assert result.constants["maxVal"] == 10
+        
+    def test_init_with_commands(self):
+        """Test file with both init and commands."""
+        result = parse_with_constants("""
+            init: x = 0
+            [] x < 10 -> x = x + 1
+        """)
+        
+        assert result.init_condition is not None
+        assert len(result.commands) == 1
+        
+    def test_no_init_condition(self):
+        """Test file without init condition."""
+        result = parse_with_constants("[] x < 10 -> x = x + 1")
+        
+        assert result.init_condition is None
+        assert len(result.commands) == 1
+
+
+class TestAutomatonTransitions:
+    """Tests for Büchi automaton transition parsing."""
+    
+    def test_simple_regular_transition(self):
+        """Test parsing: trans(q0, q1): x > 0"""
+        result = parse_with_constants("trans(q0, q1): x > 0")
+        
+        assert len(result.automaton_transitions) == 1
+        trans = result.automaton_transitions[0]
+        assert trans.from_state == "q0"
+        assert trans.to_state == "q1"
+        assert trans.is_fair == False
+        assert len(trans.guards) == 1
+        
+    def test_fair_transition(self):
+        """Test parsing fair transition: trans!(q0, q1): x > 0"""
+        result = parse_with_constants("trans!(q0, q1): x > 0")
+        
+        assert len(result.automaton_transitions) == 1
+        trans = result.automaton_transitions[0]
+        assert trans.from_state == "q0"
+        assert trans.to_state == "q1"
+        assert trans.is_fair == True
+        
+    def test_multiple_automaton_transitions(self):
+        """Test parsing multiple transitions."""
+        result = parse_with_constants("""
+            trans(q0, q1): x >= 0 && x < 5
+            trans!(q1, q1): x > 0
+            trans(q1, q0): x >= 10
+        """)
+        
+        assert len(result.automaton_transitions) == 3
+        assert result.automaton_transitions[0].is_fair == False
+        assert result.automaton_transitions[1].is_fair == True
+        assert result.automaton_transitions[2].is_fair == False
+        
+    def test_automaton_with_conjunctive_guards(self):
+        """Test transition with multiple guards."""
+        result = parse_with_constants("trans(q0, q1): x >= 0 && x < 10 && y > 5")
+        
+        trans = result.automaton_transitions[0]
+        assert len(trans.guards) == 3
+        
+    def test_mixed_program(self):
+        """Test file with init, commands, ranking, and automaton."""
+        result = parse_with_constants("""
+            const maxVal = 10
+            
+            init: x = 0 && y = 0
+            
+            [] x < maxVal -> x = x + 1
+            
+            rank(q0):
+                [] x >= 0 -> maxVal - x
+            
+            trans(q0, q1): x >= 0 && x < 5
+            trans!(q1, q0): x >= 10
+        """)
+        
+        # Check all components present
+        assert result.constants == {"maxVal": 10}
+        assert result.init_condition is not None
+        assert len(result.commands) == 1
+        assert len(result.ranking_functions) == 1
+        assert len(result.automaton_transitions) == 2

@@ -160,3 +160,131 @@ class TestEncoderEdgeCases:
         rows = {tuple(row): val for row, val in zip(enc.A, enc.b)}
         assert rows[(-1, 1)] == -1  # x' - x ≤ -1
         assert rows[(1, -1)] == 1   # -x' + x ≤ 1
+
+
+class TestInitEncoding:
+    """Tests for initial condition encoding."""
+    
+    def test_simple_init_encoding(self):
+        """Test encoding: init: x = 0"""
+        from zkterm_tool import parse_with_constants, encode_init
+        
+        result = parse_with_constants("init: x = 0")
+        enc = encode_init(result.init_condition)
+        
+        assert enc.variables == ["x"]
+        assert enc.A_0.shape == (2, 1)  # x = 0 becomes x <= 0 and -x <= 0
+        assert enc.b_0.shape == (2,)
+        
+    def test_init_with_multiple_variables(self):
+        """Test encoding: init: x = 0 && y >= 0 && y < 5"""
+        from zkterm_tool import parse_with_constants, encode_init
+        
+        result = parse_with_constants("init: x = 0 && y >= 0 && y < 5")
+        enc = encode_init(result.init_condition)
+        
+        assert set(enc.variables) == {"x", "y"}
+        assert enc.A_0.shape[0] == 4  # x=0 (2) + y>=0 (1) + y<5->y<=4 (1)
+        assert enc.A_0.shape[1] == 2  # Two variables
+        
+    def test_init_with_inequality(self):
+        """Test encoding: init: x >= 0 && x < 10"""
+        from zkterm_tool import parse_with_constants, encode_init
+        
+        result = parse_with_constants("init: x >= 0 && x < 10")
+        enc = encode_init(result.init_condition)
+        
+        assert enc.variables == ["x"]
+        assert enc.A_0.shape == (2, 1)  # Two inequalities
+        
+    def test_init_no_constraints(self):
+        """Test encoding empty init (no constraints)."""
+        from zkterm_tool import encode_init
+        
+        enc = encode_init([])  # Empty guard list
+        
+        assert enc.A_0.shape[0] == 0  # No constraints
+        assert enc.b_0.shape[0] == 0
+
+
+class TestAutomatonEncoding:
+    """Tests for Büchi automaton transition encoding."""
+    
+    def test_regular_transition_encoding(self):
+        """Test encoding regular transition: trans(q0, q1): x > 0"""
+        from zkterm_tool import parse_with_constants, encode_automaton_transitions
+        
+        result = parse_with_constants("trans(q0, q1): x > 0")
+        encodings = encode_automaton_transitions(result.automaton_transitions)
+        
+        assert len(encodings) == 1
+        enc = encodings[0]
+        assert enc.from_state == "q0"
+        assert enc.to_state == "q1"
+        assert enc.is_fair == False
+        assert enc.A_fair is None
+        assert enc.b_fair is None
+        assert enc.A_delta.shape[0] > 0  # Has constraints
+        
+    def test_fair_transition_encoding(self):
+        """Test encoding fair transition: trans!(q0, q1): x > 0"""
+        from zkterm_tool import parse_with_constants, encode_automaton_transitions
+        
+        result = parse_with_constants("trans!(q0, q1): x > 0")
+        encodings = encode_automaton_transitions(result.automaton_transitions)
+        
+        assert len(encodings) == 1
+        enc = encodings[0]
+        assert enc.from_state == "q0"
+        assert enc.to_state == "q1"
+        assert enc.is_fair == True
+        assert enc.A_fair is not None
+        assert enc.b_fair is not None
+        # Fair matrices should be same as delta
+        assert (enc.A_fair == enc.A_delta).all()
+        assert (enc.b_fair == enc.b_delta).all()
+        
+    def test_multiple_transitions_consistent_variables(self):
+        """Test encoding multiple transitions with consistent variable ordering."""
+        from zkterm_tool import parse_with_constants, encode_automaton_transitions
+        
+        result = parse_with_constants("""
+            trans(q0, q1): x >= 0 && x < 5
+            trans(q1, q0): y > 10
+        """)
+        encodings = encode_automaton_transitions(result.automaton_transitions)
+        
+        assert len(encodings) == 2
+        # Both should have same variable list (all variables)
+        assert encodings[0].variables == encodings[1].variables
+        assert set(encodings[0].variables) == {"x", "y"}
+        
+    def test_automaton_with_conjunctive_guards(self):
+        """Test transition with multiple guards."""
+        from zkterm_tool import parse_with_constants, encode_automaton_transitions
+        
+        result = parse_with_constants("trans(q0, q1): x >= 0 && x < 10 && y > 5")
+        encodings = encode_automaton_transitions(result.automaton_transitions)
+        
+        enc = encodings[0]
+        # Three guards should produce multiple inequalities
+        assert enc.A_delta.shape[0] >= 3
+        
+    def test_automaton_no_guards(self):
+        """Test transition with no guards (always true)."""
+        from zkterm_tool import parse_with_constants, AutomatonTransition
+        from zkterm_tool import encode_automaton_transition
+        
+        # Create transition with no guards
+        trans = AutomatonTransition(
+            from_state="q0",
+            to_state="q1",
+            guards=[],
+            is_fair=False
+        )
+        
+        enc = encode_automaton_transition(trans, variables=["x"])
+        
+        # No constraints (always true)
+        assert enc.A_delta.shape[0] == 0
+        assert enc.b_delta.shape[0] == 0

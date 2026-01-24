@@ -238,6 +238,92 @@ def identity_constraints(variables: List[str], assigned_vars: set[str]) -> List[
 
 
 @dataclass
+class InitEncoding:
+    """Encoded initial condition as matrix-vector pair.
+
+    A_0 x ≤ b_0
+
+    where x = [var1, var2, ...] represents current-state variables only.
+    """
+    variables: List[str]  # ordered list of variable names
+    A_0: NDArray[np.int64]  # coefficient matrix for initial condition
+    b_0: NDArray[np.int64]  # constant vector for initial condition
+
+    def __repr__(self) -> str:
+        lines = [f"Variables: {self.variables}"]
+        if self.A_0.shape[0] > 0:
+            lines.append(f"\nA_0 x ≤ b_0 where:")
+            lines.append(f"A_0 =\n{self.A_0}")
+            lines.append(f"b_0 = {self.b_0}")
+        else:
+            lines.append("\nNo constraints (always true)")
+        return "\n".join(lines)
+
+
+def encode_init(
+    guards: List[Comparison],
+    variables: List[str] | None = None
+) -> InitEncoding:
+    """Encode initial condition guards as matrix-vector constraints.
+
+    Args:
+        guards: List of comparison constraints for initial condition
+        variables: Optional ordered list of variables. If None, extracted from guards.
+
+    Returns:
+        InitEncoding with (A_0, b_0) for initial condition
+    """
+    # Extract variables from guards if not provided
+    if variables is None:
+        vars_set: set[str] = set()
+
+        def collect_vars(e: Expr) -> None:
+            if isinstance(e, Var):
+                vars_set.add(e.name)
+            elif isinstance(e, BinOp):
+                collect_vars(e.left)
+                collect_vars(e.right)
+            elif isinstance(e, Neg):
+                collect_vars(e.expr)
+
+        for guard in guards:
+            collect_vars(guard.left)
+            collect_vars(guard.right)
+
+        variables = sorted(vars_set)
+
+    # Encode guards to inequalities (no primed variables)
+    all_ineqs: List[Inequality] = []
+    for guard in guards:
+        all_ineqs.extend(comparison_to_inequalities(guard, primed=False))
+
+    # Convert to non-strict inequalities only (init conditions don't need strict)
+    all_ineqs = [iq.to_nonstrict() for iq in all_ineqs]
+
+    # Build variable index
+    var_idx = {v: i for i, v in enumerate(variables)}
+    n_vars = len(variables)
+
+    # Build matrix
+    if all_ineqs:
+        m = len(all_ineqs)
+        A_0 = np.zeros((m, n_vars), dtype=np.int64)
+        b_0 = np.zeros(m, dtype=np.int64)
+
+        for i, iq in enumerate(all_ineqs):
+            for v, coeff in iq.coeffs.items():
+                if v in var_idx:
+                    A_0[i, var_idx[v]] = coeff
+            b_0[i] = iq.const
+    else:
+        # No constraints (always true)
+        A_0 = np.zeros((0, n_vars), dtype=np.int64)
+        b_0 = np.zeros(0, dtype=np.int64)
+
+    return InitEncoding(variables=variables, A_0=A_0, b_0=b_0)
+
+
+@dataclass
 class TransitionEncoding:
     """Encoded transition relation as matrix-vector pairs.
     

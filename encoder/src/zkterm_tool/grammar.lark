@@ -1,9 +1,13 @@
-// Grammar for guarded commands and ranking functions
+// Grammar for guarded commands, ranking functions, initial conditions, and automaton transitions
 // Example guarded command: [] y < z -> y = y + 1
 // Example ranking function: rank(q0): [] x > 0 -> x
+// Example initial condition: init: x = 0 && y >= 0
+// Example automaton transition: trans(q0, q1): x > 0 (fair: trans!(q0, q1): x > 0)
 // Constants: const received = 1
 
-start: (const_def | guarded_command | ranking_function)*
+start: (init_condition | const_def | guarded_command | ranking_function | automaton_trans)*
+
+init_condition: "init" ":" guard
 
 const_def: "const" CONST_NAME "=" NUMBER
 
@@ -12,6 +16,10 @@ guarded_command: "[]" guard "->" assignments
 ranking_function: "rank" "(" STATE_NAME ")" ":" ranking_case+
 
 ranking_case: "[]" guard "->" expr
+
+automaton_trans: "trans" fair_mark? "(" STATE_NAME "," STATE_NAME ")" ":" guard
+
+fair_mark: "!"
 
 guard: comparison (("&&" | "∧") comparison)*
 

@@ -1,11 +1,12 @@
-"""CLI for zkterm-tool: encode guarded commands as matrix inequalities."""
+"""CLI for zkterm-tool: encode guarded commands, init conditions, and automaton transitions."""
 
 import argparse
 import sys
 from typing import TextIO
 
-from .parser import parse
-from .encoder import encode_program, TransitionEncoding
+from .parser import parse_with_constants
+from .encoder import encode_program, encode_init, TransitionEncoding, InitEncoding
+from .automaton_encoder import encode_automaton_transitions, AutomatonTransitionEncoding
 
 
 def format_inequality(coeffs: list[int], variables: list[str], const: int, strict: bool) -> str:
@@ -82,10 +83,73 @@ def format_encoding(enc: TransitionEncoding, index: int | None = None, symbolic:
     return "\n".join(lines)
 
 
+def format_init_encoding(enc: InitEncoding, symbolic: bool) -> str:
+    """Format initial condition encoding."""
+    lines = ["=== Initial Condition ==="]
+    lines.append(f"Variables: [{', '.join(enc.variables)}]")
+
+    if enc.A_0.shape[0] > 0:
+        lines.append("\nA_0 x <= b_0:")
+        if symbolic:
+            for row, const in zip(enc.A_0, enc.b_0):
+                ineq = format_inequality(list(row), enc.variables, int(const), strict=False)
+                lines.append(f"  {ineq}")
+        else:
+            lines.append("  A_0 =")
+            for row in enc.A_0:
+                lines.append(f"    [{' '.join(f'{v:3d}' for v in row)}]")
+            lines.append(f"  b_0 = [{' '.join(f'{v:3d}' for v in enc.b_0)}]")
+    else:
+        lines.append("\nNo constraints (always true)")
+
+    return "\n".join(lines)
+
+
+def format_automaton_transition(enc: AutomatonTransitionEncoding, symbolic: bool) -> str:
+    """Format one automaton transition encoding."""
+    fair_mark = " (FAIR)" if enc.is_fair else ""
+    lines = [f"\nTransition: {enc.from_state} -> {enc.to_state}{fair_mark}"]
+
+    # Guard info (symbolic)
+    if symbolic and enc.A_delta.shape[0] > 0:
+        guard_parts = []
+        for row, const in zip(enc.A_delta, enc.b_delta):
+            ineq = format_inequality(list(row), enc.variables, int(const), strict=False)
+            guard_parts.append(ineq)
+        lines.append(f"  Guard: {' && '.join(guard_parts)}")
+
+    # δ encoding
+    lines.append(f"  δ encoding A^({enc.from_state},{enc.to_state}) x <= b:")
+    if symbolic:
+        if enc.A_delta.shape[0] > 0:
+            for row, const in zip(enc.A_delta, enc.b_delta):
+                ineq = format_inequality(list(row), enc.variables, int(const), strict=False)
+                lines.append(f"    {ineq}")
+        else:
+            lines.append("    (no constraints - always true)")
+    else:
+        if enc.A_delta.shape[0] > 0:
+            lines.append("    A =")
+            for row in enc.A_delta:
+                lines.append(f"      [{' '.join(f'{v:3d}' for v in row)}]")
+            lines.append(f"    b = [{' '.join(f'{v:3d}' for v in enc.b_delta)}]")
+        else:
+            lines.append("    (no constraints - always true)")
+
+    # F encoding (only for fair transitions)
+    if enc.is_fair and enc.A_fair is not None:
+        lines.append(f"  F encoding A^({enc.from_state},{enc.to_state}) x <= b:")
+        lines.append("    (same as δ)")
+
+    lines.append(f"  Fair: {'YES' if enc.is_fair else 'NO'}")
+
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Encode guarded commands as matrix/vector inequality constraints.",
+        description="Encode guarded commands as matrix/vector inequality constraints. Strict inequalities are automatically converted to non-strict using integer semantics (x < c → x ≤ c-1).",
         epilog="""
 Example:
   echo '[] y < z -> y = y + 1' | zkterm
@@ -110,12 +174,6 @@ Example:
         action="store_true",
         help="Output inequalities with variable names (e.g., 2x - x' <= 2)"
     )
-    parser.add_argument(
-        "-n", "--non-strict",
-        action="store_true",
-        help="Convert strict inequalities to non-strict using integer semantics (x < c → x ≤ c-1)"
-    )
-    
     args = parser.parse_args(argv)
     
     try:
@@ -123,22 +181,66 @@ Example:
         if not text.strip():
             print("Error: empty input", file=sys.stderr)
             return 1
-        
-        commands = parse(text)
-        
+
+        result = parse_with_constants(text)
+
         if args.verbose:
-            print("Parsed commands:")
-            for i, cmd in enumerate(commands):
-                print(f"  {i + 1}. {cmd}")
-            print()
-        
-        encodings = encode_program(commands, nonstrict_only=args.non_strict)
-        
-        for i, enc in enumerate(encodings):
-            if i > 0:
+            if result.init_condition:
+                print("Parsed initial condition:")
+                guard_str = " && ".join(str(g) for g in result.init_condition)
+                print(f"  init: {guard_str}")
+                print()
+
+            if result.commands:
+                print("Parsed commands:")
+                for i, cmd in enumerate(result.commands):
+                    print(f"  {i + 1}. {cmd}")
+                print()
+
+            if result.automaton_transitions:
+                print("Parsed automaton transitions:")
+                for i, trans in enumerate(result.automaton_transitions):
+                    print(f"  {i + 1}. {trans}")
+                print()
+
+        sections_printed = False
+
+        # 1. Display initial condition if present
+        if result.init_condition:
+            init_enc = encode_init(result.init_condition)
+            print(format_init_encoding(init_enc, symbolic=args.symbolic))
+            sections_printed = True
+
+        # 2. Display program transitions (guarded commands)
+        if result.commands:
+            if sections_printed:
                 print("\n")
-            print(format_encoding(enc, index=i if len(encodings) > 1 else None, symbolic=args.symbolic))
-        
+
+            encodings = encode_program(result.commands, nonstrict_only=True)
+
+            for i, enc in enumerate(encodings):
+                if i > 0:
+                    print("\n")
+                print(format_encoding(enc, index=i if len(encodings) > 1 else None, symbolic=args.symbolic))
+
+            sections_printed = True
+
+        # 3. Display automaton transitions if present
+        if result.automaton_transitions:
+            if sections_printed:
+                print("\n")
+
+            print("=== Automaton Transitions ===")
+            print(f"Variables: [{', '.join(sorted({v for t in result.automaton_transitions for v in t.get_variables()}))}]")
+
+            aut_encodings = encode_automaton_transitions(result.automaton_transitions)
+
+            for enc in aut_encodings:
+                print(format_automaton_transition(enc, symbolic=args.symbolic))
+
+        if not sections_printed:
+            print("Warning: No content to encode (no init, commands, or automaton transitions)", file=sys.stderr)
+
         return 0
     
     except Exception as e:
