@@ -1,0 +1,16 @@
+const z = 10
+
+// Init condition
+init: y = 0 && success = 0
+
+// Programme
+[] y < z -> y = y + 1
+[] y == z -> success = 1
+
+// F s
+// Only one fair transition
+trans!(q0, q0): success == 0
+
+// Ranking function
+rank(q0):
+    [] y <= z -> z - y + 1 - success

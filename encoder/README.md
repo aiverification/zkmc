@@ -549,6 +549,116 @@ Verification Results for counter.gc
 3/3 obligations verified
 ```
 
+### Farkas Dual Formulations (zkfarkas)
+
+The `zkfarkas` tool outputs Farkas dual formulations as JSON, including witness values computed by Z3 for each obligation. This provides all data needed for zero-knowledge proofs and external verification.
+
+#### Command Line
+
+```bash
+# Output JSON to stdout
+zkfarkas program.gc
+
+# Pretty-printed JSON
+zkfarkas --pretty program.gc
+
+# Save to file
+zkfarkas program.gc > obligations.json
+```
+
+#### Output Format
+
+Each obligation is encoded with the matrices needed for the Farkas formulation:
+
+```
+λ_s ≥ 0 ∧ A_s^T λ_s = -α_p ∧ -b_s^T λ_s ≥ β_p + 1
+```
+
+Where `α_p = A_p^T λ_p + C_p^T μ_p` and `β_p = b_p^T λ_p + d_p^T μ_p`.
+
+The tool uses Z3 to find witness values (`lambda_s`, `lambda_p`, `mu_p`) and computes the aggregated terms (`alpha_p`, `beta_p`, `-b_s^T lambda_s`).
+
+Example output:
+```json
+{
+  "obligations": [
+    {
+      "obligation_type": "initial",
+      "matrices": {
+        "A_s": [[1], [-1]],
+        "b_s": [0, 0],
+        "A_p": [[-1], [1]],
+        "b_p": [0, 5],
+        "C_p": [[-1]],
+        "d_p": [-6]
+      },
+      "dimensions": {
+        "n_vars": 1,
+        "n_lambda_s": 2,
+        "n_lambda_p": 2,
+        "n_mu_p": 1
+      },
+      "ranking_state": "q0",
+      "witness": {
+        "lambda_s": [0, 1],
+        "lambda_p": [0, 1],
+        "mu_p": [1]
+      },
+      "computed_values": {
+        "alpha_p": [0],
+        "beta_p": -1,
+        "neg_bs_lambda_s": 0
+      },
+      "satisfiable": true
+    }
+  ],
+  "count": 1
+}
+```
+
+Each obligation includes:
+- **matrices**: All constraint matrices (A_s, b_s, A_p, b_p, C_p, d_p)
+- **dimensions**: Sizes of all multiplier vectors (n_vars, n_lambda_s, n_lambda_p, n_mu_p)
+- **witness**: Z3-computed Farkas multipliers (lambda_s, lambda_p, mu_p) if satisfiable
+- **computed_values**: Pre-computed aggregated terms (alpha_p, beta_p, neg_bs_lambda_s) if satisfiable
+- **satisfiable**: Whether Z3 found a witness for this obligation
+
+#### Python API (Farkas JSON)
+
+```python
+from zkterm_tool import extract_farkas_obligations
+import numpy as np
+
+# Extract all obligations with Z3-computed witnesses
+obligations = extract_farkas_obligations("program.gc")
+
+for obl in obligations:
+    print(f"{obl['obligation_type']}: satisfiable={obl['verification']['satisfiable']}")
+
+    # Access matrices
+    matrices = obl["matrices"]
+    A_s = np.array(matrices["A_s"])
+    b_s = np.array(matrices["b_s"])
+    A_p = np.array(matrices["A_p"])
+    b_p = np.array(matrices["b_p"])
+    C_p = np.array(matrices["C_p"])
+    d_p = np.array(matrices["d_p"])
+
+    # Access witness values (computed by Z3)
+    if obl["witness"] is not None:
+        lambda_s = obl["witness"]["lambda_s"]
+        lambda_p = obl["witness"]["lambda_p"]
+        mu_p = obl["witness"]["mu_p"]
+
+        # Access pre-computed aggregated terms
+        alpha_p = obl["computed_values"]["alpha_p"]
+        beta_p = obl["computed_values"]["beta_p"]
+        neg_bs_lambda_s = obl["computed_values"]["neg_bs_lambda_s"]
+
+        print(f"  Witness found: lambda_s={lambda_s}")
+        print(f"  Alpha_p: {alpha_p}, Beta_p: {beta_p}")
+```
+
 ### Python API (Verification)
 
 ```python

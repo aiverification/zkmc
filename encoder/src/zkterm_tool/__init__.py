@@ -18,6 +18,7 @@ from .automaton_encoder import (
 )
 from .verification_types import VerificationResult, ObligationResult
 from .verifier import Verifier
+from .farkas_cli import extract_farkas_obligations
 
 
 def verify_termination(result: ParseResult) -> VerificationResult:
@@ -63,4 +64,5 @@ __all__ = [
     "AutomatonTransitionEncoding",
     # Verification
     "VerificationResult", "ObligationResult", "Verifier", "verify_termination",
+    "extract_farkas_obligations",
 ]

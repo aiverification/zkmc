@@ -105,17 +105,18 @@ def test_initial_verification_multiple_states():
 
 def test_initial_verification_fail_not_positive():
     """
-    Test initial verification failure when ranking value is not positive.
+    Test initial verification failure when ranking value is negative.
 
     Program:
-        init: x = 10
+        init: x = 11
         rank(q0):
             [] x >= 0 -> 10 - x
 
-    At x=10, the ranking value is 0, which is not > 0.
+    At x=11, the ranking value is 10 - 11 = -1, which is < 0.
+    This should fail because ranking values must be >= 0.
     """
     program = """
-        init: x = 10
+        init: x = 11
 
         rank(q0):
             [] x >= 0 -> 10 - x
