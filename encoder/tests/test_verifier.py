@@ -1,6 +1,7 @@
 """Unit tests for verification obligations."""
 
 import pytest
+import warnings
 from zkterm_tool.parser import parse_with_constants
 from zkterm_tool.verifier import Verifier
 
@@ -398,3 +399,95 @@ def test_transition_two_states():
     states = {o.ranking_state for o in verification.obligations if o.ranking_state}
     assert "q0" in states
     assert "q1" in states
+
+
+def test_multiple_cases_warning():
+    """
+    Test that a warning is issued when ranking functions have multiple cases.
+
+    The verifier only uses the first case, so multiple cases are not supported.
+    A warning should be issued to alert the user.
+    """
+    program = """
+        init: x = 0
+
+        rank(q0):
+            [] x >= 0 && x < 5 -> 10 - x
+            [] x >= 5 && x < 10 -> 20 - x
+    """
+
+    result = parse_with_constants(program)
+
+    # Should issue a UserWarning about multiple cases
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        verifier = Verifier(result)
+
+        # Check that a warning was issued
+        assert len(w) == 1
+        assert issubclass(w[0].category, UserWarning)
+        assert "multiple cases" in str(w[0].message).lower() or "2 cases" in str(w[0].message)
+        assert "q0" in str(w[0].message)
+        assert "only the first case" in str(w[0].message)
+
+
+def test_single_case_no_warning():
+    """
+    Test that no warning is issued when ranking functions have a single case.
+    """
+    program = """
+        init: x = 0
+
+        rank(q0):
+            [] x >= 0 -> 10 - x
+    """
+
+    result = parse_with_constants(program)
+
+    # Should not issue any warnings
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        verifier = Verifier(result)
+
+        # Check that no warnings were issued
+        assert len(w) == 0
+
+
+def test_multiple_cases_multiple_states_warning():
+    """
+    Test warning for multiple states with multiple cases.
+
+    Should issue one warning per state that has multiple cases.
+    """
+    program = """
+        init: x = 0
+
+        rank(q0):
+            [] x >= 0 && x < 5 -> 10 - x
+            [] x >= 5 && x < 10 -> 20 - x
+
+        rank(q1):
+            [] x >= 0 -> 5 - x
+
+        rank(q2):
+            [] x >= 0 && x < 3 -> 8 - x
+            [] x >= 3 -> 2
+    """
+
+    result = parse_with_constants(program)
+
+    # Should issue warnings for q0 and q2, but not q1
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        verifier = Verifier(result)
+
+        # Should have 2 warnings (for q0 and q2)
+        assert len(w) == 2
+
+        # Check both warnings are UserWarnings
+        assert all(issubclass(warn.category, UserWarning) for warn in w)
+
+        # Check that warnings mention q0 and q2
+        warning_messages = [str(warn.message) for warn in w]
+        assert any("q0" in msg for msg in warning_messages)
+        assert any("q2" in msg for msg in warning_messages)

@@ -2,6 +2,7 @@
 
 from itertools import product
 from typing import Dict, List
+import warnings
 import numpy as np
 
 from .parser import ParseResult
@@ -48,6 +49,19 @@ class Verifier:
         # Now encode init condition with the correct variable list
         # Note: Use 'is not None' because empty list [] is falsy but valid (means 'true')
         self.init_enc = encode_init(result.init_condition, self.variables) if result.init_condition is not None else None
+
+        # Warn if any ranking functions have multiple cases
+        # The verifier only uses the first case and ignores the rest
+        for state, rank_enc in self.rank_encs.items():
+            if len(rank_enc.cases) > 1:
+                warnings.warn(
+                    f"Ranking function for state '{state}' has {len(rank_enc.cases)} cases, "
+                    f"but only the first case will be used for verification. "
+                    f"Piecewise ranking functions are not fully supported. "
+                    f"Consider using a single case or separate automaton states for different regions.",
+                    UserWarning,
+                    stacklevel=2
+                )
 
     def _align_and_expand(
         self,
