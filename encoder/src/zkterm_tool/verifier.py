@@ -12,12 +12,34 @@ from .automaton_encoder import encode_automaton_transitions, AutomatonTransition
 from .verification_types import ObligationResult, VerificationResult
 from .farkas import build_farkas_dual
 from .z3_solver import solve_farkas_dual
+from .ast_types import Var, BinOp, Neg, Expr
 from typing import Tuple
 from numpy.typing import NDArray
 
 
 class Verifier:
     """Orchestrates verification of all termination obligations."""
+
+    @staticmethod
+    def _extract_vars_from_expr(expr: Expr) -> set[str]:
+        """Extract all variable names from an expression.
+
+        Args:
+            expr: Expression to extract variables from
+
+        Returns:
+            Set of variable names found in the expression
+        """
+        vars_set: set[str] = set()
+        if isinstance(expr, Var):
+            vars_set.add(expr.name)
+        elif isinstance(expr, BinOp):
+            vars_set.update(Verifier._extract_vars_from_expr(expr.left))
+            vars_set.update(Verifier._extract_vars_from_expr(expr.right))
+        elif isinstance(expr, Neg):
+            vars_set.update(Verifier._extract_vars_from_expr(expr.expr))
+        # Num has no variables
+        return vars_set
 
     def __init__(self, result: ParseResult):
         """Initialize verifier with parsed program.
@@ -28,25 +50,49 @@ class Verifier:
         Raises:
             ValueError: If required components are missing
         """
-        # Encode components (except init, which needs the variable list first)
-        self.trans_encs = encode_program(result.commands, nonstrict_only=True) if result.commands else []
-        self.rank_encs = encode_ranking_functions(result.ranking_functions) if result.ranking_functions else {}
-        self.aut_encs = encode_automaton_transitions(result.automaton_transitions) if result.automaton_transitions else []
-
         # Verify we have all required components
-        if not self.rank_encs:
+        if not result.ranking_functions:
             raise ValueError("No ranking functions provided - cannot verify termination")
 
-        # Extract variable ordering from program transitions (they have all variables)
-        # If no transitions, fall back to ranking functions
-        if self.trans_encs:
-            # Program transitions use [x, x'] space, extract first n variables
-            self.variables = self.trans_encs[0].variables
-        else:
-            first_rank = next(iter(self.rank_encs.values()))
-            self.variables = first_rank.variables
+        # First, determine the full variable set from all components
+        # This ensures ranking functions are encoded with all program variables
+        all_vars: set[str] = set()
 
-        # Now encode init condition with the correct variable list
+        # Collect variables from program transitions
+        if result.commands:
+            for cmd in result.commands:
+                all_vars.update(cmd.get_variables())
+
+        # Collect variables from ranking functions
+        for rf in result.ranking_functions.values():
+            all_vars.update(rf.get_variables())
+
+        # Collect variables from automaton transitions
+        if result.automaton_transitions:
+            for trans in result.automaton_transitions:
+                all_vars.update(trans.get_variables())
+
+        # Collect variables from init condition
+        if result.init_condition:
+            for guard in result.init_condition:
+                # Collect from guard comparisons
+                for expr in [guard.left, guard.right]:
+                    all_vars.update(self._extract_vars_from_expr(expr))
+
+        self.variables = sorted(all_vars)
+
+        # Now encode all components with the correct variable list
+        self.trans_encs = encode_program(result.commands, nonstrict_only=True) if result.commands else []
+        self.aut_encs = encode_automaton_transitions(result.automaton_transitions) if result.automaton_transitions else []
+
+        # Encode ranking functions with the full variable list
+        from .ranking_encoder import encode_ranking_function
+        self.rank_encs = {
+            state: encode_ranking_function(rf, self.variables)
+            for state, rf in result.ranking_functions.items()
+        }
+
+        # Encode init condition with the full variable list
         # Note: Use 'is not None' because empty list [] is falsy but valid (means 'true')
         self.init_enc = encode_init(result.init_condition, self.variables) if result.init_condition is not None else None
 

@@ -325,3 +325,32 @@ def test_multiple_variables_partial_ranking_guards():
     # The ranking function only mentions x, but y and z are also program variables
     # This should pass because x is always decreasing, regardless of y and z
     assert verification.passed is True
+
+
+def test_ranking_function_with_unconstrained_variables():
+    """
+    Test that ranking functions work correctly when they don't mention all program variables.
+
+    This is a regression test for a bug where ranking functions that only mentioned
+    a subset of program variables would cause a shape mismatch error during verification.
+    """
+    program = """
+        const maxVal = 10
+
+        init: x = 0 && y = 0 && z = 0
+
+        [] x < maxVal && y < maxVal && z < maxVal -> x = x + 1; y = y + 1; z = z + 1
+
+        rank(q0):
+            [] x >= 0 && x <= maxVal -> maxVal + 1 - x
+
+        trans(q0, q0): x < maxVal && y < maxVal && z < maxVal
+    """
+
+    result = parse_with_constants(program)
+    verification = verify_termination(result)
+
+    # Should verify successfully - ranking function only depends on x,
+    # while y and z are unconstrained in the ranking but still part of the program
+    assert verification.passed is True
+    assert len(verification.obligations) == 3  # initial, well_defined, non_increasing
