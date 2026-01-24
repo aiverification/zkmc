@@ -1,7 +1,10 @@
-"""Tests for the guarded command parser."""
+"""Tests for the guarded command and ranking function parser."""
 
 import pytest
-from zkterm_tool import parse, parse_with_constants, GuardedCommand, Comparison, Assignment, CompOp, Var, Num, BinOp
+from zkterm_tool import (
+    parse, parse_with_constants, GuardedCommand, Comparison, Assignment, CompOp,
+    Var, Num, BinOp, RankingCase, RankingFunction
+)
 
 
 class TestParser:
@@ -128,6 +131,125 @@ class TestConstants:
             const x = 1  // inline comment
             [] y = x -> y = 0  // another comment
         """)
-        
+
         assert len(result) == 1
         assert result[0].guards[0].right == Num(1)
+
+
+class TestRankingFunctions:
+    def test_simple_ranking_function(self):
+        """Test parsing: rank(q0): [] x > 0 -> x"""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x > 0 -> x
+        """)
+
+        assert len(result.ranking_functions) == 1
+        assert "q0" in result.ranking_functions
+
+        rf = result.ranking_functions["q0"]
+        assert rf.state == "q0"
+        assert len(rf.cases) == 1
+
+        case = rf.cases[0]
+        assert len(case.guards) == 1
+        assert case.guards[0].op == CompOp.GT
+        assert case.guards[0].left == Var("x")
+        assert case.guards[0].right == Num(0)
+        assert case.expression == Var("x")
+
+    def test_multiple_cases(self):
+        """Test parsing ranking function with multiple cases."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x >= 0 && x < 10 -> 10 - x
+                [] x >= 10 -> 1
+        """)
+
+        rf = result.ranking_functions["q0"]
+        assert len(rf.cases) == 2
+
+        # First case
+        case1 = rf.cases[0]
+        assert len(case1.guards) == 2
+        assert case1.guards[0].op == CompOp.GE
+        assert case1.guards[1].op == CompOp.LT
+        assert case1.expression == BinOp("-", Num(10), Var("x"))
+
+        # Second case
+        case2 = rf.cases[1]
+        assert len(case2.guards) == 1
+        assert case2.guards[0].op == CompOp.GE
+        assert case2.expression == Num(1)
+
+    def test_multiple_ranking_functions(self):
+        """Test parsing multiple ranking functions for different states."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x > 0 -> x
+
+            rank(q1):
+                [] y > 0 -> 2 * y
+        """)
+
+        assert len(result.ranking_functions) == 2
+        assert "q0" in result.ranking_functions
+        assert "q1" in result.ranking_functions
+
+        rf0 = result.ranking_functions["q0"]
+        assert rf0.state == "q0"
+        assert rf0.cases[0].expression == Var("x")
+
+        rf1 = result.ranking_functions["q1"]
+        assert rf1.state == "q1"
+        assert rf1.cases[0].expression == BinOp("*", Num(2), Var("y"))
+
+    def test_ranking_with_constants(self):
+        """Test ranking functions with constant substitution."""
+        result = parse_with_constants("""
+            const maxVal = 10
+
+            rank(q0):
+                [] x < maxVal -> maxVal - x
+        """)
+
+        rf = result.ranking_functions["q0"]
+        case = rf.cases[0]
+
+        # Constants should be substituted
+        assert case.guards[0].right == Num(10)  # maxVal -> 10
+        assert case.expression == BinOp("-", Num(10), Var("x"))
+
+    def test_mixed_commands_and_ranking(self):
+        """Test parsing file with both guarded commands and ranking functions."""
+        result = parse_with_constants("""
+            [] x < 10 -> x = x + 1
+            [] x >= 10 -> x = 0
+
+            rank(q0):
+                [] x >= 0 && x < 10 -> 10 - x
+                [] x >= 10 -> 1
+        """)
+
+        # Should have both commands and ranking functions
+        assert len(result.commands) == 2
+        assert len(result.ranking_functions) == 1
+
+        # Check that both are parsed correctly
+        assert result.commands[0].assignments[0].var == "x"
+        assert result.ranking_functions["q0"].state == "q0"
+
+    def test_complex_expression(self):
+        """Test ranking with complex linear expression."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x > 0 && y > 0 -> 2*x + 3*y - 1
+        """)
+
+        rf = result.ranking_functions["q0"]
+        case = rf.cases[0]
+
+        # Expression: 2*x + 3*y - 1
+        # Parsed as: (2*x + 3*y) - 1
+        assert isinstance(case.expression, BinOp)
+        assert case.expression.op == "-"
