@@ -195,33 +195,42 @@ def verify_disjointness(
 
 @dataclass
 class FieldEmbeddings:
-    """Field embeddings for polynomial commitment schemes.
+    """Dense field embeddings for IFFT-based polynomial construction.
 
-    These embeddings provide injective mappings from states and transitions
-    to field elements for use in zero-knowledge proofs based on polynomial
-    commitments (e.g., KZG).
+    Uses continuous embedding spaces [0, |S|) and [0, |SxS|) for efficient IFFT.
+    Since S and SxS have trivial embeddings (just sequential indices), only the
+    subsets are returned with their indices in the parent sets.
 
     Attributes:
-        E_init: Embeddings e_1(s) for s ∈ B_init
-        E_step: Embeddings e_2(s,s') for (s,s') ∈ B_step
-        E_fairstep: Embeddings e_2(s,s') for (s,s') ∈ B_fairstep
-        E_S: Embeddings e_1(s) for s ∈ S (complete state space)
-        E_S0: Embeddings e_1(s) for s ∈ S0 (initial states)
-        E_T: Embeddings e_2(s,s') for (s,s') ∈ T (program transitions)
-        E_SxS: Embeddings e_2(s,s') for (s,s') ∈ S×S (all possible transitions)
+        E_init: Indices of B_init states in sorted S (e.g., [3, 5, 7])
+        E_step: Indices of B_step transitions in sorted SxS
+        E_fairstep: Indices of B_fairstep transitions in sorted SxS
+        E_S: Always None (implicit: S is embedded as [0, 1, ..., |S|-1])
+        E_S0: Indices of S0 states in sorted S
+        E_T: Indices of T transitions in sorted SxS
+        E_SxS: Always None (implicit: SxS is embedded as [0, 1, ..., |SxS|-1])
         field_size: Size of field F (should be prime)
-        max_embedding: Maximum embedding value (for field size check)
-        embeddings_valid: True if all embeddings fit in field
+        max_embedding_S: Maximum state embedding value (|S| - 1)
+        max_embedding_SxS: Maximum transition embedding value (|S×S| - 1)
+        embeddings_valid: True if both max embeddings fit in field (i.e.,
+            max_embedding_S < field_size and max_embedding_SxS < field_size).
+            This is required for polynomial commitment schemes like KZG.
+
+    Note:
+        For ZK proofs using IFFT, the prover builds polynomials P_S and P_SxS
+        where P_S(i) = 1 iff i ∈ E_S (i.e., always), and P_T(i) = 1 iff i ∈ E_T.
+        The continuous embedding space [0, n) allows efficient FFT/IFFT.
     """
     E_init: List[int]
     E_step: List[int]
     E_fairstep: List[int]
-    E_S: List[int]
+    E_S: None  # Implicit: range(|S|)
     E_S0: List[int]
     E_T: List[int]
-    E_SxS: List[int]
+    E_SxS: None  # Implicit: range(|SxS|)
     field_size: int
-    max_embedding: int
+    max_embedding_S: int
+    max_embedding_SxS: int
     embeddings_valid: bool
 
 
@@ -451,80 +460,94 @@ def compute_embeddings(
     violations: ViolationSets,
     field_size: int = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 ) -> FieldEmbeddings:
-    """Compute field embeddings for all violation and valid sets.
+    """Compute dense field embeddings for IFFT-based polynomial construction.
+
+    Uses continuous embedding spaces for efficient IFFT:
+    - States: S is embedded as [0, 1, 2, ..., |S|-1]
+    - Transitions: SxS is embedded as [0, 1, 2, ..., |S×S|-1]
+
+    Since S and SxS have trivial embeddings (just sequential indices), we only
+    return embeddings for the subsets (B_init, B_step, B_fairstep, S0, T).
 
     Args:
         violations: ViolationSets object containing both violation and valid sets
         field_size: Prime field size (default: BLS12-381 scalar field)
 
     Returns:
-        FieldEmbeddings object with embeddings for all sets (B_init, B_step,
-        B_fairstep, S, S0, T, SxS) plus validity check
+        FieldEmbeddings object with embeddings for violation and valid subsets.
+        E_S and E_SxS are not included (they're just range(|S|) and range(|S×S|)).
 
     Note:
-        The default field size is the BLS12-381 scalar field modulus
-        (52435875175126190479447740508185965837690552500527637822603658699938581184513),
-        commonly used in pairing-based cryptography and zkSNARK systems.
+        The embedding function maps each state/transition to its index in the
+        sorted list, creating a continuous space [0, n) with no gaps. This is
+        optimal for IFFT-based polynomial construction in ZK proof systems.
 
     Example:
         >>> embeddings = compute_embeddings(violations)
-        >>> if not embeddings.embeddings_valid:
-        ...     print(f"Warning: max embedding {embeddings.max_embedding} exceeds field size")
+        >>> # E_S is implicitly [0, 1, 2, ..., |S|-1]
+        >>> # E_SxS is implicitly [0, 1, 2, ..., |S×S|-1]
+        >>> print(f"S0 embeddings: {embeddings.E_S0}")
     """
-    # Compute bases for injective embeddings
-    # State base: larger than any variable value in the state space
-    max_var_value = max(max(s[var] for s in violations.S) for var in violations.variables) if violations.S else 0
-    state_base = max_var_value + 1
+    # Helper to convert state dict to tuple for hashing
+    def state_to_tuple(s: Dict[str, int]) -> Tuple:
+        return tuple(s[var] for var in violations.variables)
 
-    # Compute all state embeddings first to find the maximum
-    temp_state_embeddings = [
-        compute_state_embedding(s, violations.variables, state_base, field_size)
-        for s in violations.S
-    ]
-    max_state_embedding = max(temp_state_embeddings) if temp_state_embeddings else 0
+    def transition_to_tuple(t: Tuple[Dict[str, int], Dict[str, int]]) -> Tuple:
+        return (state_to_tuple(t[0]), state_to_tuple(t[1]))
 
-    # Transition base: larger than any state embedding
-    transition_base = max_state_embedding + 1
+    # Build lookup tables: state/transition -> index
+    # Since sets are already sorted, the index is just the position
+    state_to_index = {
+        state_to_tuple(s): i
+        for i, s in enumerate(violations.S)
+    }
 
-    # Now compute embeddings for all sets
-    # Violation sets
+    transition_to_index = {
+        transition_to_tuple((s, s_prime)): i
+        for i, (s, s_prime) in enumerate(violations.SxS)
+    }
+
+    # Compute embeddings as indices in sorted lists
+    # For violation sets (subsets of S and SxS)
     E_init = [
-        compute_state_embedding(s, violations.variables, state_base, field_size)
+        state_to_index[state_to_tuple(s)]
         for s in violations.B_init
     ]
 
     E_step = [
-        compute_transition_embedding(s, s_prime, violations.variables, state_base, transition_base, field_size)
+        transition_to_index[transition_to_tuple((s, s_prime))]
         for s, s_prime in violations.B_step
     ]
 
     E_fairstep = [
-        compute_transition_embedding(s, s_prime, violations.variables, state_base, transition_base, field_size)
+        transition_to_index[transition_to_tuple((s, s_prime))]
         for s, s_prime in violations.B_fairstep
     ]
 
-    # Valid sets
-    E_S = temp_state_embeddings  # Reuse already computed embeddings
-
+    # For valid subsets
     E_S0 = [
-        compute_state_embedding(s, violations.variables, state_base, field_size)
+        state_to_index[state_to_tuple(s)]
         for s in violations.S0
     ]
 
     E_T = [
-        compute_transition_embedding(s, s_prime, violations.variables, state_base, transition_base, field_size)
+        transition_to_index[transition_to_tuple((s, s_prime))]
         for s, s_prime in violations.T
     ]
 
-    E_SxS = [
-        compute_transition_embedding(s, s_prime, violations.variables, state_base, transition_base, field_size)
-        for s, s_prime in violations.SxS
-    ]
+    # E_S and E_SxS are just range(|S|) and range(|S×S|), so we don't compute them
+    # They're implicit: E_S = [0, 1, 2, ..., |S|-1], E_SxS = [0, 1, 2, ..., |S×S|-1]
+    E_S = None  # Implicit: range(len(violations.S))
+    E_SxS = None  # Implicit: range(len(violations.SxS))
 
-    # Find max embedding and check validity
-    all_embeddings = E_init + E_step + E_fairstep + E_S + E_S0 + E_T + E_SxS
-    max_embedding = max(all_embeddings) if all_embeddings else 0
-    embeddings_valid = max_embedding < field_size
+    # Find max embeddings for S and SxS separately
+    # max(E_S) = |S| - 1, max(E_SxS) = |S×S| - 1
+    max_embedding_S = len(violations.S) - 1 if violations.S else 0
+    max_embedding_SxS = len(violations.SxS) - 1 if violations.SxS else 0
+
+    # Check if embeddings fit in field (required for polynomial commitment schemes)
+    embeddings_valid = (max_embedding_S < field_size and
+                       max_embedding_SxS < field_size)
 
     return FieldEmbeddings(
         E_init=E_init,
@@ -535,6 +558,7 @@ def compute_embeddings(
         E_T=E_T,
         E_SxS=E_SxS,
         field_size=field_size,
-        max_embedding=max_embedding,
+        max_embedding_S=max_embedding_S,
+        max_embedding_SxS=max_embedding_SxS,
         embeddings_valid=embeddings_valid
     )

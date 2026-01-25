@@ -263,16 +263,29 @@ def test_cli_default_embeddings(tmp_path):
     assert "E_init" in data["embeddings"]
     assert "E_step" in data["embeddings"]
     assert "E_fairstep" in data["embeddings"]
-    assert "E_S" in data["embeddings"]
     assert "E_S0" in data["embeddings"]
     assert "E_T" in data["embeddings"]
     assert "field_size" in data["embeddings"]
-    assert "max_embedding" in data["embeddings"]
+    assert "max_embedding_S" in data["embeddings"]
+    assert "max_embedding_SxS" in data["embeddings"]
     assert "embeddings_valid" in data["embeddings"]
+
+    # E_S and E_SxS are implicit (not included in output)
+    assert "E_S" not in data["embeddings"]
+    assert "E_SxS" not in data["embeddings"]
 
     # Metadata and verification always included
     assert "metadata" in data
     assert "verification" in data
+
+    # Can compute E_S and E_SxS from sizes
+    assert data["metadata"]["set_sizes"]["S"] == 6
+    assert data["metadata"]["set_sizes"]["SxS"] == 36
+    # E_S = [0, 1, 2, 3, 4, 5], E_SxS = [0, 1, ..., 35]
+
+    # Verify max embeddings match set sizes
+    assert data["embeddings"]["max_embedding_S"] == 5  # |S| - 1 = 6 - 1
+    assert data["embeddings"]["max_embedding_SxS"] == 35  # |S×S| - 1 = 36 - 1
 
     # Full state dictionaries NOT included (only in --verbose mode)
     assert "B_init" not in data
@@ -283,7 +296,7 @@ def test_cli_default_embeddings(tmp_path):
 
 
 def test_cli_sxs_embeddings(tmp_path):
-    """Test that SxS embeddings are included."""
+    """Test that SxS size is reported (E_SxS is implicit)."""
     program = """
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
@@ -308,15 +321,14 @@ def test_cli_sxs_embeddings(tmp_path):
 
     data = json.loads(output)
 
-    # Check that E_SxS is included in embeddings
+    # E_SxS is NOT included (implicit: it's just [0, 1, 2, ..., |SxS|-1])
     assert "embeddings" in data
-    assert "E_SxS" in data["embeddings"]
-
-    # With 4 states (x=0,1,2,3), SxS should have 16 elements
-    assert len(data["embeddings"]["E_SxS"]) == 16
+    assert "E_SxS" not in data["embeddings"]
 
     # Check metadata reports correct SxS size
+    # With 4 states (x=0,1,2,3), SxS should have 16 elements
     assert data["metadata"]["set_sizes"]["SxS"] == 16
+    # E_SxS is implicitly [0, 1, 2, ..., 15]
 
     # In default mode, full SxS state dicts should NOT be included
     assert "SxS" not in data
@@ -390,12 +402,11 @@ def test_cli_sort_embeddings(tmp_path):
     # Check that all embeddings are sorted
     assert "embeddings" in data
 
-    # E_SxS should be sorted numerically
-    e_sxs = data["embeddings"]["E_SxS"]
-    assert e_sxs == sorted(e_sxs), f"E_SxS not sorted: {e_sxs}"
+    # E_S and E_SxS are not included (implicit: they're just range(|S|) and range(|SxS|))
+    assert "E_S" not in data["embeddings"]
+    assert "E_SxS" not in data["embeddings"]
 
-    # All other embeddings should also be sorted
-    assert data["embeddings"]["E_S"] == sorted(data["embeddings"]["E_S"])
+    # All other embeddings should be sorted
     assert data["embeddings"]["E_S0"] == sorted(data["embeddings"]["E_S0"])
     assert data["embeddings"]["E_T"] == sorted(data["embeddings"]["E_T"])
     assert data["embeddings"]["E_init"] == sorted(data["embeddings"]["E_init"])

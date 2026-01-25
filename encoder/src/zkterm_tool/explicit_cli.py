@@ -44,21 +44,26 @@ def violations_to_json(
                 "E_init": [11, 12],
                 "E_step": [8, 8, 9],
                 "E_fairstep": [],
-                "E_S": [0, 1, 2, ..., 15],
                 "E_S0": [0],
                 "E_T": [1, 2, 3, ...],
-                "E_SxS": [0, 1, 2, ..., 255],
                 "field_size": 52435875...,
-                "max_embedding": 15,
+                "max_embedding_S": 15,
+                "max_embedding_SxS": 255,
                 "embeddings_valid": true
             },
             "verification": {...},
             "metadata": {
-                "set_sizes": {...},
-                "state_space_bounds": {"x": {"min": 0, "max": 15}},
+                "set_sizes": {
+                    "S": 16,        // E_S is implicitly [0, 1, 2, ..., 15]
+                    "SxS": 256,     // E_SxS is implicitly [0, 1, 2, ..., 255]
+                    ...
+                },
                 ...
             }
         }
+
+        Note: E_S and E_SxS are not included because they're just [0, |S|) and
+        [0, |SxS|) respectively - use metadata.set_sizes.S and .SxS instead.
 
     Example output (verbose, includes full states):
         {
@@ -77,23 +82,21 @@ def violations_to_json(
     E_init = sorted(embeddings.E_init) if sort_embeddings else embeddings.E_init
     E_step = sorted(embeddings.E_step) if sort_embeddings else embeddings.E_step
     E_fairstep = sorted(embeddings.E_fairstep) if sort_embeddings else embeddings.E_fairstep
-    E_S = sorted(embeddings.E_S) if sort_embeddings else embeddings.E_S
     E_S0 = sorted(embeddings.E_S0) if sort_embeddings else embeddings.E_S0
     E_T = sorted(embeddings.E_T) if sort_embeddings else embeddings.E_T
-    E_SxS = sorted(embeddings.E_SxS) if sort_embeddings else embeddings.E_SxS
 
     # Embeddings always included (compact representation)
+    # Note: E_S and E_SxS are implicit (just range(|S|) and range(|S×S|))
     result = {
         "embeddings": {
             "E_init": E_init,
             "E_step": E_step,
             "E_fairstep": E_fairstep,
-            "E_S": E_S,
             "E_S0": E_S0,
             "E_T": E_T,
-            "E_SxS": E_SxS,
             "field_size": embeddings.field_size,
-            "max_embedding": embeddings.max_embedding,
+            "max_embedding_S": embeddings.max_embedding_S,
+            "max_embedding_SxS": embeddings.max_embedding_SxS,
             "embeddings_valid": embeddings.embeddings_valid
         },
         "metadata": {
