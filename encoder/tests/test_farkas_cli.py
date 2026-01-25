@@ -27,8 +27,9 @@ def test_extract_farkas_obligations_basic():
     try:
         obligations = extract_farkas_obligations(temp_path)
 
-        # Should have 2 obligations: initial + update (1 prog_trans × 1 aut_trans × 1 source_case)
-        assert len(obligations) == 2
+        # Should have 1 obligation: update only (no infinity cases, so no initial_non_infinity)
+        # update: 1 prog_trans × 1 aut_trans × 1 source_case × 1 target_case = 1
+        assert len(obligations) == 1
 
         # Check structure of each obligation
         for obl in obligations:
@@ -39,32 +40,22 @@ def test_extract_farkas_obligations_basic():
             matrices = obl["matrices"]
             assert "A_s" in matrices
             assert "b_s" in matrices
-            assert "C" in matrices
-            assert "d" in matrices
-            assert "E_list" in matrices
-            assert "f_list" in matrices
+            assert "E" in matrices  # Changed from E_list
+            assert "f" in matrices  # Changed from f_list
 
             # Check all matrices are lists
             assert isinstance(matrices["A_s"], list)
             assert isinstance(matrices["b_s"], list)
-            assert isinstance(matrices["C"], list)
-            assert isinstance(matrices["d"], list)
-            assert isinstance(matrices["E_list"], list)
-            assert isinstance(matrices["f_list"], list)
-
-            # E_list and f_list should have same length (number of disjuncts)
-            assert len(matrices["E_list"]) == len(matrices["f_list"])
+            assert isinstance(matrices["E"], list)
+            assert isinstance(matrices["f"], list)
 
             dims = obl["dimensions"]
             assert "n_vars" in dims
             assert "n_lambda_s" in dims
-            assert "n_middle" in dims
-            assert "n_disjuncts" in dims
             assert "n_mu_p" in dims
 
-        # Check obligation types
+        # Check obligation types (only update since no infinity cases)
         types = [o["obligation_type"] for o in obligations]
-        assert "initial" in types
         assert "update" in types
 
     finally:
@@ -91,8 +82,8 @@ def test_extract_farkas_obligations_with_fair_transition():
     try:
         obligations = extract_farkas_obligations(temp_path)
 
-        # Should have 2 obligations: initial + update
-        assert len(obligations) == 2
+        # Should have 1 obligation: update only (no infinity cases)
+        assert len(obligations) == 1
 
         # Find the update obligation
         update_obl = next(o for o in obligations if o["obligation_type"] == "update")
@@ -130,11 +121,8 @@ def test_extract_farkas_dimensions():
     try:
         obligations = extract_farkas_obligations(temp_path)
 
-        # Check initial obligation
-        initial = next(o for o in obligations if o["obligation_type"] == "initial")
-
-        # Should have 2 variables (x, y) - initial is in [x] space
-        assert initial["dimensions"]["n_vars"] == 2
+        # Should only have update obligations (no infinity cases)
+        assert len(obligations) >= 1
 
         # For update, variables are in [x, y, x', y'] space (4 total)
         update = next(o for o in obligations if o["obligation_type"] == "update")
@@ -164,9 +152,10 @@ def test_extract_farkas_matrix_structure():
     try:
         obligations = extract_farkas_obligations(temp_path)
 
-        initial = next(o for o in obligations if o["obligation_type"] == "initial")
-        matrices = initial["matrices"]
-        dims = initial["dimensions"]
+        # Get first obligation (should be update)
+        update = obligations[0]
+        matrices = update["matrices"]
+        dims = update["dimensions"]
 
         # A_s should be n_lambda_s × n_vars
         assert len(matrices["A_s"]) == dims["n_lambda_s"]
@@ -176,27 +165,16 @@ def test_extract_farkas_matrix_structure():
         # b_s should be length n_lambda_s
         assert len(matrices["b_s"]) == dims["n_lambda_s"]
 
-        # C should be n_middle × n_vars
-        assert len(matrices["C"]) == dims["n_middle"]
-        if dims["n_middle"] > 0:
-            assert len(matrices["C"][0]) == dims["n_vars"]
+        # E should be n_mu_p × n_vars (single matrix, not list)
+        assert isinstance(matrices["E"], list)
+        assert len(matrices["E"]) == dims["n_mu_p"]
+        if dims["n_mu_p"] > 0:
+            assert isinstance(matrices["E"][0], list)
+            assert len(matrices["E"][0]) == dims["n_vars"]
 
-        # E_list should have n_disjuncts elements
-        assert len(matrices["E_list"]) == dims["n_disjuncts"]
-
-        # Each E_k should be a matrix (list of lists)
-        for E_k in matrices["E_list"]:
-            assert isinstance(E_k, list)
-            if len(E_k) > 0:
-                assert isinstance(E_k[0], list)
-                assert len(E_k[0]) == dims["n_vars"]
-
-        # f_list should have n_disjuncts elements
-        assert len(matrices["f_list"]) == dims["n_disjuncts"]
-
-        # Each f_k should be a vector (list)
-        for f_k in matrices["f_list"]:
-            assert isinstance(f_k, list)
+        # f should be vector of length n_mu_p (single vector, not list)
+        assert isinstance(matrices["f"], list)
+        assert len(matrices["f"]) == dims["n_mu_p"]
 
     finally:
         Path(temp_path).unlink()
@@ -223,19 +201,20 @@ def test_multi_case_ranking_function():
     try:
         obligations = extract_farkas_obligations(temp_path)
 
-        # Should have: 1 initial + 2 updates (one per source case)
-        assert len(obligations) == 3
+        # New system: 4 update obligations (2 source_cases × 2 target_cases)
+        # No initial_non_infinity (no infinity cases)
+        assert len(obligations) == 4
 
-        initial = next(o for o in obligations if o["obligation_type"] == "initial")
+        # All should be update obligations
+        for obl in obligations:
+            assert obl["obligation_type"] == "update"
 
-        # Initial should have 2 disjuncts (one per ranking case)
-        assert initial["dimensions"]["n_disjuncts"] == 2
-
-        # Update obligations should each have 2 disjuncts (one per target case)
-        updates = [o for o in obligations if o["obligation_type"] == "update"]
-        assert len(updates) == 2
-        for update in updates:
-            assert update["dimensions"]["n_disjuncts"] == 2
+        # Each update should have source_case_idx and target_case_idx
+        for obl in obligations:
+            assert "source_case_idx" in obl
+            assert "target_case_idx" in obl
+            assert obl["source_case_idx"] in [0, 1]  # Two source cases
+            assert obl["target_case_idx"] in [0, 1]  # Two target cases
 
     finally:
         Path(temp_path).unlink()
@@ -272,19 +251,19 @@ def test_witness_structure():
         assert "mu_p" in witness
         assert "lambda_p" not in witness  # No lambda_p in new system
 
-        # Check computed values
+        # Check computed values (renamed from alpha_p/beta_p to alpha/beta)
         assert "computed_values" in passing
         computed = passing["computed_values"]
-        assert "alpha_p" in computed
-        assert "beta_p" in computed
+        assert "alpha" in computed
+        assert "beta" in computed
         assert "verification_check" in computed
 
         # Verification check should confirm correctness
         check = computed["verification_check"]
-        assert "alpha_p_equals_zero" in check
-        assert "beta_p_leq_minus_one" in check
-        assert check["alpha_p_equals_zero"] == True
-        assert check["beta_p_leq_minus_one"] == True
+        assert "alpha_equals_zero" in check
+        assert "beta_leq_minus_one" in check
+        assert check["alpha_equals_zero"] == True
+        assert check["beta_leq_minus_one"] == True
 
     finally:
         Path(temp_path).unlink()

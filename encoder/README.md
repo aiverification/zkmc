@@ -146,19 +146,24 @@ zkrank -s program.gc
 
 ### Syntax
 
-Define ranking functions for automaton states:
+Define ranking functions for automaton states with explicit finite and infinity cases:
 
 ```
 rank(q0):
   [] x >= 0 && x < 10 -> 10 - x
-  [] x >= 10 -> 1
+  [] x >= 10 && x < 20 -> 1
+  [] x < 0 -> inf
+  [] x >= 20 -> inf
 ```
 
 Each case has:
 - **Guard**: Conjunction of linear inequalities (like guarded commands)
-- **Expression**: Linear expression computing the ranking value
+- **Expression**: Linear expression computing the ranking value, or `inf` for infinity cases
 
-**Semantics**: Cases are checked in order (first-match). If no guard is satisfied, V(x, q) = +∞.
+**Finite cases** have linear expressions (e.g., `10 - x`, `1`).
+**Infinity cases** use the keyword `inf` to mark states where the ranking is undefined (+∞).
+
+**Semantics**: Cases are checked in order (first-match). All states must be covered by at least one case (finite or infinity).
 
 ### Example
 
@@ -168,7 +173,9 @@ const maxVal = 10
 
 rank(q0):
   [] x >= 0 && x < maxVal -> maxVal - x
-  [] x >= maxVal -> 1
+  [] x >= maxVal && x < 20 -> 1
+  [] x < 0 -> inf
+  [] x >= 20 -> inf
 ```
 
 Matrix output (`zkrank program.gc`):
@@ -481,26 +488,46 @@ zkverify program.gc
 
 # Verbose mode (shows Farkas witnesses)
 zkverify --verbose program.gc
+
+# Skip validation checks (disjointness, coverage, non-negativity)
+zkverify --skip-validation program.gc
 ```
+
+### Ranking Function Validation
+
+By default, `zkverify` validates ranking functions before verification:
+
+1. **Disjointness**: All case guards must be pairwise disjoint
+2. **Complete coverage**: Cases must cover the entire state space
+3. **Non-negativity**: Finite cases must be non-negative under their guards
+
+Use `--skip-validation` to bypass these checks if needed.
 
 ### Verification Obligations
 
-The tool checks two types of obligations using a disjunctive formulation:
+The tool checks three types of obligations:
 
-1. **Initial**: A_0 x ≤ b_0 ⟹ ∨_k [V_k(x,q) ≥ 0 ∧ guard_k satisfied]
-   - Ensures initial states satisfy at least one ranking function case with non-negative value
+1. **Initial Non-Infinity**: A_0 x ≤ b_0 ⟹ E_k x > f_k
+   - For each infinity case k, ensures initial states don't satisfy the infinity guard
+   - Prevents the ranking from being undefined at initial states
 
-2. **Update**: For each source case j, checks T(x,x') ∧ σ(x) ∧ guard_j(x) ⟹ ∨_k [V_j(x,q) - V_k(x',q') ≥ ζ ∧ V_k(x',q') ≥ 0 ∧ guard_k(x')]
-   - Ensures ranking decreases (or non-increasing if ζ=0) and target state is well-defined
-   - ζ=1 for fair transitions (strict decrease), ζ=0 for regular transitions (non-increasing)
+2. **Transition Non-Infinity**: A_i [x;x'] ≤ b_i ⟹ [P; C_j] x ≤ [r; d_j] ⟹ E_k x > f_k
+   - For each finite case j and infinity case k, ensures transitions from finite regions don't reach infinity
+   - Prevents the ranking from becoming undefined during execution
 
-This disjunctive formulation fully supports multi-case ranking functions.
+3. **Update** (Ranking Decrease): A_i [x;x'] ≤ b_i ⟹ [P; C_j; C_k'] [x;x'] ≤ [r; d_j; d_k] ⟹ [w_j, -w_k] [x;x'] > u_k - u_j + ζ
+   - For each finite source case j and target case k, ensures ranking decreases by at least ζ
+   - ζ=1 for fair transitions (strict decrease required), ζ=0 for regular transitions (non-increasing)
 
-**Obligation count**: For a program with m ranking function cases (source), n target cases, p program transitions, and a automaton transitions:
-- Initial obligations: 1 per automaton state with ranking function
-- Update obligations: p × a × m (one per source case)
+**Obligation count**: For p program transitions, a automaton transitions, s states, m_j finite source cases, m_k finite target cases, l infinity cases:
+- Initial non-infinity: s × l (one per state × infinity cases)
+- Transition non-infinity: p × a × m_j × l (one per program transition × automaton transition × finite source cases × infinity cases)
+- Update: p × a × m_j × m_k (one per program transition × automaton transition × source cases × target cases)
 
-**Requirements**: Programs must include automaton transitions for verification. If no automaton transitions are defined, the verifier will raise an error.
+**Requirements**:
+- Programs must include automaton transitions for verification
+- Ranking functions must include explicit infinity cases (use `[] guard -> inf` syntax)
+- All states must be covered by finite or infinity cases (validated automatically unless `--skip-validation` is used)
 
 ### Example
 
@@ -514,6 +541,8 @@ init: x = 0
 
 rank(q0):
   [] x >= 0 && x < maxVal + 1 -> maxVal + 1 - x
+  [] x < 0 -> inf
+  [] x >= maxVal + 1 -> inf
 
 trans(q0, q0): x < maxVal
 ```
@@ -521,7 +550,7 @@ trans(q0, q0): x < maxVal
 Verification:
 ```bash
 $ zkverify counter.gc
-2/2 obligations verified
+5/5 obligations verified
 ```
 
 With verbose output:
@@ -530,19 +559,39 @@ $ zkverify --verbose counter.gc
 Verification Results for counter.gc
 ============================================================
 
-[1/2] ✓ PASS: initial
+[1/5] ✓ PASS: initial_non_infinity
      Source state: q0
-     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_p_0': 0, 'mu_p_1': 1}
+     Infinity case: 0
+     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_p_0': 1}
 
-[2/2] ✓ PASS: update
+[2/5] ✓ PASS: initial_non_infinity
+     Source state: q0
+     Infinity case: 1
+     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_p_0': 1}
+
+[3/5] ✓ PASS: transition_non_infinity
      Program transition: 0
      Automaton transition: q0 → q0
      Source state: q0 [case 0]
-     Target state: q0
-     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_p_0': 0, ...}
+     Infinity case: 0
+     Witness: {...}
+
+[4/5] ✓ PASS: transition_non_infinity
+     Program transition: 0
+     Automaton transition: q0 → q0
+     Source state: q0 [case 0]
+     Infinity case: 1
+     Witness: {...}
+
+[5/5] ✓ PASS: update
+     Program transition: 0
+     Automaton transition: q0 → q0
+     Source state: q0 [case 0]
+     Target state: q0 [case 0]
+     Witness: {...}
 
 ============================================================
-2/2 obligations verified
+5/5 obligations verified
 ```
 
 ### Farkas Dual Formulations (zkfarkas)
@@ -929,15 +978,17 @@ init: guard
 
 ```
 rank(state_name):
-  [] guard -> expression
-  [] guard -> expression
+  [] guard -> expression     // Finite case
+  [] guard -> expression     // Finite case
+  [] guard -> inf            // Infinity case
   ...
 ```
 
 - **State name**: Identifier for automaton state (e.g., `q0`, `q1`)
 - **Guard**: Conjunction of comparisons (same as guarded commands)
-- **Expression**: Linear arithmetic expression
+- **Expression**: Linear arithmetic expression (for finite cases) or `inf` (for infinity cases)
 - **Semantics**: First-match (cases checked in order)
+- **Coverage**: All states must be covered by at least one case (finite or infinity)
 
 ### Büchi Automaton Transitions
 
@@ -990,20 +1041,28 @@ All constraints are encoded in the $(A, b)$ matrix pair where $Ax \leq b$.
 
 ### Ranking Function Encoding (zkrank)
 
-For each case j in ranking function V(x, q):
+Ranking functions have two types of cases:
+
+**Finite cases** (j = 1...m):
 
 1. **Guard** `C_j x ≤ d_j` encodes the condition for this case
    - Comparisons are converted to inequalities
    - Multiple comparisons in conjunction become multiple rows in C_j
 
-2. **Expression** `W_j x + u_j` encodes the ranking value
-   - W_j is a row vector of variable coefficients
+2. **Expression** `w_j x + u_j` encodes the ranking value
+   - w_j is a row vector of variable coefficients
    - u_j is the constant term
-   - For expression `2x + 3y - 1`: W_j = [2, 3], u_j = -1
+   - For expression `2x + 3y - 1`: w_j = [2, 3], u_j = -1
 
-**Notation**: Paper notation V(x,q) = W_k x + u_k if C_k x ≤ d_k maps to code fields (C_j, d_j, W_j, u_j).
+**Infinity cases** (k = 1...l):
 
-Cases are ordered (first satisfied guard determines the value at runtime). The verifier checks all cases using disjunctive formulation. If no guard is satisfied at runtime, V(x, q) = +∞.
+1. **Guard** `E_k x ≤ f_k` encodes when the ranking is +∞
+   - Uses the keyword `inf` instead of an expression
+   - Encodes only the guard (no expression coefficients)
+
+**Notation**: Finite cases use (C_j, d_j, w_j, u_j), infinity cases use (E_k, f_k).
+
+Cases are ordered (first satisfied guard determines the value at runtime). All states must be covered by at least one case (finite or infinity) - this is validated automatically unless `--skip-validation` is used.
 
 ### Büchi Automaton Transition Encoding
 

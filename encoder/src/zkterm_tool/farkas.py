@@ -3,21 +3,21 @@
 This module implements the Farkas lemma transformation to convert
 implication checking into a satisfiability problem solvable by SMT solvers.
 
-Farkas Lemma (Disjunctive):
-    ∀y: A_s y ≤ b_s ⟹ C y ≤ d ⟹ ∨_{k=1}^m E_k y > f_k
+Farkas Lemma (Simple Form):
+    ∀y: A_s y ≤ b_s ⟹ C_p y > d_p
 
 Is equivalent to:
-    ¬∃y: A_s y ≤ b_s ∧ [C y ≤ d ∧ ∧_{k=1}^m E_k y ≤ f_k]
-                        └─────── C_p y ≤ d_p ──────┘
+    ¬∃y: A_s y ≤ b_s ∧ C_p y ≤ d_p
 
 Which holds iff there exist λ_s ≥ 0, μ_p ≥ 0 such that:
     1. A_s^T λ_s + C_p^T μ_p = 0    (dual equality)
     2. b_s^T λ_s + d_p^T μ_p < 0     (constant term negative)
 
-Where C_p = [C; E_1; E_2; ...; E_m] and d_p = [d; f_1; f_2; ...; f_m]
-
 For integer semantics, we convert the strict inequality to:
     b_s^T λ_s + d_p^T μ_p ≤ -1
+
+For obligations with middle premises (A => C => E), stack premises:
+    [A_s; C] y ≤ [b_s; d] ⟹ E y > f
 """
 
 from dataclasses import dataclass
@@ -132,113 +132,3 @@ def build_farkas_dual(
     )
 
 
-def build_farkas_dual_simple(
-    A_s: NDArray[np.int64],
-    b_s: NDArray[np.int64],
-    C_p: NDArray[np.int64],
-    d_p: NDArray[np.int64],
-) -> FarkasDual:
-    """Alias for build_farkas_dual (kept for backwards compatibility).
-
-    Given: ∀y: A_s y ≤ b_s ⟹ C_p y > d_p
-
-    Args:
-        A_s: Premise matrix
-        b_s: Premise vector
-        C_p: Conclusion matrix (strict inequality)
-        d_p: Conclusion vector (strict inequality)
-
-    Returns:
-        FarkasDual object
-    """
-    return build_farkas_dual(A_s, b_s, C_p, d_p)
-
-
-def build_farkas_dual_disjunctive(
-    A_s: NDArray[np.int64],
-    b_s: NDArray[np.int64],
-    C: NDArray[np.int64] | None,
-    d: NDArray[np.int64] | None,
-    E_list: list[NDArray[np.int64]],
-    f_list: list[NDArray[np.int64]],
-) -> FarkasDual:
-    """Construct Farkas dual for implication with disjunctive conclusion.
-
-    Given: ∀y: A_s y ≤ b_s ⟹ C y ≤ d ⟹ ∨_{k=1}^m E_k y > f_k
-
-    This is equivalent to checking unsatisfiability of:
-        A_s y ≤ b_s ∧ [C y ≤ d ∧ ∧_{k=1}^m E_k y ≤ f_k]
-                       └─────── C_p y ≤ d_p ──────┘
-
-    Where C_p = [C; E_1; E_2; ...; E_m] and d_p = [d; f_1; f_2; ...; f_m]
-
-    The Farkas dual requires finding λ_s, μ_p such that:
-        A_s^T λ_s + C_p^T μ_p = 0
-        b_s^T λ_s + d_p^T μ_p ≤ -1
-        λ_s ≥ 0, μ_p ≥ 0
-
-    Args:
-        A_s: Premise matrix (m_s × n)
-        b_s: Premise vector (m_s,)
-        C: Middle premise matrix (m_c × n) - optional, can be None or empty
-        d: Middle premise vector (m_c,) - optional, can be None or empty
-        E_list: List of conclusion matrices E_k, each of shape (r_k × n)
-        f_list: List of conclusion vectors f_k, each of shape (r_k,)
-
-    Returns:
-        FarkasDual object containing the dual formulation
-
-    Note:
-        - E_list and f_list must have the same length (number of cases m)
-        - Each E_k may have different numbers of rows (r_k)
-        - C and d are optional (None or empty) for obligations without middle premise
-    """
-    # Validate inputs
-    if len(E_list) != len(f_list):
-        raise ValueError(f"E_list and f_list must have same length, got {len(E_list)} vs {len(f_list)}")
-
-    if len(E_list) == 0:
-        raise ValueError("E_list cannot be empty - need at least one conclusion case")
-
-    # Handle optional C, d (convert None to empty arrays)
-    if C is None or C.size == 0:
-        # Infer n from A_s or first E_k
-        n = A_s.shape[1] if A_s.size > 0 else E_list[0].shape[1]
-        C = np.zeros((0, n), dtype=np.int64)
-        d = np.zeros(0, dtype=np.int64)
-
-    # Get dimensions
-    m_s = A_s.shape[0] if A_s.size > 0 else 0
-    m_c = C.shape[0] if C.size > 0 else 0
-
-    # Infer n from first non-empty matrix
-    if m_s > 0:
-        n = A_s.shape[1]
-    elif m_c > 0:
-        n = C.shape[1]
-    else:
-        n = E_list[0].shape[1]
-
-    # Build C_p by stacking [C; E_1; E_2; ...; E_m]
-    # Build d_p by concatenating [d; f_1; f_2; ...; f_m]
-    matrices_to_stack = []
-    vectors_to_concat = []
-
-    if m_c > 0:
-        matrices_to_stack.append(C)
-        vectors_to_concat.append(d)
-
-    for E_k, f_k in zip(E_list, f_list):
-        if E_k.shape[0] > 0:
-            matrices_to_stack.append(E_k)
-            vectors_to_concat.append(f_k)
-
-    if len(matrices_to_stack) > 0:
-        C_p = np.vstack(matrices_to_stack)
-        d_p = np.concatenate(vectors_to_concat)
-    else:
-        C_p = np.zeros((0, n), dtype=np.int64)
-        d_p = np.zeros(0, dtype=np.int64)
-
-    # Now use the simple build_farkas_dual with only λ_s and μ_p
-    return build_farkas_dual(A_s, b_s, C_p, d_p)

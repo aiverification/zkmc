@@ -53,16 +53,19 @@ def evaluate_ranking(
 ) -> Optional[int]:
     """Evaluate ranking function V(s, q) for a concrete state.
 
-    Uses first-match semantics: returns the value from the first case
-    whose guard is satisfied. If no guard is satisfied, returns None
-    (representing V(s,q) = ∞).
+    Uses first-match semantics across finite and infinity cases:
+    1. Checks finite cases in order - returns value if guard satisfied
+    2. Checks infinity cases in order - returns None (+∞) if guard satisfied
+    3. If no case matches, this indicates a coverage gap (validation should catch this)
 
     Args:
         state_dict: State as dictionary {'var': value, ...}
         rank_enc: Ranking function encoding for automaton state q
 
     Returns:
-        Ranking value (int) if defined, None if V(s,q) = ∞
+        Ranking value (int) if a finite case guard is satisfied
+        None if an infinity case guard is satisfied (V(s,q) = +∞)
+        None if no guard satisfied (validation should prevent this)
 
     Note:
         First-match semantics: Returns value from first satisfied case.
@@ -71,7 +74,7 @@ def evaluate_ranking(
     Example:
         >>> state = {'x': 5, 'y': 3}
         >>> value = evaluate_ranking(state, rank_enc)
-        >>> # Returns int if x satisfies some guard, None otherwise
+        >>> # Returns int if finite case matched, None if infinity case matched
     """
     # Convert state dict to vector in correct order
     state_vec = np.array(
@@ -79,14 +82,21 @@ def evaluate_ranking(
         dtype=np.int64
     )
 
-    # Check cases in order (first-match semantics)
-    for case in rank_enc.cases:
+    # First, check finite cases in order (first-match semantics)
+    for case in rank_enc.finite_cases:
         if check_guard(state_vec, case.C_j, case.d_j):
-            # Guard satisfied: compute V = W_j · x + u_j
-            value = np.dot(case.W_j, state_vec) + case.u_j
+            # Guard satisfied: compute V = w_j · x + u_j
+            value = np.dot(case.w_j, state_vec) + case.u_j
             return int(value)
 
-    # No guard satisfied: V(s,q) = ∞
+    # No finite case satisfied: check infinity cases
+    for case in rank_enc.infinity_cases:
+        if check_guard(state_vec, case.E_k, case.f_k):
+            # Infinity case satisfied: V(s,q) = +∞
+            return None
+
+    # No case satisfied at all (should be caught by validation - coverage check)
+    # Return None to indicate undefined ranking
     return None
 
 

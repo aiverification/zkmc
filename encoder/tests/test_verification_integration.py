@@ -23,11 +23,11 @@ def test_simple_counter_pass():
     verification = verify_termination(result)
 
     assert verification.passed is True
-    # New: 1 initial + 1 update (old: 1 initial + well_defined + non_increasing = 3)
-    assert len(verification.obligations) == 2
+    # New system: 1 update only (no infinity cases, so no initial_non_infinity/transition_non_infinity)
+    # 1 prog_trans × 1 aut_trans × 1 source_case × 1 target_case = 1
+    assert len(verification.obligations) == 1
 
 
-@pytest.mark.xfail(reason="Known bug: edge case where transition constraint appears in both premise and conclusion")
 def test_simple_counter_fail():
     """Test counter with wrong ranking function that should fail."""
     program = """
@@ -60,6 +60,7 @@ def test_fair_transition_pass():
 
         rank(q0):
             [] x > 0 -> x
+            [] x <= 0 -> inf
 
         trans!(q0, q0): x > 1
     """
@@ -68,9 +69,9 @@ def test_fair_transition_pass():
     verification = verify_termination(result)
 
     assert verification.passed is True
-    # New: 1 initial + 1 update (old: 1 initial + well_defined + non_increasing + strictly_decreasing = 4)
+    # New system with infinity case: 1 initial_non_infinity + 1 transition_non_infinity + 1 update = 3
     # Fair transitions use ζ=1 in the update obligation
-    assert len(verification.obligations) == 2
+    assert len(verification.obligations) == 3
 
     # Check that the update obligation is marked as fair
     update_obls = [o for o in verification.obligations if o.obligation_type == "update"]
@@ -150,9 +151,9 @@ def test_multiple_transitions_same_automaton_state():
     verification = verify_termination(result)
 
     # Should have obligations for both program transitions
-    # New: 1 initial + 2 update (one per prog trans) = 3
-    # Old: 1 initial + 2 * (well_defined + non_increasing) = 5
-    assert len(verification.obligations) == 3
+    # New system: 2 update (one per prog trans, no infinity cases)
+    # 2 prog_trans × 1 aut_trans × 1 source_case × 1 target_case = 2
+    assert len(verification.obligations) == 2
 
 
 def test_verification_summary_format():
@@ -301,16 +302,15 @@ def test_true_keyword_in_init_condition():
     verification = verify_termination(result)
 
     # With 'init: true', there are no constraints on the initial state.
-    # The initial obligation checks: true ∧ (x >= 0 && x < 11) => 11 - x > 0
-    # This simplifies to: (x >= 0 && x < 11) => 11 - x > 0
-    # which is valid (when x is in [0, 10], 11-x is in [1, 11], all positive)
+    # New system: No initial_non_infinity obligations (no infinity cases)
+    # The ranking function covers all states where it matters (x in [0, 10])
     # So verification should pass
     assert verification.passed is True
 
-    # Should have initial obligation (and it should pass)
-    initial_obls = [o for o in verification.obligations if o.obligation_type == "initial"]
-    assert len(initial_obls) == 1
-    assert initial_obls[0].passed is True
+    # Should have update obligations (no initial_non_infinity since no infinity cases)
+    update_obls = [o for o in verification.obligations if o.obligation_type == "update"]
+    assert len(update_obls) >= 1
+    assert all(o.passed for o in update_obls)
 
 
 def test_multiple_variables_partial_ranking_guards():
@@ -360,5 +360,5 @@ def test_ranking_function_with_unconstrained_variables():
     # Should verify successfully - ranking function only depends on x,
     # while y and z are unconstrained in the ranking but still part of the program
     assert verification.passed is True
-    # New: 1 initial + 1 update = 2 (old: initial + well_defined + non_increasing = 3)
-    assert len(verification.obligations) == 2
+    # New system: 1 update only (no infinity cases)
+    assert len(verification.obligations) == 1

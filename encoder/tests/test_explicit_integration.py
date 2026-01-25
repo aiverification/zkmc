@@ -197,11 +197,12 @@ def test_cli_simple_counter(tmp_path):
     assert {"x": 0} not in data["B_init"]
 
     # States where ranking is undefined should be in B_init
-    # Based on actual behavior, x=12..15 are in B_init
+    # Ranking function guard is x < 11, so x=11..15 are undefined
+    assert {"x": 11} in data["B_init"]
     assert {"x": 12} in data["B_init"]
     assert {"x": 15} in data["B_init"]
-    # x=11 should have defined ranking
-    assert {"x": 11} not in data["B_init"]
+    # x=10 should have defined ranking (last state covered by guard)
+    assert {"x": 10} not in data["B_init"]
 
 
 def test_cli_pretty_output(tmp_path):
