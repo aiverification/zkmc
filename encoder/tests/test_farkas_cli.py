@@ -40,19 +40,19 @@ def test_extract_farkas_obligations_basic():
             matrices = obl["matrices"]
             assert "A_s" in matrices
             assert "b_s" in matrices
-            assert "E" in matrices  # Changed from E_list
-            assert "f" in matrices  # Changed from f_list
+            assert "G_p" in matrices  # Public constraint matrix
+            assert "h_p" in matrices  # Public constraint vector
 
             # Check all matrices are lists
             assert isinstance(matrices["A_s"], list)
             assert isinstance(matrices["b_s"], list)
-            assert isinstance(matrices["E"], list)
-            assert isinstance(matrices["f"], list)
+            assert isinstance(matrices["G_p"], list)
+            assert isinstance(matrices["h_p"], list)
 
             dims = obl["dimensions"]
             assert "n_vars" in dims
             assert "n_lambda_s" in dims
-            assert "n_mu_p" in dims
+            assert "n_mu_s" in dims
 
         # Check obligation types (only update since no infinity cases)
         types = [o["obligation_type"] for o in obligations]
@@ -165,16 +165,16 @@ def test_extract_farkas_matrix_structure():
         # b_s should be length n_lambda_s
         assert len(matrices["b_s"]) == dims["n_lambda_s"]
 
-        # E should be n_mu_p × n_vars (single matrix, not list)
-        assert isinstance(matrices["E"], list)
-        assert len(matrices["E"]) == dims["n_mu_p"]
-        if dims["n_mu_p"] > 0:
-            assert isinstance(matrices["E"][0], list)
-            assert len(matrices["E"][0]) == dims["n_vars"]
+        # G_p should be n_mu_s × n_vars (public constraint matrix)
+        assert isinstance(matrices["G_p"], list)
+        assert len(matrices["G_p"]) == dims["n_mu_s"]
+        if dims["n_mu_s"] > 0:
+            assert isinstance(matrices["G_p"][0], list)
+            assert len(matrices["G_p"][0]) == dims["n_vars"]
 
-        # f should be vector of length n_mu_p (single vector, not list)
-        assert isinstance(matrices["f"], list)
-        assert len(matrices["f"]) == dims["n_mu_p"]
+        # h_p should be vector of length n_mu_s (public constraint vector)
+        assert isinstance(matrices["h_p"], list)
+        assert len(matrices["h_p"]) == dims["n_mu_s"]
 
     finally:
         Path(temp_path).unlink()
@@ -244,26 +244,20 @@ def test_witness_structure():
         passing = next((o for o in obligations if o["satisfiable"]), None)
         assert passing is not None
 
-        # Check witness structure (only lambda_s and mu_p, no lambda_p)
+        # Check witness structure (only lambda_s and mu_s, no lambda_p)
         assert "witness" in passing
         witness = passing["witness"]
         assert "lambda_s" in witness
-        assert "mu_p" in witness
+        assert "mu_s" in witness
         assert "lambda_p" not in witness  # No lambda_p in new system
 
-        # Check computed values (renamed from alpha_p/beta_p to alpha/beta)
+        # Check computed values (convenience value for ZK proofs)
         assert "computed_values" in passing
         computed = passing["computed_values"]
-        assert "alpha" in computed
-        assert "beta" in computed
-        assert "verification_check" in computed
+        assert "neg_b_s_T_lambda_s" in computed
 
-        # Verification check should confirm correctness
-        check = computed["verification_check"]
-        assert "alpha_equals_zero" in check
-        assert "beta_leq_minus_one" in check
-        assert check["alpha_equals_zero"] == True
-        assert check["beta_leq_minus_one"] == True
+        # Verify it's a number
+        assert isinstance(computed["neg_b_s_T_lambda_s"], int)
 
     finally:
         Path(temp_path).unlink()

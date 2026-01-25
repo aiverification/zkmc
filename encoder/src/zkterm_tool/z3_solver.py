@@ -18,10 +18,10 @@ def solve_farkas_dual(
     """Solve Farkas dual formulation using Z3.
 
     Given a FarkasDual formulation, finds integer values for Farkas multipliers
-    (λ_s, μ_p) that satisfy:
+    (λ_s, μ_s) that satisfy:
         1. A_eq @ multipliers = b_eq  (equality constraints)
         2. const_coeffs @ multipliers ≤ -1  (constant inequality)
-        3. multipliers[i] ≥ 0 for i in lambda_s_indices, mu_p_indices
+        3. multipliers[i] ≥ 0 for i in lambda_s_indices, mu_s_indices
         4. 0 ≤ multipliers[i] < max_value (bounded for finite field proofs)
 
     Args:
@@ -35,7 +35,7 @@ def solve_farkas_dual(
                       None if UNSAT
     """
     # Total number of multipliers
-    total_multipliers = len(dual.lambda_s_indices) + len(dual.mu_p_indices)
+    total_multipliers = len(dual.lambda_s_indices) + len(dual.mu_s_indices)
 
     # Create Z3 integer variables for all multipliers
     z3_vars = [Int(f"v{i}") for i in range(total_multipliers)]
@@ -72,7 +72,7 @@ def solve_farkas_dual(
         solver.add(const_lhs <= -1)
 
     # Add non-negativity and bounds for all multipliers
-    all_nonneg_indices = dual.lambda_s_indices + dual.mu_p_indices
+    all_nonneg_indices = dual.lambda_s_indices + dual.mu_s_indices
     for idx in all_nonneg_indices:
         solver.add(z3_vars[idx] >= 0)
         solver.add(z3_vars[idx] < max_value)
@@ -89,9 +89,9 @@ def solve_farkas_dual(
         for i, idx in enumerate(dual.lambda_s_indices):
             witness[f"lambda_s_{i}"] = model[z3_vars[idx]].as_long()
 
-        # Mu_p multipliers
-        for i, idx in enumerate(dual.mu_p_indices):
-            witness[f"mu_p_{i}"] = model[z3_vars[idx]].as_long()
+        # Mu_s multipliers
+        for i, idx in enumerate(dual.mu_s_indices):
+            witness[f"mu_s_{i}"] = model[z3_vars[idx]].as_long()
 
         return True, witness
     else:

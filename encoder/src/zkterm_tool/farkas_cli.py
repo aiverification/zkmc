@@ -159,13 +159,13 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
 def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
     """Convert ObligationResult to JSON with all Farkas components.
 
-    New simplified format (non-disjunctive):
-    - Matrices: A_s, b_s (stacked premise), E, f (conclusion)
-    - Witness: lambda_s, mu_p (if SAT)
-    - Computed values: alpha, beta (if SAT)
+    Uniform pattern format (matching paper notation):
+    - Matrices: A_s, b_s (secret), G_p, h_p (public)
+    - Witness: lambda_s, mu_s (if SAT)
+    - Computed convenience value: -b_s^T lambda_s
 
-    All obligations use simple form:
-        A_s y ≤ b_s ⟹ E y > f
+    All obligations use uniform pattern:
+        A_s y ≤ b_s ⟹ G_p y ≰ h_p
     """
     # Get the matrices by reconstructing the obligation
     matrices = get_obligation_matrices(verifier, obl_result)
@@ -183,13 +183,13 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
         "matrices": {
             "A_s": numpy_to_list(matrices["A_s"]),
             "b_s": numpy_to_list(matrices["b_s"]),
-            "E": numpy_to_list(matrices["E"]),
-            "f": numpy_to_list(matrices["f"]),
+            "G_p": numpy_to_list(matrices["E"]),  # G_p is the public constraint matrix
+            "h_p": numpy_to_list(matrices["f"]),  # h_p is the public constraint vector
         },
         "dimensions": {
             "n_vars": n_vars,
             "n_lambda_s": matrices["A_s"].shape[0],
-            "n_mu_p": matrices["E"].shape[0],
+            "n_mu_s": matrices["E"].shape[0],
         }
     }
 
@@ -224,42 +224,25 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
     # Add witness and computed values if obligation passed
     if obl_result.passed and obl_result.witness:
         n_lambda_s = matrices["A_s"].shape[0]
-        n_mu_p = matrices["E"].shape[0]
+        n_mu_s = matrices["E"].shape[0]
 
         # Extract witness vectors
         lambda_s = [obl_result.witness.get(f'lambda_s_{i}', 0) for i in range(n_lambda_s)]
-        mu_p = [obl_result.witness.get(f'mu_p_{i}', 0) for i in range(n_mu_p)]
+        mu_s = [obl_result.witness.get(f'mu_s_{i}', 0) for i in range(n_mu_s)]
 
-        # Compute aggregated terms
+        # Compute convenience value: -b_s^T * lambda_s
         lambda_s_arr = np.array(lambda_s, dtype=np.int64)
-        mu_p_arr = np.array(mu_p, dtype=np.int64)
-
-        # alpha = A_s^T * lambda_s + E^T * mu_p
-        alpha = np.zeros(n_vars, dtype=np.int64)
-        if matrices["A_s"].size > 0:
-            alpha += np.dot(matrices["A_s"].T, lambda_s_arr)
-        if matrices["E"].size > 0:
-            alpha += np.dot(matrices["E"].T, mu_p_arr)
-
-        # beta = b_s^T * lambda_s + f^T * mu_p
-        beta = 0
+        neg_b_s_T_lambda_s = 0
         if matrices["b_s"].size > 0:
-            beta += np.dot(matrices["b_s"], lambda_s_arr)
-        if matrices["f"].size > 0:
-            beta += np.dot(matrices["f"], mu_p_arr)
+            neg_b_s_T_lambda_s = -int(np.dot(matrices["b_s"], lambda_s_arr))
 
         obj["witness"] = {
             "lambda_s": lambda_s,
-            "mu_p": mu_p
+            "mu_s": mu_s
         }
 
         obj["computed_values"] = {
-            "alpha": numpy_to_list(alpha),
-            "beta": int(beta),
-            "verification_check": {
-                "alpha_equals_zero": bool((alpha == 0).all()),
-                "beta_leq_minus_one": bool(beta <= -1)
-            }
+            "neg_b_s_T_lambda_s": neg_b_s_T_lambda_s
         }
 
         obj["satisfiable"] = True

@@ -31,7 +31,7 @@ def test_simple_implication():
 
     # Check indices (only λ_s and μ_p now)
     assert len(dual.lambda_s_indices) == 2
-    assert len(dual.mu_p_indices) == 1
+    assert len(dual.mu_s_indices) == 1
 
 
 def test_2d_implication_with_premises():
@@ -57,7 +57,7 @@ def test_2d_implication_with_premises():
 
     # Check that we have 2 lambda_s, 1 mu_p (no lambda_p)
     assert len(dual.lambda_s_indices) == 2
-    assert len(dual.mu_p_indices) == 1
+    assert len(dual.mu_s_indices) == 1
 
 
 def test_empty_premise():
@@ -75,7 +75,7 @@ def test_empty_premise():
     # Check dimensions
     assert dual.n_vars == 1
     assert len(dual.lambda_s_indices) == 0
-    assert len(dual.mu_p_indices) == 1
+    assert len(dual.mu_s_indices) == 1
 
 
 def test_additional_premise():
@@ -103,10 +103,10 @@ def test_additional_premise():
 
     # Check we have only λ_s and μ_p (no λ_p)
     assert len(dual.lambda_s_indices) == 1
-    assert len(dual.mu_p_indices) == 2
+    assert len(dual.mu_s_indices) == 2
 
     # Total 3 multipliers (1 λ_s, 2 μ_p)
-    total = len(dual.lambda_s_indices) + len(dual.mu_p_indices)
+    total = len(dual.lambda_s_indices) + len(dual.mu_s_indices)
     assert total == 3
     assert dual.A_eq.shape[1] == total
 

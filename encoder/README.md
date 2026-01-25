@@ -562,12 +562,12 @@ Verification Results for counter.gc
 [1/5] ✓ PASS: initial_non_infinity
      Source state: q0
      Infinity case: 0
-     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_p_0': 1}
+     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_s_0': 1}
 
 [2/5] ✓ PASS: initial_non_infinity
      Source state: q0
      Infinity case: 1
-     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_p_0': 1}
+     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_s_0': 1}
 
 [3/5] ✓ PASS: transition_non_infinity
      Program transition: 0
@@ -619,7 +619,7 @@ Each obligation is encoded in the disjunctive Farkas formulation:
 ∀y: A_s y ≤ b_s ⟹ C y ≤ d ⟹ ∨_k E_k y > f_k
 ```
 
-The tool uses Z3 to find witness values (`lambda_s`, `mu_p`) and computes verification checks (`alpha_p = 0`, `beta_p ≤ -1`).
+The tool uses Z3 to find witness values (`lambda_s`, `mu_s`) and computes verification checks (`alpha = 0`, `beta ≤ -1`).
 
 Example output:
 ```json
@@ -640,19 +640,19 @@ Example output:
         "n_lambda_s": 2,
         "n_middle": 0,
         "n_disjuncts": 1,
-        "n_mu_p": 2
+        "n_mu_s": 2
       },
       "source_ranking_state": "q0",
       "witness": {
         "lambda_s": [0, 1],
-        "mu_p": [1, 0]
+        "mu_s": [1, 0]
       },
       "computed_values": {
-        "alpha_p": [0],
-        "beta_p": -1,
+        "alpha": [0],
+        "beta": -1,
         "verification_check": {
-          "alpha_p_equals_zero": true,
-          "beta_p_leq_minus_one": true
+          "alpha_equals_zero": true,
+          "beta_leq_minus_one": true
         }
       },
       "satisfiable": true
@@ -664,9 +664,9 @@ Example output:
 
 Each obligation includes:
 - **matrices**: Disjunctive format (A_s, b_s, C, d, E_list, f_list)
-- **dimensions**: Sizes (n_vars, n_lambda_s, n_middle, n_disjuncts, n_mu_p)
-- **witness**: Z3-computed Farkas multipliers (lambda_s, mu_p) if satisfiable
-- **computed_values**: Verification results (alpha_p, beta_p, verification_check) if satisfiable
+- **dimensions**: Sizes (n_vars, n_lambda_s, n_middle, n_disjuncts, n_mu_s)
+- **witness**: Z3-computed Farkas multipliers (lambda_s, mu_s) if satisfiable
+- **computed_values**: Verification results (alpha, beta, verification_check) if satisfiable
 - **metadata**: obligation_type, source/target states, source_case_idx, is_fair, transitions
 - **satisfiable**: Whether Z3 found a witness for this obligation
 
@@ -694,15 +694,15 @@ for obl in obligations:
     # Access witness values (computed by Z3)
     if obl["witness"] is not None:
         lambda_s = obl["witness"]["lambda_s"]
-        mu_p = obl["witness"]["mu_p"]
+        mu_s = obl["witness"]["mu_s"]
 
         # Access computed verification checks
-        alpha_p = obl["computed_values"]["alpha_p"]
-        beta_p = obl["computed_values"]["beta_p"]
+        alpha = obl["computed_values"]["alpha"]
+        beta = obl["computed_values"]["beta"]
         checks = obl["computed_values"]["verification_check"]
 
-        print(f"  Witness found: lambda_s={lambda_s}, mu_p={mu_p}")
-        print(f"  Verification: alpha_p={alpha_p}, beta_p={beta_p}")
+        print(f"  Witness found: lambda_s={lambda_s}, mu_s={mu_s}")
+        print(f"  Verification: alpha={alpha}, beta={beta}")
         print(f"  Checks: {checks}")
 ```
 
@@ -725,7 +725,7 @@ else:
 # Get Farkas witnesses (proof certificates)
 witnesses = verification.get_witnesses()
 for w in witnesses:
-    print(f"Witness: {w}")  # {'lambda_s_0': 1, 'mu_p_0': 2, ...}
+    print(f"Witness: {w}")  # {'lambda_s_0': 1, 'mu_s_0': 2, ...}
 ```
 
 ## Explicit-State Verification (zkexplicit)

@@ -32,8 +32,8 @@ def test_basic_sat_case():
     assert witness is not None
     assert "lambda_s_0" in witness
     assert "lambda_s_1" in witness
-    assert "mu_p_0" in witness  # From merged A_p
-    assert "mu_p_1" in witness  # From original C_p
+    assert "mu_s_0" in witness  # From merged A_p
+    assert "mu_s_1" in witness  # From original C_p
 
 
 def test_basic_unsat_case():
@@ -87,7 +87,7 @@ def test_multiple_variables():
     assert "lambda_s_1" in witness
     assert "lambda_s_2" in witness
     assert "lambda_s_3" in witness
-    assert "mu_p_0" in witness
+    assert "mu_s_0" in witness
 
 
 def test_with_additional_premise():
@@ -112,8 +112,8 @@ def test_with_additional_premise():
     assert sat is True
     assert witness is not None
     assert "lambda_s_0" in witness
-    assert "mu_p_0" in witness  # From merged A_p
-    assert "mu_p_1" in witness  # From original C_p
+    assert "mu_s_0" in witness  # From merged A_p
+    assert "mu_s_1" in witness  # From original C_p
 
 
 def test_witness_values_nonnegative():
