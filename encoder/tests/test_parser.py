@@ -429,17 +429,17 @@ class TestTrueKeyword:
         # Create programmatically with empty guards
         result2_rf = RankingFunction(
             state="q0",
-            cases=[RankingCase(guards=[], expression=Num(1))]
+            cases=[RankingCase(guards=[], expression=Num(1), is_infinity=False)]
         )
 
         enc1 = encode_ranking_function(result1.ranking_functions["q0"])
         enc2 = encode_ranking_function(result2_rf)
 
         # Both should have empty guard matrices (0 rows)
-        assert enc1.cases[0].C_j.shape == enc2.cases[0].C_j.shape
-        assert enc1.cases[0].C_j.shape[0] == 0  # 0 rows = no constraints
-        assert enc1.cases[0].d_j.shape == enc2.cases[0].d_j.shape
-        assert enc1.cases[0].d_j.shape[0] == 0
+        assert enc1.finite_cases[0].C_j.shape == enc2.finite_cases[0].C_j.shape
+        assert enc1.finite_cases[0].C_j.shape[0] == 0  # 0 rows = no constraints
+        assert enc1.finite_cases[0].d_j.shape == enc2.finite_cases[0].d_j.shape
+        assert enc1.finite_cases[0].d_j.shape[0] == 0
 
     def test_fair_automaton_with_true(self):
         """Test fair automaton transition with true guard."""
@@ -487,3 +487,68 @@ class TestTrueKeyword:
         # Second case has no guards (true)
         assert len(rf.cases[1].guards) == 0
         assert rf.cases[1].expression == Num(1)
+
+class TestInfinityCases:
+    """Tests for parsing infinity cases with 'inf' keyword."""
+
+    def test_simple_infinity_case(self):
+        """Test parsing a simple infinity case."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x < 0 -> inf
+        """)
+
+        rf = result.ranking_functions["q0"]
+        assert len(rf.cases) == 1
+        case = rf.cases[0]
+        assert case.is_infinity is True
+        assert case.expression is None
+        assert len(case.guards) == 1
+
+    def test_mixed_finite_and_infinity_cases(self):
+        """Test parsing mixed finite and infinity cases."""
+        result = parse_with_constants("""
+            rank(q0):
+                [] x >= 0 && x <= 10 -> 10 - x
+                [] x < 0 -> inf
+                [] x > 10 -> inf
+        """)
+
+        rf = result.ranking_functions["q0"]
+        assert len(rf.cases) == 3
+
+        # First case is finite
+        assert rf.cases[0].is_infinity is False
+        assert rf.cases[0].expression is not None
+
+        # Second and third cases are infinity
+        assert rf.cases[1].is_infinity is True
+        assert rf.cases[1].expression is None
+        assert rf.cases[2].is_infinity is True
+        assert rf.cases[2].expression is None
+
+    def test_infinity_case_encoding(self):
+        """Test encoding infinity cases."""
+        from zkterm_tool import encode_ranking_function
+
+        result = parse_with_constants("""
+            rank(q0):
+                [] x >= 0 && x <= 10 -> 10 - x
+                [] x < 0 -> inf
+        """)
+
+        enc = encode_ranking_function(result.ranking_functions["q0"])
+
+        # Should have 1 finite case and 1 infinity case
+        assert len(enc.finite_cases) == 1
+        assert len(enc.infinity_cases) == 1
+
+        # Check finite case
+        finite = enc.finite_cases[0]
+        assert finite.w_j is not None
+        assert finite.u_j == 10
+
+        # Check infinity case
+        infinity = enc.infinity_cases[0]
+        assert infinity.E_k is not None
+        assert infinity.f_k is not None

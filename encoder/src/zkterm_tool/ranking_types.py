@@ -1,25 +1,32 @@
 """AST types for ranking functions."""
 
 from dataclasses import dataclass
+from typing import Optional
 from .ast_types import Comparison, Expr
 
 
 @dataclass(frozen=True)
 class RankingCase:
-    """One case of a ranking function: guard -> expression.
+    """One case of a ranking function: guard -> expression or guard -> inf.
 
     Represents a single case in a piecewise ranking function:
-        [] guard -> expression
+        [] guard -> expression  (finite case: is_infinity=False)
+        [] guard -> inf         (infinity case: is_infinity=True)
 
     The guard is a conjunction of comparisons (like in guarded commands).
-    The expression is a linear expression that computes the ranking value.
+    For finite cases: expression is a linear expression that computes the ranking value.
+    For infinity cases: expression is None, and the ranking value is +∞.
     """
-    guards: list[Comparison]  # conjunction of comparisons
-    expression: Expr          # linear expression (not assignment)
+    guards: list[Comparison]      # conjunction of comparisons
+    expression: Optional[Expr]    # linear expression (finite) or None (infinity)
+    is_infinity: bool = False     # True for infinity cases, False for finite cases
 
     def __repr__(self) -> str:
         guard_str = " && ".join(str(g) for g in self.guards)
-        return f"[] {guard_str} -> {self.expression}"
+        if self.is_infinity:
+            return f"[] {guard_str} -> inf"
+        else:
+            return f"[] {guard_str} -> {self.expression}"
 
     def get_variables(self) -> set[str]:
         """Extract all variable names from guards and expression."""
@@ -40,8 +47,9 @@ class RankingCase:
             collect_from_expr(guard.left)
             collect_from_expr(guard.right)
 
-        # Collect from expression
-        collect_from_expr(self.expression)
+        # Collect from expression (only for finite cases)
+        if self.expression is not None:
+            collect_from_expr(self.expression)
 
         return variables
 
@@ -52,12 +60,14 @@ class RankingFunction:
 
     Represents V(x, q) for a specific state q as a piecewise linear function:
         rank(q):
-            [] guard_1 -> expression_1
-            [] guard_2 -> expression_2
+            [] guard_1 -> expression_1  (finite case)
+            [] guard_2 -> expression_2  (finite case)
+            [] guard_3 -> inf           (infinity case)
             ...
 
     Cases are checked in order (first-match semantics).
-    If no guard is satisfied, V(x, q) = +∞.
+    Finite cases compute a ranking value; infinity cases assign V(x, q) = +∞.
+    Cases must be disjoint and cover the entire state space (validated separately).
     """
     state: str                    # state name (e.g., "q0")
     cases: list[RankingCase]      # ordered list of cases

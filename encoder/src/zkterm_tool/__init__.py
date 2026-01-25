@@ -10,11 +10,16 @@ from .parser import parse, parse_with_constants, ParseResult
 from .encoder import encode_transition, encode_program, encode_init, TransitionEncoding, InitEncoding
 from .ranking_encoder import (
     encode_ranking_case, encode_ranking_function, encode_ranking_functions,
-    RankingCaseEncoding, RankingFunctionEncoding
+    encode_infinity_case,
+    RankingCaseEncoding, InfinityCaseEncoding, RankingFunctionEncoding
 )
 from .automaton_encoder import (
     encode_automaton_transition, encode_automaton_transitions,
     AutomatonTransitionEncoding
+)
+from .ranking_validator import (
+    check_disjoint_cases, check_complete_coverage, check_non_negativity,
+    validate_ranking_function
 )
 from .verification_types import VerificationResult, ObligationResult
 from .verifier import Verifier
@@ -69,10 +74,14 @@ __all__ = [
     "TransitionEncoding", "InitEncoding",
     # Ranking encoder
     "encode_ranking_case", "encode_ranking_function", "encode_ranking_functions",
-    "RankingCaseEncoding", "RankingFunctionEncoding",
+    "encode_infinity_case",
+    "RankingCaseEncoding", "InfinityCaseEncoding", "RankingFunctionEncoding",
     # Automaton encoder
     "encode_automaton_transition", "encode_automaton_transitions",
     "AutomatonTransitionEncoding",
+    # Ranking validation
+    "check_disjoint_cases", "check_complete_coverage", "check_non_negativity",
+    "validate_ranking_function",
     # Verification
     "VerificationResult", "ObligationResult", "Verifier", "verify_termination",
     "extract_farkas_obligations",

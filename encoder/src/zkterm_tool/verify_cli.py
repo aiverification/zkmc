@@ -6,6 +6,8 @@ from pathlib import Path
 
 from .parser import parse_with_constants
 from .verifier import Verifier
+from .ranking_encoder import encode_ranking_functions
+from .ranking_validator import validate_ranking_function
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,6 +34,11 @@ Example:
         action="store_true",
         help="Show Farkas witnesses for each obligation"
     )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip ranking function validation checks (disjointness, coverage, non-negativity)"
+    )
 
     args = parser.parse_args(argv)
 
@@ -44,6 +51,29 @@ Example:
 
         text = file_path.read_text()
         result = parse_with_constants(text)
+
+        # Validate ranking functions (unless skipped)
+        if not args.skip_validation and result.ranking_functions:
+            encodings = encode_ranking_functions(result.ranking_functions)
+            validation_errors = []
+
+            for state, enc in encodings.items():
+                is_valid, errors = validate_ranking_function(
+                    enc.finite_cases,
+                    enc.infinity_cases,
+                    enc.variables
+                )
+                if not is_valid:
+                    validation_errors.append(f"State {state}:")
+                    for error in errors:
+                        validation_errors.append(f"  - {error}")
+
+            if validation_errors:
+                print("Ranking function validation failed:", file=sys.stderr)
+                for error in validation_errors:
+                    print(error, file=sys.stderr)
+                print("\nUse --skip-validation to bypass validation checks.", file=sys.stderr)
+                return 1
 
         # Verify
         verifier = Verifier(result)

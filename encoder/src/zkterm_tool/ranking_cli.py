@@ -5,7 +5,11 @@ import sys
 from typing import TextIO
 
 from .parser import parse_with_constants
-from .ranking_encoder import encode_ranking_functions, RankingCaseEncoding, RankingFunctionEncoding
+from .ranking_encoder import (
+    encode_ranking_functions, RankingCaseEncoding, InfinityCaseEncoding,
+    RankingFunctionEncoding
+)
+from .ranking_validator import validate_ranking_function
 
 
 def format_inequality(coeffs: list[int], variables: list[str], const: int, strict: bool = False) -> str:
@@ -89,11 +93,11 @@ def format_ranking_case(
     variables: list[str],
     symbolic: bool
 ) -> str:
-    """Format one ranking case encoding.
+    """Format one finite ranking case encoding.
 
-    Paper notation: V(x, q) = W_j x + u_j  if  C_j x ≤ d_j
+    Paper notation: V(x, q) = w_j x + u_j  if  C_j x ≤ d_j
     """
-    lines = [f"\nCase {case_num}:"]
+    lines = [f"\nFinite Case {case_num}:"]
 
     if symbolic:
         # Symbolic format
@@ -105,7 +109,7 @@ def format_ranking_case(
         else:
             lines.append("  Guard: true")
 
-        expr = format_expression(list(case_enc.W_j), variables, case_enc.u_j)
+        expr = format_expression(list(case_enc.w_j), variables, case_enc.u_j)
         lines.append(f"  Expression: {expr}")
     else:
         # Matrix format (default) - paper notation
@@ -118,9 +122,48 @@ def format_ranking_case(
         else:
             lines.append("  Guard: true (no constraints)")
 
-        lines.append("  Expression W_j x + u_j:")
-        lines.append(f"    W_j = [{' '.join(f'{v:3d}' for v in case_enc.W_j)}]")
+        lines.append("  Expression w_j x + u_j:")
+        lines.append(f"    w_j = [{' '.join(f'{v:3d}' for v in case_enc.w_j)}]")
         lines.append(f"    u_j = {case_enc.u_j}")
+
+    return "\n".join(lines)
+
+
+def format_infinity_case(
+    case_enc: InfinityCaseEncoding,
+    case_num: int,
+    variables: list[str],
+    symbolic: bool
+) -> str:
+    """Format one infinity ranking case encoding.
+
+    Paper notation: V(x, q) = +∞  if  E_k x ≤ f_k
+    """
+    lines = [f"\nInfinity Case {case_num}:"]
+
+    if symbolic:
+        # Symbolic format
+        if case_enc.E_k.shape[0] > 0:
+            lines.append("  Guard:")
+            for row, const in zip(case_enc.E_k, case_enc.f_k):
+                ineq = format_inequality(list(row), variables, int(const), strict=False)
+                lines.append(f"    {ineq}")
+        else:
+            lines.append("  Guard: true")
+
+        lines.append("  Value: +∞")
+    else:
+        # Matrix format (default) - paper notation
+        if case_enc.E_k.shape[0] > 0:
+            lines.append("  Guard E_k x <= f_k:")
+            lines.append("    E_k =")
+            for row in case_enc.E_k:
+                lines.append(f"      [{' '.join(f'{v:3d}' for v in row)}]")
+            lines.append(f"    f_k = [{' '.join(f'{v:3d}' for v in case_enc.f_k)}]")
+        else:
+            lines.append("  Guard: true (no constraints)")
+
+        lines.append("  Value: +∞")
 
     return "\n".join(lines)
 
@@ -132,9 +175,16 @@ def format_ranking_function(
     """Format a complete ranking function encoding."""
     lines = [f"=== Ranking Function for State {enc.state} ==="]
     lines.append(f"Variables: [{', '.join(enc.variables)}]")
+    lines.append(f"Finite cases: {len(enc.finite_cases)}")
+    lines.append(f"Infinity cases: {len(enc.infinity_cases)}")
 
-    for i, case_enc in enumerate(enc.cases, start=1):
+    # Format finite cases
+    for i, case_enc in enumerate(enc.finite_cases, start=1):
         lines.append(format_ranking_case(case_enc, i, enc.variables, symbolic))
+
+    # Format infinity cases
+    for k, case_enc in enumerate(enc.infinity_cases, start=1):
+        lines.append(format_infinity_case(case_enc, k, enc.variables, symbolic))
 
     return "\n".join(lines)
 
@@ -167,6 +217,11 @@ Example:
         action="store_true",
         help="Output with variable names (e.g., 'x - z <= 0' instead of matrices)"
     )
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip validation checks (disjointness, coverage, non-negativity)"
+    )
 
     args = parser.parse_args(argv)
 
@@ -190,6 +245,26 @@ Example:
 
         # Encode ranking functions
         encodings = encode_ranking_functions(result.ranking_functions)
+
+        # Validate ranking functions (unless skipped)
+        if not args.skip_validation:
+            validation_errors = []
+            for state, enc in encodings.items():
+                is_valid, errors = validate_ranking_function(
+                    enc.finite_cases,
+                    enc.infinity_cases,
+                    enc.variables
+                )
+                if not is_valid:
+                    validation_errors.append(f"State {state}:")
+                    for error in errors:
+                        validation_errors.append(f"  - {error}")
+
+            if validation_errors:
+                print("Validation failed:", file=sys.stderr)
+                for error in validation_errors:
+                    print(error, file=sys.stderr)
+                return 1
 
         # Output encodings
         for i, (state, enc) in enumerate(encodings.items()):

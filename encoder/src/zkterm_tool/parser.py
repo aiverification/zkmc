@@ -120,10 +120,21 @@ class ASTTransformer(Transformer):
         return None  # Don't include in items list, stored in self.ranking_functions
 
     def ranking_case(self, items: list) -> RankingCase:
-        """Parse ranking case: [] guard -> expression"""
+        """Parse ranking case: [] guard -> expression or [] guard -> inf"""
         guard_comparisons = items[0]  # list of comparisons from guard
-        expression = items[1]  # Expr
-        return RankingCase(guards=guard_comparisons, expression=expression)
+        expr_or_inf = items[1]  # Either Expr or special infinity marker
+
+        # Check if it's the infinity marker (None means inf keyword was used)
+        if expr_or_inf is None:
+            # Infinity case
+            return RankingCase(guards=guard_comparisons, expression=None, is_infinity=True)
+        else:
+            # Finite case - expr_or_inf is an Expr
+            return RankingCase(guards=guard_comparisons, expression=expr_or_inf, is_infinity=False)
+
+    def inf_keyword(self, items: list) -> None:
+        """Transform inf_keyword node into None marker for infinity cases"""
+        return None  # Special marker indicating infinity case
 
     def automaton_trans(self, items: list) -> None:
         """Parse automaton transition: trans(q, q'): guard or trans!(q, q'): guard"""

@@ -16,7 +16,9 @@ guarded_command: "[]" guard "->" assignments
 
 ranking_function: "rank" "(" STATE_NAME ")" ":" ranking_case+
 
-ranking_case: "[]" guard "->" expr
+ranking_case: "[]" guard "->" (expr | inf_keyword)
+
+inf_keyword: "inf"
 
 automaton_trans: "trans" fair_mark? "(" STATE_NAME "," STATE_NAME ")" ":" guard
 
