@@ -8,19 +8,24 @@ class ObligationResult:
     """Result of checking one verification obligation.
 
     Attributes:
-        obligation_type: Type of obligation ("initial", "well_defined",
-                        "non_increasing", "strictly_decreasing")
-        program_transition_idx: Index of program transition (for transition obligations)
+        obligation_type: Type of obligation ("initial" or "update")
+        program_transition_idx: Index of program transition (for update obligations)
         automaton_transition: Tuple of (from_state, to_state) for automaton transition
-        ranking_state: State name for ranking function
+        source_ranking_state: Source state for ranking function
+        target_ranking_state: Target state for ranking function (update only)
+        source_case_idx: Index of source ranking case (update only)
+        is_fair: Whether this is a fair transition (update only)
         passed: Whether the obligation was verified
         witness: Farkas multipliers that prove the obligation (if passed)
     """
     obligation_type: str
     program_transition_idx: int | None
     automaton_transition: tuple[str, str] | None
-    ranking_state: str | None
-    passed: bool
+    source_ranking_state: str | None
+    target_ranking_state: str | None = None
+    source_case_idx: int | None = None
+    is_fair: bool = False
+    passed: bool = False
     witness: dict[str, int] | None = None
 
     def __str__(self) -> str:
@@ -29,11 +34,18 @@ class ObligationResult:
 
         if self.program_transition_idx is not None:
             parts.append(f"prog_trans={self.program_transition_idx}")
+
         if self.automaton_transition:
             from_state, to_state = self.automaton_transition
-            parts.append(f"aut_trans=({from_state},{to_state})")
-        if self.ranking_state:
-            parts.append(f"state={self.ranking_state}")
+            fair_mark = "!" if self.is_fair else ""
+            parts.append(f"aut_trans{fair_mark}=({from_state},{to_state})")
+
+        if self.source_ranking_state:
+            case_info = f"[case {self.source_case_idx}]" if self.source_case_idx is not None else ""
+            parts.append(f"source={self.source_ranking_state}{case_info}")
+
+        if self.target_ranking_state:
+            parts.append(f"target={self.target_ranking_state}")
 
         return " ".join(parts)
 

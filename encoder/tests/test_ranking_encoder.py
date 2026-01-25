@@ -34,11 +34,11 @@ class TestRankingEncoder:
 
         # Guard: x > 0  =>  x - 0 > 0  =>  -x + 0 < 0  =>  -x < 0 (after normalization)
         # Or: 0 - x < 0  =>  -x < 0
-        assert case_enc.A_j.shape[0] >= 1 or case_enc.A_j.shape[0] == 0  # May have strict inequality
+        assert case_enc.C_j.shape[0] >= 1 or case_enc.C_j.shape[0] == 0  # May have strict inequality
 
-        # Expression: x  =>  C_j = [1], d_j = 0
-        assert np.array_equal(case_enc.C_j, np.array([1]))
-        assert case_enc.d_j == 0
+        # Expression: x  =>  W_j = [1], u_j = 0
+        assert np.array_equal(case_enc.W_j, np.array([1]))
+        assert case_enc.u_j == 0
 
     def test_linear_expression_encoding(self):
         """Test encoding linear expression: 10 - x"""
@@ -50,9 +50,9 @@ class TestRankingEncoder:
         enc = encode_ranking_function(result.ranking_functions["q0"])
         case_enc = enc.cases[0]
 
-        # Expression: 10 - x  =>  -x + 10  =>  C_j = [-1], d_j = 10
-        assert np.array_equal(case_enc.C_j, np.array([-1]))
-        assert case_enc.d_j == 10
+        # Expression: 10 - x  =>  -x + 10  =>  W_j = [-1], u_j = 10
+        assert np.array_equal(case_enc.W_j, np.array([-1]))
+        assert case_enc.u_j == 10
 
     def test_multiple_variables(self):
         """Test encoding with multiple variables."""
@@ -68,9 +68,9 @@ class TestRankingEncoder:
 
         case_enc = enc.cases[0]
 
-        # Expression: 2*x + 3*y - 1  =>  C_j = [2, 3], d_j = -1
-        assert np.array_equal(case_enc.C_j, np.array([2, 3]))
-        assert case_enc.d_j == -1
+        # Expression: 2*x + 3*y - 1  =>  W_j = [2, 3], u_j = -1
+        assert np.array_equal(case_enc.W_j, np.array([2, 3]))
+        assert case_enc.u_j == -1
 
     def test_multiple_cases_encoding(self):
         """Test encoding ranking function with multiple cases."""
@@ -86,19 +86,19 @@ class TestRankingEncoder:
 
         # First case: expression 10 - x
         case1 = enc.cases[0]
-        assert np.array_equal(case1.C_j, np.array([-1]))
-        assert case1.d_j == 10
+        assert np.array_equal(case1.W_j, np.array([-1]))
+        assert case1.u_j == 10
 
         # Guard should have 2 inequalities: x >= 0 AND x < 10
-        assert case1.A_j.shape[0] == 2
+        assert case1.C_j.shape[0] == 2
 
         # Second case: expression 1 (constant)
         case2 = enc.cases[1]
-        assert np.array_equal(case2.C_j, np.array([0]))  # no x term
-        assert case2.d_j == 1
+        assert np.array_equal(case2.W_j, np.array([0]))  # no x term
+        assert case2.u_j == 1
 
         # Guard should have 1 inequality: x >= 10
-        assert case2.A_j.shape[0] == 1
+        assert case2.C_j.shape[0] == 1
 
     def test_guard_encoding(self):
         """Test that guards are correctly encoded to (A_j, b_j)."""
@@ -113,7 +113,7 @@ class TestRankingEncoder:
         # Guard: x >= 0 AND x < 10
         # x >= 0  =>  -x <= 0  =>  [-1] x <= [0]
         # x < 10  =>  [1] x < [10] (strict) or x <= 9 if converted
-        assert case_enc.A_j.shape[0] == 2  # Two inequality constraints
+        assert case_enc.C_j.shape[0] == 2  # Two inequality constraints
 
     def test_multiple_states(self):
         """Test encoding multiple ranking functions with consistent variable ordering."""
@@ -148,9 +148,9 @@ class TestRankingEncoder:
         enc = encode_ranking_function(result.ranking_functions["q0"])
         case_enc = enc.cases[0]
 
-        # Expression: 5  =>  C_j = [0], d_j = 5
-        assert np.array_equal(case_enc.C_j, np.array([0]))
-        assert case_enc.d_j == 5
+        # Expression: 5  =>  W_j = [0], u_j = 5
+        assert np.array_equal(case_enc.W_j, np.array([0]))
+        assert case_enc.u_j == 5
 
     def test_with_constants_substitution(self):
         """Test encoding with constant substitution."""
@@ -164,9 +164,9 @@ class TestRankingEncoder:
         enc = encode_ranking_function(result.ranking_functions["q0"])
         case_enc = enc.cases[0]
 
-        # Expression: 10 - x  =>  C_j = [-1], d_j = 10
-        assert np.array_equal(case_enc.C_j, np.array([-1]))
-        assert case_enc.d_j == 10
+        # Expression: 10 - x  =>  W_j = [-1], u_j = 10
+        assert np.array_equal(case_enc.W_j, np.array([-1]))
+        assert case_enc.u_j == 10
 
     def test_empty_guard(self):
         """Test case with no explicit guard (always true)."""
@@ -178,12 +178,12 @@ class TestRankingEncoder:
         case_enc = enc.cases[0]
 
         # Empty guard should give empty matrix
-        assert case_enc.A_j.shape[0] == 0
-        assert case_enc.b_j.shape[0] == 0
+        assert case_enc.C_j.shape[0] == 0
+        assert case_enc.d_j.shape[0] == 0
 
-        # Expression: 1  =>  C_j = [0], d_j = 1
-        assert np.array_equal(case_enc.C_j, np.array([0]))
-        assert case_enc.d_j == 1
+        # Expression: 1  =>  W_j = [0], u_j = 1
+        assert np.array_equal(case_enc.W_j, np.array([0]))
+        assert case_enc.u_j == 1
 
     def test_negative_coefficients(self):
         """Test encoding with negative coefficients."""
@@ -195,9 +195,9 @@ class TestRankingEncoder:
         enc = encode_ranking_function(result.ranking_functions["q0"])
         case_enc = enc.cases[0]
 
-        # Expression: -2*x + 5  =>  C_j = [-2], d_j = 5
-        assert np.array_equal(case_enc.C_j, np.array([-2]))
-        assert case_enc.d_j == 5
+        # Expression: -2*x + 5  =>  W_j = [-2], u_j = 5
+        assert np.array_equal(case_enc.W_j, np.array([-2]))
+        assert case_enc.u_j == 5
 
 
 class TestVariableAlignment:
@@ -218,12 +218,12 @@ class TestVariableAlignment:
         assert enc.variables == ["x", "y"]
 
         # Guard matrix should have 2 columns (for x and y)
-        assert enc.cases[0].A_j.shape[1] == 2
+        assert enc.cases[0].C_j.shape[1] == 2
 
         # Expression vector should have 2 elements
-        assert enc.cases[0].C_j.shape[0] == 2
-        assert enc.cases[0].C_j[0] == 1  # coefficient of x
-        assert enc.cases[0].C_j[1] == 0  # coefficient of y (unconstrained)
+        assert enc.cases[0].W_j.shape[0] == 2
+        assert enc.cases[0].W_j[0] == 1  # coefficient of x
+        assert enc.cases[0].W_j[1] == 0  # coefficient of y (unconstrained)
 
     def test_partial_guard_encoding(self):
         """Test guard mentioning only subset of variables."""
@@ -237,19 +237,19 @@ class TestVariableAlignment:
 
         # Guard only mentions x, should have 0 coefficient for y and z
         case = enc.cases[0]
-        assert case.A_j.shape[1] == 3  # Three columns
+        assert case.C_j.shape[1] == 3  # Three columns
 
         # Check that y and z columns are all zeros in guard matrix
         # (meaning they're unconstrained by the guard)
-        if case.A_j.shape[0] > 0:  # If there are any rows (guards)
-            assert all(case.A_j[:, 1] == 0)  # y column (index 1)
-            assert all(case.A_j[:, 2] == 0)  # z column (index 2)
+        if case.C_j.shape[0] > 0:  # If there are any rows (guards)
+            assert all(case.C_j[:, 1] == 0)  # y column (index 1)
+            assert all(case.C_j[:, 2] == 0)  # z column (index 2)
 
         # Expression should have correct coefficients
-        assert case.C_j.shape[0] == 3
-        assert case.C_j[0] == 1  # x coefficient
-        assert case.C_j[1] == 1  # y coefficient
-        assert case.C_j[2] == 0  # z coefficient (not in expression)
+        assert case.W_j.shape[0] == 3
+        assert case.W_j[0] == 1  # x coefficient
+        assert case.W_j[1] == 1  # y coefficient
+        assert case.W_j[2] == 0  # z coefficient (not in expression)
 
     def test_union_of_variables_multiple_functions(self):
         """Test that encode_ranking_functions uses union correctly."""
@@ -268,14 +268,14 @@ class TestVariableAlignment:
         assert set(encodings["q0"].variables) == {"x", "y"}
 
         # Verify matrix dimensions are consistent
-        assert encodings["q0"].cases[0].A_j.shape[1] == 2
-        assert encodings["q1"].cases[0].A_j.shape[1] == 2
+        assert encodings["q0"].cases[0].C_j.shape[1] == 2
+        assert encodings["q1"].cases[0].C_j.shape[1] == 2
 
         # Verify expression vectors have correct structure
-        # q0's expression is 'x', so C_j should be [1, 0] for [x, y]
-        assert encodings["q0"].cases[0].C_j.shape[0] == 2
-        # q1's expression is 'y', so C_j should be [0, 1] for [x, y]
-        assert encodings["q1"].cases[0].C_j.shape[0] == 2
+        # q0's expression is 'x', so W_j should be [1, 0] for [x, y]
+        assert encodings["q0"].cases[0].W_j.shape[0] == 2
+        # q1's expression is 'y', so W_j should be [0, 1] for [x, y]
+        assert encodings["q1"].cases[0].W_j.shape[0] == 2
 
     def test_no_variables_in_guard(self):
         """Test guard with no variables (constant comparison)."""
@@ -288,8 +288,8 @@ class TestVariableAlignment:
         enc = encode_ranking_function(rf, variables=["x", "y"])
 
         # Guard is empty (true), so matrix has 0 rows
-        assert enc.cases[0].A_j.shape[0] == 0
-        assert enc.cases[0].A_j.shape[1] == 2  # But still 2 columns for variables
+        assert enc.cases[0].C_j.shape[0] == 0
+        assert enc.cases[0].C_j.shape[1] == 2  # But still 2 columns for variables
 
         # Expression should be just x
-        assert np.array_equal(enc.cases[0].C_j, np.array([1, 0]))
+        assert np.array_equal(enc.cases[0].W_j, np.array([1, 0]))

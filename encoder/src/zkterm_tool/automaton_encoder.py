@@ -4,9 +4,9 @@ Given automaton transitions:
     trans(q, q'): guard     - Regular transition (δ only)
     trans!(q, q'): guard    - Fair transition (both δ and F)
 
-We encode:
-    - δ (all transitions): A^(q,q')_δ x ≤ b^(q,q')_δ
-    - F (fair transitions): A^(q,q')_F x ≤ b^(q,q')_F
+We encode using paper notation P^(σ) x ≤ r^(σ):
+    - All transitions: P^(q,q') x ≤ r^(q,q')
+    - is_fair flag indicates if this is also in F set
 
 Where x = [var1, var2, ...] contains current-state variables only.
 """
@@ -24,38 +24,29 @@ from .encoder import comparison_to_inequalities, Inequality
 class AutomatonTransitionEncoding:
     """Encoding of one Büchi automaton transition.
 
-    Contains:
-    - δ encoding (always present): A_delta x ≤ b_delta
-    - F encoding (only if is_fair): A_fair x ≤ b_fair
+    Paper notation: P^(σ) x ≤ r^(σ) where σ = (q, q')
+
+    The is_fair flag indicates if this transition is in the F set.
     """
     from_state: str
     to_state: str
-    variables: List[str]              # Variable ordering
-    A_delta: NDArray[np.int64]        # δ matrix (always present)
-    b_delta: NDArray[np.int64]        # δ vector (always present)
-    A_fair: NDArray[np.int64] | None  # F matrix (only if is_fair)
-    b_fair: NDArray[np.int64] | None  # F vector (only if is_fair)
-    is_fair: bool                     # True if marked with !
+    variables: List[str]       # Variable ordering
+    P: NDArray[np.int64]       # Guard matrix: P^(σ) x ≤ r^(σ)
+    r: NDArray[np.int64]       # Guard vector
+    is_fair: bool              # True if marked with ! (in F set)
 
     def __repr__(self) -> str:
         fair_str = " (FAIR)" if self.is_fair else ""
         lines = [f"Transition: {self.from_state} -> {self.to_state}{fair_str}"]
         lines.append(f"Variables: {self.variables}")
 
-        # δ encoding (always present)
-        lines.append(f"\nδ encoding A^({self.from_state},{self.to_state}) x ≤ b:")
-        if self.A_delta.shape[0] > 0:
-            lines.append(f"  A =\n{self.A_delta}")
-            lines.append(f"  b = {self.b_delta}")
+        # Encoding P^(σ) x ≤ r^(σ)
+        lines.append(f"\nP^({self.from_state},{self.to_state}) x ≤ r^({self.from_state},{self.to_state}):")
+        if self.P.shape[0] > 0:
+            lines.append(f"  P =\n{self.P}")
+            lines.append(f"  r = {self.r}")
         else:
             lines.append("  (no constraints - always true)")
-
-        # F encoding (only for fair transitions)
-        if self.is_fair and self.A_fair is not None:
-            lines.append(f"\nF encoding A^({self.from_state},{self.to_state}) x ≤ b:")
-            if self.A_fair.shape[0] > 0:
-                lines.append(f"  A =\n{self.A_fair}")
-                lines.append(f"  b = {self.b_fair}")
 
         return "\n".join(lines)
 
@@ -71,7 +62,7 @@ def encode_automaton_transition(
         variables: Optional ordered list of variables. If None, extracted from transition.
 
     Returns:
-        AutomatonTransitionEncoding with δ and optionally F matrices
+        AutomatonTransitionEncoding with P^(σ) x ≤ r^(σ) and is_fair flag
     """
     # Extract variables if not provided
     if variables is None:
@@ -89,38 +80,28 @@ def encode_automaton_transition(
     var_idx = {v: i for i, v in enumerate(variables)}
     n_vars = len(variables)
 
-    # Build matrices
+    # Build matrices P^(σ) x ≤ r^(σ)
     if all_ineqs:
         m = len(all_ineqs)
-        A_delta = np.zeros((m, n_vars), dtype=np.int64)
-        b_delta = np.zeros(m, dtype=np.int64)
+        P = np.zeros((m, n_vars), dtype=np.int64)
+        r = np.zeros(m, dtype=np.int64)
 
         for i, iq in enumerate(all_ineqs):
             for v, coeff in iq.coeffs.items():
                 if v in var_idx:
-                    A_delta[i, var_idx[v]] = coeff
-            b_delta[i] = iq.const
+                    P[i, var_idx[v]] = coeff
+            r[i] = iq.const
     else:
         # No constraints (always true)
-        A_delta = np.zeros((0, n_vars), dtype=np.int64)
-        b_delta = np.zeros(0, dtype=np.int64)
-
-    # For fair transitions, F encoding is same as δ encoding
-    if trans.is_fair:
-        A_fair = A_delta.copy()
-        b_fair = b_delta.copy()
-    else:
-        A_fair = None
-        b_fair = None
+        P = np.zeros((0, n_vars), dtype=np.int64)
+        r = np.zeros(0, dtype=np.int64)
 
     return AutomatonTransitionEncoding(
         from_state=trans.from_state,
         to_state=trans.to_state,
         variables=variables,
-        A_delta=A_delta,
-        b_delta=b_delta,
-        A_fair=A_fair,
-        b_fair=b_fair,
+        P=P,
+        r=r,
         is_fair=trans.is_fair
     )
 

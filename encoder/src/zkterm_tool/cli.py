@@ -111,37 +111,32 @@ def format_automaton_transition(enc: AutomatonTransitionEncoding, symbolic: bool
     lines = [f"\nTransition: {enc.from_state} -> {enc.to_state}{fair_mark}"]
 
     # Guard info (symbolic)
-    if symbolic and enc.A_delta.shape[0] > 0:
+    if symbolic and enc.P.shape[0] > 0:
         guard_parts = []
-        for row, const in zip(enc.A_delta, enc.b_delta):
+        for row, const in zip(enc.P, enc.r):
             ineq = format_inequality(list(row), enc.variables, int(const), strict=False)
             guard_parts.append(ineq)
         lines.append(f"  Guard: {' && '.join(guard_parts)}")
 
-    # δ encoding
-    lines.append(f"  δ encoding A^({enc.from_state},{enc.to_state}) x <= b:")
+    # Encoding P^(σ) x ≤ r^(σ)
+    lines.append(f"  P^({enc.from_state},{enc.to_state}) x <= r^({enc.from_state},{enc.to_state}):")
     if symbolic:
-        if enc.A_delta.shape[0] > 0:
-            for row, const in zip(enc.A_delta, enc.b_delta):
+        if enc.P.shape[0] > 0:
+            for row, const in zip(enc.P, enc.r):
                 ineq = format_inequality(list(row), enc.variables, int(const), strict=False)
                 lines.append(f"    {ineq}")
         else:
             lines.append("    (no constraints - always true)")
     else:
-        if enc.A_delta.shape[0] > 0:
-            lines.append("    A =")
-            for row in enc.A_delta:
+        if enc.P.shape[0] > 0:
+            lines.append("    P =")
+            for row in enc.P:
                 lines.append(f"      [{' '.join(f'{v:3d}' for v in row)}]")
-            lines.append(f"    b = [{' '.join(f'{v:3d}' for v in enc.b_delta)}]")
+            lines.append(f"    r = [{' '.join(f'{v:3d}' for v in enc.r)}]")
         else:
             lines.append("    (no constraints - always true)")
 
-    # F encoding (only for fair transitions)
-    if enc.is_fair and enc.A_fair is not None:
-        lines.append(f"  F encoding A^({enc.from_state},{enc.to_state}) x <= b:")
-        lines.append("    (same as δ)")
-
-    lines.append(f"  Fair: {'YES' if enc.is_fair else 'NO'}")
+    lines.append(f"  In F (fair): {'YES' if enc.is_fair else 'NO'}")
 
     return "\n".join(lines)
 

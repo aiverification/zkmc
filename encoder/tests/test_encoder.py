@@ -213,36 +213,30 @@ class TestAutomatonEncoding:
     def test_regular_transition_encoding(self):
         """Test encoding regular transition: trans(q0, q1): x > 0"""
         from zkterm_tool import parse_with_constants, encode_automaton_transitions
-        
+
         result = parse_with_constants("trans(q0, q1): x > 0")
         encodings = encode_automaton_transitions(result.automaton_transitions)
-        
+
         assert len(encodings) == 1
         enc = encodings[0]
         assert enc.from_state == "q0"
         assert enc.to_state == "q1"
         assert enc.is_fair == False
-        assert enc.A_fair is None
-        assert enc.b_fair is None
-        assert enc.A_delta.shape[0] > 0  # Has constraints
+        assert enc.P.shape[0] > 0  # Has constraints
         
     def test_fair_transition_encoding(self):
         """Test encoding fair transition: trans!(q0, q1): x > 0"""
         from zkterm_tool import parse_with_constants, encode_automaton_transitions
-        
+
         result = parse_with_constants("trans!(q0, q1): x > 0")
         encodings = encode_automaton_transitions(result.automaton_transitions)
-        
+
         assert len(encodings) == 1
         enc = encodings[0]
         assert enc.from_state == "q0"
         assert enc.to_state == "q1"
         assert enc.is_fair == True
-        assert enc.A_fair is not None
-        assert enc.b_fair is not None
-        # Fair matrices should be same as delta
-        assert (enc.A_fair == enc.A_delta).all()
-        assert (enc.b_fair == enc.b_delta).all()
+        assert enc.P.shape[0] > 0  # Has constraints
         
     def test_multiple_transitions_consistent_variables(self):
         """Test encoding multiple transitions with consistent variable ordering."""
@@ -262,19 +256,19 @@ class TestAutomatonEncoding:
     def test_automaton_with_conjunctive_guards(self):
         """Test transition with multiple guards."""
         from zkterm_tool import parse_with_constants, encode_automaton_transitions
-        
+
         result = parse_with_constants("trans(q0, q1): x >= 0 && x < 10 && y > 5")
         encodings = encode_automaton_transitions(result.automaton_transitions)
-        
+
         enc = encodings[0]
         # Three guards should produce multiple inequalities
-        assert enc.A_delta.shape[0] >= 3
+        assert enc.P.shape[0] >= 3
         
     def test_automaton_no_guards(self):
         """Test transition with no guards (always true)."""
         from zkterm_tool import parse_with_constants, AutomatonTransition
         from zkterm_tool import encode_automaton_transition
-        
+
         # Create transition with no guards
         trans = AutomatonTransition(
             from_state="q0",
@@ -282,9 +276,9 @@ class TestAutomatonEncoding:
             guards=[],
             is_fair=False
         )
-        
+
         enc = encode_automaton_transition(trans, variables=["x"])
-        
+
         # No constraints (always true)
-        assert enc.A_delta.shape[0] == 0
-        assert enc.b_delta.shape[0] == 0
+        assert enc.P.shape[0] == 0
+        assert enc.r.shape[0] == 0

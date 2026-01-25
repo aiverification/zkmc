@@ -64,10 +64,15 @@ Example:
 
                 if obl.automaton_transition:
                     from_state, to_state = obl.automaton_transition
-                    print(f"     Automaton transition: {from_state} → {to_state}")
+                    fair_str = " (FAIR)" if obl.is_fair else ""
+                    print(f"     Automaton transition: {from_state} → {to_state}{fair_str}")
 
-                if obl.ranking_state:
-                    print(f"     Ranking state: {obl.ranking_state}")
+                if obl.source_ranking_state:
+                    case_str = f" [case {obl.source_case_idx}]" if obl.source_case_idx is not None else ""
+                    print(f"     Source state: {obl.source_ranking_state}{case_str}")
+
+                if obl.target_ranking_state:
+                    print(f"     Target state: {obl.target_ranking_state}")
 
                 if args.verbose and obl.passed and obl.witness:
                     print(f"     Witness: {obl.witness}")

@@ -7,14 +7,13 @@ Given a ranking function V(x, q) as piecewise linear cases:
         ...
 
 We encode each case j as:
-    - (A_j, b_j) for guard: A_j x ≤ b_j
-    - (C_j, d_j) for expression: C_j x + d_j
+    V(x, q) = W_j x + u_j  if  C_j x ≤ d_j
 
 Where:
-    - A_j is a matrix (guard can have multiple inequalities)
-    - b_j is a vector
-    - C_j is a row vector (expression returns scalar)
-    - d_j is a scalar
+    - C_j is a matrix (guard can have multiple inequalities)
+    - d_j is a vector
+    - W_j is a row vector (expression returns scalar)
+    - u_j is a scalar
 """
 
 from dataclasses import dataclass
@@ -30,13 +29,15 @@ from .encoder import comparison_to_inequalities, expr_to_linear, Inequality
 class RankingCaseEncoding:
     """Encoding of one ranking function case j for state q.
 
+    Paper notation: V(x, q) = W_j x + u_j  if  C_j x ≤ d_j
+
     Represents:
-        [] A_j x ≤ b_j -> C_j x + d_j
+        [] C_j x ≤ d_j -> W_j x + u_j
     """
-    A_j: NDArray[np.int64]  # Guard matrix: A_j x <= b_j
-    b_j: NDArray[np.int64]  # Guard vector
-    C_j: NDArray[np.int64]  # Expression row vector: C_j x + d_j
-    d_j: int                # Expression constant (scalar)
+    C_j: NDArray[np.int64]  # Guard matrix: C_j x ≤ d_j
+    d_j: NDArray[np.int64]  # Guard vector
+    W_j: NDArray[np.int64]  # Expression row vector: W_j x + u_j
+    u_j: int                # Expression constant (scalar)
 
 
 @dataclass
@@ -61,7 +62,9 @@ def encode_ranking_case(
     case: RankingCase,
     variables: List[str]
 ) -> RankingCaseEncoding:
-    """Encode one ranking case to (A_j, b_j, C_j, d_j).
+    """Encode one ranking case to (C_j, d_j, W_j, u_j).
+
+    Paper notation: V(x, q) = W_j x + u_j  if  C_j x ≤ d_j
 
     Args:
         case: The ranking case to encode
@@ -73,7 +76,7 @@ def encode_ranking_case(
     Raises:
         ValueError: If expression is not linear
     """
-    # 1. Encode guards to (A_j, b_j)
+    # 1. Encode guards to (C_j, d_j)
     # Guards are just inequalities (no assignments), so we encode them
     # the same way we encode guard comparisons in transitions
     guard_ineqs: List[Inequality] = []
@@ -85,11 +88,11 @@ def encode_ranking_case(
     var_idx = {v: i for i, v in enumerate(variables)}
     n_vars = len(variables)
 
-    # Build guard matrix A_j and vector b_j
+    # Build guard matrix C_j and vector d_j
     if guard_ineqs:
         m = len(guard_ineqs)
-        A_j = np.zeros((m, n_vars), dtype=np.int64)
-        b_j = np.zeros(m, dtype=np.int64)
+        C_j = np.zeros((m, n_vars), dtype=np.int64)
+        d_j = np.zeros(m, dtype=np.int64)
 
         for i, ineq in enumerate(guard_ineqs):
             # All inequalities should be non-strict (≤) for ranking guards
@@ -97,24 +100,24 @@ def encode_ranking_case(
             # we'll just encode them as-is (the comparison_to_inequalities handles this)
             for v, coeff in ineq.coeffs.items():
                 if v in var_idx:
-                    A_j[i, var_idx[v]] = coeff
-            b_j[i] = ineq.const
+                    C_j[i, var_idx[v]] = coeff
+            d_j[i] = ineq.const
     else:
         # No guards means always true (empty constraint)
-        A_j = np.zeros((0, n_vars), dtype=np.int64)
-        b_j = np.zeros(0, dtype=np.int64)
+        C_j = np.zeros((0, n_vars), dtype=np.int64)
+        d_j = np.zeros(0, dtype=np.int64)
 
-    # 2. Encode expression to (C_j, d_j)
+    # 2. Encode expression to (W_j, u_j)
     # Expression is a linear combination of variables + constant
     expr_lin = expr_to_linear(case.expression)
 
-    # C_j is row vector of coefficients
-    C_j = np.array([expr_lin.coeffs.get(v, 0) for v in variables], dtype=np.int64)
+    # W_j is row vector of coefficients
+    W_j = np.array([expr_lin.coeffs.get(v, 0) for v in variables], dtype=np.int64)
 
-    # d_j is the constant term
-    d_j = expr_lin.const
+    # u_j is the constant term
+    u_j = expr_lin.const
 
-    return RankingCaseEncoding(A_j=A_j, b_j=b_j, C_j=C_j, d_j=d_j)
+    return RankingCaseEncoding(C_j=C_j, d_j=d_j, W_j=W_j, u_j=u_j)
 
 
 def encode_ranking_function(

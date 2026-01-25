@@ -436,10 +436,10 @@ class TestTrueKeyword:
         enc2 = encode_ranking_function(result2_rf)
 
         # Both should have empty guard matrices (0 rows)
-        assert enc1.cases[0].A_j.shape == enc2.cases[0].A_j.shape
-        assert enc1.cases[0].A_j.shape[0] == 0  # 0 rows = no constraints
-        assert enc1.cases[0].b_j.shape == enc2.cases[0].b_j.shape
-        assert enc1.cases[0].b_j.shape[0] == 0
+        assert enc1.cases[0].C_j.shape == enc2.cases[0].C_j.shape
+        assert enc1.cases[0].C_j.shape[0] == 0  # 0 rows = no constraints
+        assert enc1.cases[0].d_j.shape == enc2.cases[0].d_j.shape
+        assert enc1.cases[0].d_j.shape[0] == 0
 
     def test_fair_automaton_with_true(self):
         """Test fair automaton transition with true guard."""

@@ -17,23 +17,23 @@ def test_basic_sat_case():
     A_s = np.array([[1], [-1]], dtype=np.int64)
     b_s = np.array([0, 0], dtype=np.int64)
 
-    # Additional premise: x ≥ 0 (-x ≤ 0)
-    A_p = np.array([[-1]], dtype=np.int64)
-    b_p = np.array([0], dtype=np.int64)
+    # Conclusion: [x ≥ 0 ∧ 10 - x > 0]
+    # Merged: [-x ≤ 0; -x > -10]
+    C_p = np.array([
+        [-1],  # x ≥ 0 becomes -x ≤ 0
+        [-1],  # 10 - x > 0 becomes -x > -10
+    ], dtype=np.int64)
+    d_p = np.array([0, -10], dtype=np.int64)
 
-    # Conclusion: 10 - x > 0, i.e., -x > -10
-    C_p = np.array([[-1]], dtype=np.int64)
-    d_p = np.array([-10], dtype=np.int64)
-
-    dual = build_farkas_dual(A_s, b_s, A_p, b_p, C_p, d_p)
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
     sat, witness = solve_farkas_dual(dual)
 
     assert sat is True
     assert witness is not None
     assert "lambda_s_0" in witness
     assert "lambda_s_1" in witness
-    assert "lambda_p_0" in witness
-    assert "mu_p_0" in witness
+    assert "mu_p_0" in witness  # From merged A_p
+    assert "mu_p_1" in witness  # From original C_p
 
 
 def test_basic_unsat_case():
@@ -46,14 +46,11 @@ def test_basic_unsat_case():
     A_s = np.array([[1], [-1]], dtype=np.int64)
     b_s = np.array([5, -5], dtype=np.int64)
 
-    A_p = np.zeros((0, 1), dtype=np.int64)
-    b_p = np.zeros(0, dtype=np.int64)
-
     # Conclusion: x > 10
     C_p = np.array([[1]], dtype=np.int64)
     d_p = np.array([10], dtype=np.int64)
 
-    dual = build_farkas_dual(A_s, b_s, A_p, b_p, C_p, d_p)
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
     sat, witness = solve_farkas_dual(dual)
 
     # This should be UNSAT because the implication is false
@@ -76,14 +73,11 @@ def test_multiple_variables():
     ], dtype=np.int64)
     b_s = np.array([0, 0, 0, 0], dtype=np.int64)
 
-    A_p = np.zeros((0, 2), dtype=np.int64)
-    b_p = np.zeros(0, dtype=np.int64)
-
     # Conclusion: x + y > -1
     C_p = np.array([[1, 1]], dtype=np.int64)
     d_p = np.array([-1], dtype=np.int64)
 
-    dual = build_farkas_dual(A_s, b_s, A_p, b_p, C_p, d_p)
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
     sat, witness = solve_farkas_dual(dual)
 
     assert sat is True
@@ -98,27 +92,28 @@ def test_multiple_variables():
 
 def test_with_additional_premise():
     """
-    Test with both A_s and A_p: x ≤ 5 ∧ x ≥ 0 ⟹ x > -1
+    Test with merged conclusion: x ≤ 5 ⟹ [x ≥ 0 ∧ x > -1]
 
     This should be SAT (always true).
     """
     A_s = np.array([[1]], dtype=np.int64)
     b_s = np.array([5], dtype=np.int64)
 
-    A_p = np.array([[-1]], dtype=np.int64)
-    b_p = np.array([0], dtype=np.int64)
+    # Merged conclusion: [x ≥ 0; x > -1]
+    C_p = np.array([
+        [-1],  # x ≥ 0 becomes -x ≤ 0
+        [1],   # x > -1
+    ], dtype=np.int64)
+    d_p = np.array([0, -1], dtype=np.int64)
 
-    C_p = np.array([[1]], dtype=np.int64)
-    d_p = np.array([-1], dtype=np.int64)
-
-    dual = build_farkas_dual(A_s, b_s, A_p, b_p, C_p, d_p)
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
     sat, witness = solve_farkas_dual(dual)
 
     assert sat is True
     assert witness is not None
     assert "lambda_s_0" in witness
-    assert "lambda_p_0" in witness
-    assert "mu_p_0" in witness
+    assert "mu_p_0" in witness  # From merged A_p
+    assert "mu_p_1" in witness  # From original C_p
 
 
 def test_witness_values_nonnegative():
@@ -126,12 +121,10 @@ def test_witness_values_nonnegative():
     # SAT case: x = 0 ⟹ -x > -10
     A_s = np.array([[1], [-1]], dtype=np.int64)
     b_s = np.array([0, 0], dtype=np.int64)
-    A_p = np.zeros((0, 1), dtype=np.int64)
-    b_p = np.zeros(0, dtype=np.int64)
     C_p = np.array([[-1]], dtype=np.int64)
     d_p = np.array([-10], dtype=np.int64)
 
-    dual = build_farkas_dual(A_s, b_s, A_p, b_p, C_p, d_p)
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
     sat, witness = solve_farkas_dual(dual)
 
     assert sat is True
@@ -147,12 +140,10 @@ def test_bounded_by_max_value():
     # SAT case: x = 0 ⟹ -x > -10
     A_s = np.array([[1], [-1]], dtype=np.int64)
     b_s = np.array([0, 0], dtype=np.int64)
-    A_p = np.zeros((0, 1), dtype=np.int64)
-    b_p = np.zeros(0, dtype=np.int64)
     C_p = np.array([[-1]], dtype=np.int64)
     d_p = np.array([-10], dtype=np.int64)
 
-    dual = build_farkas_dual(A_s, b_s, A_p, b_p, C_p, d_p)
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
 
     max_val = 1000
     sat, witness = solve_farkas_dual(dual, max_value=max_val)
@@ -179,14 +170,11 @@ def test_ranking_well_definedness():
     ], dtype=np.int64)
     b_s = np.array([0, 9], dtype=np.int64)
 
-    A_p = np.zeros((0, 1), dtype=np.int64)
-    b_p = np.zeros(0, dtype=np.int64)
-
     # Conclusion: 10 - x > 0, i.e., -x > -10
     C_p = np.array([[-1]], dtype=np.int64)
     d_p = np.array([-10], dtype=np.int64)
 
-    dual = build_farkas_dual(A_s, b_s, A_p, b_p, C_p, d_p)
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
     sat, witness = solve_farkas_dual(dual)
 
     assert sat is True

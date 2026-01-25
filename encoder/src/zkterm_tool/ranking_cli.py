@@ -89,35 +89,38 @@ def format_ranking_case(
     variables: list[str],
     symbolic: bool
 ) -> str:
-    """Format one ranking case encoding."""
+    """Format one ranking case encoding.
+
+    Paper notation: V(x, q) = W_j x + u_j  if  C_j x ≤ d_j
+    """
     lines = [f"\nCase {case_num}:"]
 
     if symbolic:
         # Symbolic format
-        if case_enc.A_j.shape[0] > 0:
+        if case_enc.C_j.shape[0] > 0:
             lines.append("  Guard:")
-            for row, const in zip(case_enc.A_j, case_enc.b_j):
+            for row, const in zip(case_enc.C_j, case_enc.d_j):
                 ineq = format_inequality(list(row), variables, int(const), strict=False)
                 lines.append(f"    {ineq}")
         else:
             lines.append("  Guard: true")
 
-        expr = format_expression(list(case_enc.C_j), variables, case_enc.d_j)
+        expr = format_expression(list(case_enc.W_j), variables, case_enc.u_j)
         lines.append(f"  Expression: {expr}")
     else:
-        # Matrix format (default)
-        if case_enc.A_j.shape[0] > 0:
-            lines.append("  Guard A_j x <= b_j:")
-            lines.append("    A_j =")
-            for row in case_enc.A_j:
+        # Matrix format (default) - paper notation
+        if case_enc.C_j.shape[0] > 0:
+            lines.append("  Guard C_j x <= d_j:")
+            lines.append("    C_j =")
+            for row in case_enc.C_j:
                 lines.append(f"      [{' '.join(f'{v:3d}' for v in row)}]")
-            lines.append(f"    b_j = [{' '.join(f'{v:3d}' for v in case_enc.b_j)}]")
+            lines.append(f"    d_j = [{' '.join(f'{v:3d}' for v in case_enc.d_j)}]")
         else:
             lines.append("  Guard: true (no constraints)")
 
-        lines.append("  Expression C_j x + d_j:")
-        lines.append(f"    C_j = [{' '.join(f'{v:3d}' for v in case_enc.C_j)}]")
-        lines.append(f"    d_j = {case_enc.d_j}")
+        lines.append("  Expression W_j x + u_j:")
+        lines.append(f"    W_j = [{' '.join(f'{v:3d}' for v in case_enc.W_j)}]")
+        lines.append(f"    u_j = {case_enc.u_j}")
 
     return "\n".join(lines)
 
