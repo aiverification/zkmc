@@ -56,16 +56,22 @@ class ObligationResult:
         if self.source_ranking_state:
             if self.obligation_type in ["transition_non_infinity", "update"]:
                 case_info = f"[finite_case {self.source_case_idx}]" if self.source_case_idx is not None else ""
+            elif self.obligation_type == "initial_non_infinity" and self.infinity_case_idx is not None:
+                case_info = f"[infinity_case {self.infinity_case_idx}]"
             else:
                 case_info = ""
             parts.append(f"source={self.source_ranking_state}{case_info}")
 
         if self.target_ranking_state:
-            case_info = f"[finite_case {self.target_case_idx}]" if self.target_case_idx is not None else ""
+            # For transition_non_infinity: show infinity case
+            # For update: show finite case
+            if self.obligation_type == "transition_non_infinity" and self.infinity_case_idx is not None:
+                case_info = f"[infinity_case {self.infinity_case_idx}]"
+            elif self.target_case_idx is not None:
+                case_info = f"[finite_case {self.target_case_idx}]"
+            else:
+                case_info = ""
             parts.append(f"target={self.target_ranking_state}{case_info}")
-
-        if self.infinity_case_idx is not None:
-            parts.append(f"infinity_case={self.infinity_case_idx}")
 
         return " ".join(parts)
 

@@ -594,3 +594,104 @@ def test_multiple_cases_multiple_states_support():
     # Check states are present
     states = {o.source_ranking_state for o in initial_obls}
     assert states == {"q0", "q1", "q2"}
+
+
+def test_initial_obligations_respect_automaton_init():
+    """
+    Test that initial_non_infinity obligations only check states in Q_0.
+
+    When automaton_init is specified, we should only verify initial conditions
+    for states that are actually in the initial automaton state set.
+    """
+    program = """
+        init: x = 0
+
+        [] x < 10 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 10 -> 10 - x
+            [] x < 0 -> inf
+            [] x > 10 -> inf
+
+        rank(q1):
+            [] x >= 5 && x <= 15 -> 15 - x
+            [] x < 5 -> inf
+            [] x > 15 -> inf
+
+        automaton_init: q0
+
+        trans(q0, q1): x >= 5
+        trans(q1, q0): x < 8
+    """
+
+    result = parse_with_constants(program)
+    verifier = Verifier(result)
+    verification = verifier.verify_all()
+
+    # Should only have initial_non_infinity for q0 (which is in Q_0)
+    # q0 has 2 infinity cases, so 2 initial obligations
+    initial_obls = [o for o in verification.obligations if o.obligation_type == "initial_non_infinity"]
+    assert len(initial_obls) == 2
+
+    # All should be for q0 only
+    states = {o.source_ranking_state for o in initial_obls}
+    assert states == {"q0"}
+
+    # No initial obligations for q1 (not in Q_0)
+    q1_initial = [o for o in initial_obls if o.source_ranking_state == "q1"]
+    assert len(q1_initial) == 0
+
+
+def test_transition_non_infinity_uses_correct_states():
+    """
+    Test that transition_non_infinity obligations use:
+    - Finite cases from source state (q)
+    - Infinity cases from target state (q')
+
+    For automaton transition (q, σ, q') ∈ δ.
+    """
+    program = """
+        init: x = 5
+
+        [] x < 10 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 10 -> 10 - x
+            [] x < 0 -> inf
+            [] x > 10 -> inf
+
+        rank(q1):
+            [] x >= 5 && x <= 15 -> 15 - x
+            [] x < 5 -> inf
+            [] x > 15 -> inf
+
+        automaton_init: q0
+
+        trans(q0, q1): x >= 5
+        trans(q1, q0): x <= 10
+    """
+
+    result = parse_with_constants(program)
+    verifier = Verifier(result)
+    verification = verifier.verify_all()
+
+    trans_non_inf = [o for o in verification.obligations if o.obligation_type == "transition_non_infinity"]
+
+    # Verify all obligations have correct source/target states
+    for obl in trans_non_inf:
+        aut_from, aut_to = obl.automaton_transition
+        # Source ranking state should match automaton from_state
+        assert obl.source_ranking_state == aut_from, \
+            f"Source ranking state {obl.source_ranking_state} doesn't match automaton from_state {aut_from}"
+        # Target ranking state should match automaton to_state
+        assert obl.target_ranking_state == aut_to, \
+            f"Target ranking state {obl.target_ranking_state} doesn't match automaton to_state {aut_to}"
+
+    # Count obligations by transition
+    q0_to_q1 = [o for o in trans_non_inf if o.automaton_transition == ("q0", "q1")]
+    q1_to_q0 = [o for o in trans_non_inf if o.automaton_transition == ("q1", "q0")]
+
+    # q0->q1: 1 prog_trans × 1 finite_case(q0) × 2 infinity_cases(q1) = 2
+    assert len(q0_to_q1) == 2
+    # q1->q0: 1 prog_trans × 1 finite_case(q1) × 2 infinity_cases(q0) = 2
+    assert len(q1_to_q0) == 2

@@ -103,6 +103,10 @@ class Verifier:
         # Note: Use 'is not None' because empty list [] is falsy but valid (means 'true')
         self.init_enc = encode_init(result.init_condition, self.variables) if result.init_condition is not None else None
 
+        # Store automaton initial states (Q_0)
+        # If not specified, default to all states with ranking functions
+        self.automaton_initial_states = result.automaton_initial_states if result.automaton_initial_states is not None else list(result.ranking_functions.keys())
+
     def _align_and_expand(
         self,
         A: NDArray[np.int64],
@@ -195,17 +199,18 @@ class Verifier:
         obligations = []
 
         # Type 1: Initial non-infinity obligations (one per state × infinity case)
-        for state in self.rank_encs.keys():
-            obligations.extend(self._verify_initial_non_infinity(state))
+        # Only check states in Q_0 (automaton initial states)
+        for state in self.automaton_initial_states:
+            if state in self.rank_encs:
+                obligations.extend(self._verify_initial_non_infinity(state))
 
         # Type 2: Transition non-infinity obligations
-        # (one per prog_trans × aut_trans × state × finite_case × infinity_case)
+        # (one per prog_trans × aut_trans × finite_case(source) × infinity_case(target))
         for prog_idx, prog_trans in enumerate(self.trans_encs):
             for aut_trans in self.aut_encs:
-                for state in self.rank_encs.keys():
-                    obligations.extend(
-                        self._verify_transition_non_infinity(prog_idx, prog_trans, aut_trans, state)
-                    )
+                obligations.extend(
+                    self._verify_transition_non_infinity(prog_idx, prog_trans, aut_trans)
+                )
 
         # Type 3: Update obligations
         # (one per prog_trans × aut_trans × source_finite_case × target_finite_case)
@@ -227,9 +232,10 @@ class Verifier:
             A_0 x ≤ b_0 => E_k x > f_k
 
         This checks that initial states don't have ranking value +∞.
+        Should only be called for states in Q_0 (automaton_initial_states).
 
         Args:
-            state: Automaton state with ranking function
+            state: Automaton state in Q_0 with ranking function
 
         Returns:
             List of ObligationResult (one per infinity case)
@@ -279,42 +285,53 @@ class Verifier:
         self,
         prog_idx: int,
         prog_trans: TransitionEncoding,
-        aut_trans: AutomatonTransitionEncoding,
-        state: str
+        aut_trans: AutomatonTransitionEncoding
     ) -> List[ObligationResult]:
         """Type 2: Verify transitions from finite cases don't reach infinity.
 
-        For each finite case j and infinity case k:
-            A_i [x;x'] ≤ b_i => [P; C_j] x ≤ [r; d_j] => E_k x > f_k
+        For automaton transition (q, σ, q') ∈ δ:
+        For each finite case j in rank(q) and infinity case k in rank(q'):
+            A_i [x;x'] ≤ b_i => [P; C_j] x ≤ [r; d_j] => E_k x' > f_k
 
-        This checks that from finite ranking values, we don't transition to +∞.
+        This checks that from finite ranking values in source state q,
+        we don't transition to +∞ in target state q'.
 
         Args:
             prog_idx: Index of program transition
             prog_trans: Program transition encoding
-            aut_trans: Automaton transition encoding
-            state: Automaton state
+            aut_trans: Automaton transition encoding (q, σ, q')
 
         Returns:
-            List of ObligationResult (one per finite_case × infinity_case pair)
+            List of ObligationResult (one per finite_case(q) × infinity_case(q') pair)
         """
         obligations = []
 
-        rank_enc = self.rank_encs[state]
+        # Get source and target states from automaton transition
+        source_state = aut_trans.from_state
+        target_state = aut_trans.to_state
+
+        # Skip if states don't have ranking functions
+        if source_state not in self.rank_encs or target_state not in self.rank_encs:
+            return obligations
+
+        source_enc = self.rank_encs[source_state]
+        target_enc = self.rank_encs[target_state]
         n = len(self.variables)
 
-        # For each finite case j
-        for fin_case_idx, fin_case in enumerate(rank_enc.finite_cases):
-            # For each infinity case k
-            for inf_case_idx, inf_case in enumerate(rank_enc.infinity_cases):
+        # For each finite case j in source state q
+        for fin_case_idx, fin_case in enumerate(source_enc.finite_cases):
+            # For each infinity case k in target state q'
+            for inf_case_idx, inf_case in enumerate(target_enc.infinity_cases):
                 # Premise: A_i [x;x'] ≤ b_i
                 A_s = prog_trans.A
                 b_s = prog_trans.b
 
                 # Middle premise: [P; C_j] x ≤ [r; d_j]
+                # P: automaton transition guard
+                # C_j: finite case guard from source state q
                 # Need to expand from [x] to [x;x'] space
                 P_exp, r_exp = self._align_and_expand(aut_trans.P, aut_trans.r, aut_trans.variables, primed=False)
-                C_j_exp, d_j_exp = self._align_and_expand(fin_case.C_j, fin_case.d_j, rank_enc.variables, primed=False)
+                C_j_exp, d_j_exp = self._align_and_expand(fin_case.C_j, fin_case.d_j, source_enc.variables, primed=False)
 
                 # Stack [P; C_j] and concatenate [r; d_j]
                 if P_exp.shape[0] > 0 and C_j_exp.shape[0] > 0:
@@ -330,8 +347,9 @@ class Verifier:
                     C = np.zeros((0, 2*n), dtype=np.int64)
                     d = np.zeros(0, dtype=np.int64)
 
-                # Conclusion: E_k x > f_k (expand to [x;x'] space)
-                E_exp, f_exp = self._align_and_expand(inf_case.E_k, inf_case.f_k, rank_enc.variables, primed=False)
+                # Conclusion: E_k x' > f_k (expand to [x;x'] space, check next state)
+                # E_k: infinity case guard from target state q'
+                E_exp, f_exp = self._align_and_expand(inf_case.E_k, inf_case.f_k, target_enc.variables, primed=True)
 
                 # Stack premise and middle premise
                 if A_s.shape[0] > 0 and C.shape[0] > 0:
@@ -357,8 +375,8 @@ class Verifier:
                     obligation_type="transition_non_infinity",
                     program_transition_idx=prog_idx,
                     automaton_transition=(aut_trans.from_state, aut_trans.to_state),
-                    source_ranking_state=state,
-                    target_ranking_state=None,
+                    source_ranking_state=source_state,
+                    target_ranking_state=target_state,
                     source_case_idx=fin_case_idx,
                     target_case_idx=None,
                     infinity_case_idx=inf_case_idx,

@@ -48,23 +48,26 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
         }
 
     elif obl_result.obligation_type == "transition_non_infinity":
-        # Type 2: A_i [x;x'] ≤ b_i => [P; C_j] x ≤ [r; d_j] => E_k x > f_k
+        # Type 2: A_i [x;x'] ≤ b_i => [P; C_j] x ≤ [r; d_j] => E_k x' > f_k
+        # For transition (q, σ, q'): finite case j from rank(q), infinity case k from rank(q')
         prog_idx = obl_result.program_transition_idx
         from_state, to_state = obl_result.automaton_transition
-        state = obl_result.source_ranking_state
+        source_state = obl_result.source_ranking_state
+        target_state = obl_result.target_ranking_state
         fin_case_idx = obl_result.source_case_idx
         inf_case_idx = obl_result.infinity_case_idx
 
         prog_trans = verifier.trans_encs[prog_idx]
         aut_trans = next(a for a in verifier.aut_encs
                        if a.from_state == from_state and a.to_state == to_state)
-        rank_enc = verifier.rank_encs[state]
-        fin_case = rank_enc.finite_cases[fin_case_idx]
-        inf_case = rank_enc.infinity_cases[inf_case_idx]
+        source_rank_enc = verifier.rank_encs[source_state]
+        target_rank_enc = verifier.rank_encs[target_state]
+        fin_case = source_rank_enc.finite_cases[fin_case_idx]
+        inf_case = target_rank_enc.infinity_cases[inf_case_idx]
 
         # Build stacked premise: [A_i; P; C_j]
         P_exp, r_exp = verifier._align_and_expand(aut_trans.P, aut_trans.r, aut_trans.variables, primed=False)
-        C_j_exp, d_j_exp = verifier._align_and_expand(fin_case.C_j, fin_case.d_j, rank_enc.variables, primed=False)
+        C_j_exp, d_j_exp = verifier._align_and_expand(fin_case.C_j, fin_case.d_j, source_rank_enc.variables, primed=False)
 
         matrices_to_stack = [prog_trans.A]
         vectors_to_concat = [prog_trans.b]
@@ -79,8 +82,8 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
         A_s_full = np.vstack(matrices_to_stack) if matrices_to_stack else np.zeros((0, 2*n), dtype=np.int64)
         b_s_full = np.concatenate(vectors_to_concat) if vectors_to_concat else np.zeros(0, dtype=np.int64)
 
-        # Expand E_k to [x;x'] space
-        E_exp, f_exp = verifier._align_and_expand(inf_case.E_k, inf_case.f_k, rank_enc.variables, primed=False)
+        # Expand E_k to [x;x'] space (check next state x')
+        E_exp, f_exp = verifier._align_and_expand(inf_case.E_k, inf_case.f_k, target_rank_enc.variables, primed=True)
 
         return {
             "A_s": A_s_full,
