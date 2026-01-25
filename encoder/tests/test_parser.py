@@ -450,6 +450,26 @@ class TestTrueKeyword:
         assert trans.is_fair == True
         assert len(trans.guards) == 0
 
+    def test_automaton_init_single_state(self):
+        """Test automaton_init with single state."""
+        result = parse_with_constants("automaton_init: q0")
+
+        assert result.automaton_initial_states is not None
+        assert result.automaton_initial_states == ["q0"]
+
+    def test_automaton_init_multiple_states(self):
+        """Test automaton_init with multiple states."""
+        result = parse_with_constants("automaton_init: q0, q1, q2")
+
+        assert result.automaton_initial_states is not None
+        assert result.automaton_initial_states == ["q0", "q1", "q2"]
+
+    def test_automaton_init_not_specified(self):
+        """Test that automaton_init is None when not specified."""
+        result = parse_with_constants("[] x > 0 -> x = x + 1")
+
+        assert result.automaton_initial_states is None
+
     def test_multiple_cases_with_true(self):
         """Test ranking function with multiple cases including true."""
         result = parse_with_constants("""

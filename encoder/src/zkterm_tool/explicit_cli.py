@@ -281,9 +281,12 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
             return 1
 
         # Determine automaton initial states (Q_0)
-        # For now, use all states that have ranking functions
-        # TODO: Should this come from automaton definition?
-        automaton_initial_states = list(rank_encs.keys())
+        # Require explicit automaton_init declaration
+        if result.automaton_initial_states is None:
+            print("Error: No automaton initial states specified. Add 'automaton_init: q0, ...' to your program.", file=sys.stderr)
+            return 1
+
+        automaton_initial_states = result.automaton_initial_states
 
         # Compute violation sets and valid sets
         violations = compute_violation_sets(

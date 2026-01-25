@@ -24,6 +24,7 @@ class ParseResult:
     commands: list[GuardedCommand]                   # Program transitions
     ranking_functions: dict[str, RankingFunction]    # state -> RankingFunction
     automaton_transitions: list[AutomatonTransition] # Büchi automaton transitions
+    automaton_initial_states: list[str] | None       # Q_0 (None = use all states with ranking functions)
 
 
 class ASTTransformer(Transformer):
@@ -39,18 +40,21 @@ class ASTTransformer(Transformer):
         self._init_guards: list[Comparison] | None = None
         self.ranking_functions: dict[str, RankingFunction] = {}
         self.automaton_transitions: list[AutomatonTransition] = []
+        self.automaton_initial_states: list[str] | None = None
 
     def start(self, items: list) -> ParseResult:
-        # Items are a mix of None (from const_def, ranking_function, automaton_trans, init_condition)
+        # Items are a mix of None (from const_def, ranking_function, automaton_trans, automaton_init, init_condition)
         # and GuardedCommands
         commands = [item for item in items if isinstance(item, GuardedCommand)]
-        # ranking_functions, init_condition, and automaton_transitions are collected in their respective fields
+        # ranking_functions, init_condition, automaton_transitions, and automaton_initial_states
+        # are collected in their respective fields
         return ParseResult(
             constants=self.constants,
             init_condition=self._init_guards,
             commands=commands,
             ranking_functions=self.ranking_functions,
-            automaton_transitions=self.automaton_transitions
+            automaton_transitions=self.automaton_transitions,
+            automaton_initial_states=self.automaton_initial_states
         )
 
     def init_condition(self, items: list) -> None:
@@ -147,6 +151,16 @@ class ASTTransformer(Transformer):
         )
         self.automaton_transitions.append(trans)
         return None  # Don't include in items list, stored in self.automaton_transitions
+
+    def automaton_init(self, items: list) -> None:
+        """Parse automaton initial states: automaton_init: q0, q1, ..."""
+        state_list = items[0]  # list of state names from state_list
+        self.automaton_initial_states = state_list
+        return None  # Don't include in items list, stored in self.automaton_initial_states
+
+    def state_list(self, items: list) -> list[str]:
+        """Parse state list: q0, q1, ..."""
+        return [str(token) for token in items]
 
     @v_args(inline=True)
     def add(self, left: Expr, right: Expr) -> BinOp:

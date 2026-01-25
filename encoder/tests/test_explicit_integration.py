@@ -23,6 +23,8 @@ def test_violations_to_json_structure():
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
 
+    automaton_init: q0
+
     trans(q0, q0): x < 5
     """
     result = parse_with_constants(program)
@@ -106,6 +108,8 @@ def test_violations_to_json_with_embeddings():
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
 
+    automaton_init: q0
+
     trans(q0, q0): x < 5
     """
     result = parse_with_constants(program)
@@ -152,6 +156,8 @@ def test_cli_simple_counter(tmp_path):
 
     rank(q0):
         [] x >= 0 && x < maxVal + 1 -> maxVal + 1 - x
+
+    automaton_init: q0
 
     trans(q0, q0): x < maxVal
     """
@@ -204,6 +210,8 @@ def test_cli_pretty_output(tmp_path):
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
 
+    automaton_init: q0
+
     trans(q0, q0): x < 5
     """
 
@@ -237,6 +245,8 @@ def test_cli_default_embeddings(tmp_path):
     program = """
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
+
+    automaton_init: q0
 
     trans(q0, q0): x < 5
     """
@@ -301,6 +311,8 @@ def test_cli_sxs_embeddings(tmp_path):
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
 
+    automaton_init: q0
+
     trans(q0, q0): x < 5
     """
 
@@ -340,6 +352,8 @@ def test_cli_verbose_sxs(tmp_path):
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
 
+    automaton_init: q0
+
     trans(q0, q0): x < 5
     """
 
@@ -378,6 +392,8 @@ def test_cli_sort_embeddings(tmp_path):
     program = """
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
+
+    automaton_init: q0
 
     trans(q0, q0): x < 5
     """
@@ -419,6 +435,8 @@ def test_cli_with_verbose(tmp_path):
     program = """
     rank(q0):
         [] x >= 0 && x <= 5 -> 5 - x
+
+    automaton_init: q0
 
     trans(q0, q0): x < 5
     """
@@ -472,6 +490,8 @@ def test_cli_missing_bounds(tmp_path):
     rank(q0):
         [] x >= 0 -> x
 
+    automaton_init: q0
+
     trans(q0, q0): x < 5
     """
 
@@ -488,6 +508,8 @@ def test_cli_invalid_bounds(tmp_path):
     program = """
     rank(q0):
         [] x >= 0 -> x
+
+    automaton_init: q0
 
     trans(q0, q0): x < 5
     """
@@ -559,6 +581,8 @@ def test_cli_multivar(tmp_path):
     rank(q0):
         [] x >= 0 && y >= 0 && x + y <= 10 -> x + y
 
+    automaton_init: q0
+
     trans(q0, q0): x + y < 10
     """
 
@@ -587,6 +611,8 @@ def test_cli_fair_transition(tmp_path):
     rank(q0):
         [] x >= 0 && x <= 10 -> 10 - x
 
+    automaton_init: q0
+
     trans!(q0, q0): x < 10
     """
 
@@ -609,3 +635,142 @@ def test_cli_fair_transition(tmp_path):
     # With --verbose, should have full state dictionaries
     # Should have B_fairstep violations (not B_step)
     assert len(data["B_fairstep"]) > 0
+
+def test_automaton_init_explicit(tmp_path):
+    """Test automaton_init: explicitly specify initial states."""
+    # Program with two automaton states, but only q0 in Q_0
+    program = """
+        init: x = 0
+
+        [] x < 5 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 5 -> 5 - x
+
+        rank(q1):
+            [] x >= 0 && x <= 5 -> 10 - x
+
+        automaton_init: q0
+
+        trans(q0, q1): x >= 2
+        trans(q1, q0): x < 3
+    """
+
+    gc_file = tmp_path / "test_automaton_init.gc"
+    gc_file.write_text(program)
+
+    old_stdout = sys.stdout
+    try:
+        sys.stdout = StringIO()
+        result = main([str(gc_file), "--bounds", "x:0:5"])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = old_stdout
+
+    assert result == 0
+
+    data = json.loads(output)
+
+    # Check that B_init only considers q0 (not q1)
+    # Since rank(q0) is well-defined for all x in [0,5], B_init should be empty
+    # If we incorrectly used q1 as well, B_init would still be empty (both are well-defined)
+    # So this test verifies the parsing, not the behavior difference
+    assert "embeddings" in data
+    assert "metadata" in data
+
+
+def test_automaton_init_missing_error(tmp_path):
+    """Test that missing automaton_init produces an error."""
+    # Program without automaton_init should fail
+    program = """
+        init: x = 0
+
+        [] x < 5 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 5 -> 5 - x
+
+        rank(q1):
+            [] x >= 0 && x <= 5 -> 10 - x
+
+        trans(q0, q1): x >= 2
+        trans(q1, q0): x < 3
+    """
+
+    gc_file = tmp_path / "test_automaton_default.gc"
+    gc_file.write_text(program)
+
+    old_stderr = sys.stderr
+    try:
+        sys.stderr = StringIO()
+        result = main([str(gc_file), "--bounds", "x:0:5"])
+        error = sys.stderr.getvalue()
+    finally:
+        sys.stderr = old_stderr
+
+    # Should fail with error code 1
+    assert result == 1
+    assert "No automaton initial states specified" in error
+    assert "automaton_init" in error
+
+
+def test_automaton_init_subset_behavior(tmp_path):
+    """Test that automaton_init changes which states are checked for B_init."""
+    # Ranking function for q1 is undefined for x > 3
+    # If q1 is in Q_0, then x=4,5 should be in B_init
+    # If only q0 is in Q_0, then B_init should be empty (q0 is well-defined everywhere)
+    program = """
+        init: x = 0
+
+        [] x < 5 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 5 -> 5 - x
+
+        rank(q1):
+            [] x >= 0 && x <= 3 -> 3 - x
+
+        automaton_init: q0
+
+        trans(q0, q1): x >= 2
+        trans(q1, q0): x < 3
+    """
+
+    gc_file = tmp_path / "test_init_subset.gc"
+    gc_file.write_text(program)
+
+    old_stdout = sys.stdout
+    try:
+        sys.stdout = StringIO()
+        result = main([str(gc_file), "--bounds", "x:0:5"])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = old_stdout
+
+    assert result == 0
+
+    data = json.loads(output)
+
+    # B_init should be empty because only q0 is in Q_0, and q0 is well-defined everywhere
+    assert len(data["embeddings"]["E_init"]) == 0
+
+    # Now test with both states in Q_0
+    program_both = program.replace("automaton_init: q0", "automaton_init: q0, q1")
+
+    gc_file2 = tmp_path / "test_init_both.gc"
+    gc_file2.write_text(program_both)
+
+    old_stdout = sys.stdout
+    try:
+        sys.stdout = StringIO()
+        result = main([str(gc_file2), "--bounds", "x:0:5"])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = old_stdout
+
+    assert result == 0
+
+    data_both = json.loads(output)
+
+    # B_init should contain x=4 and x=5 because q1 is undefined there
+    assert len(data_both["embeddings"]["E_init"]) == 2

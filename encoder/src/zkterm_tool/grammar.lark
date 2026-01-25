@@ -3,9 +3,10 @@
 // Example ranking function: rank(q0): [] x > 0 -> x
 // Example initial condition: init: x = 0 && y >= 0
 // Example automaton transition: trans(q0, q1): x > 0 (fair: trans!(q0, q1): x > 0)
+// Example automaton initial states: automaton_init: q0, q1
 // Constants: const received = 1
 
-start: (init_condition | const_def | guarded_command | ranking_function | automaton_trans)*
+start: (init_condition | const_def | guarded_command | ranking_function | automaton_trans | automaton_init)*
 
 init_condition: "init" ":" guard
 
@@ -18,6 +19,10 @@ ranking_function: "rank" "(" STATE_NAME ")" ":" ranking_case+
 ranking_case: "[]" guard "->" expr
 
 automaton_trans: "trans" fair_mark? "(" STATE_NAME "," STATE_NAME ")" ":" guard
+
+automaton_init: "automaton_init" ":" state_list
+
+state_list: STATE_NAME ("," STATE_NAME)*
 
 fair_mark: "!"
 

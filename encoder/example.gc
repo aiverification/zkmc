@@ -9,6 +9,7 @@ init: y = 0 && success = 0
 
 // F s
 // Only one fair transition
+automaton_init: q0
 trans!(q0, q0): success == 0
 
 // Ranking function
