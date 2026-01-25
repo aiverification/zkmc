@@ -775,3 +775,48 @@ def test_automaton_init_subset_behavior(tmp_path):
 
     # B_init should contain x=4 and x=5 because q1 is undefined there
     assert len(data_both["embeddings"]["E_init"]) == 2
+
+
+def test_underspecified_init_condition(tmp_path):
+    """Test that init conditions can be underspecified (not mention all variables)."""
+    # Init only specifies x=0, but program uses both x and y
+    # S0 should contain all states where x=0 regardless of y value
+    program = """
+        init: x = 0
+
+        [] x < 5 && y < 5 -> x = x + 1; y = y + 1
+
+        rank(q0):
+            [] x >= 0 && y >= 0 -> 10 - x - y
+
+        automaton_init: q0
+
+        trans(q0, q0): x < 5
+    """
+
+    gc_file = tmp_path / "test_underspec.gc"
+    gc_file.write_text(program)
+
+    old_stdout = sys.stdout
+    try:
+        sys.stdout = StringIO()
+        result = main([str(gc_file), "--bounds", "x:0:2", "y:0:2"])
+        output = sys.stdout.getvalue()
+    finally:
+        sys.stdout = old_stdout
+
+    assert result == 0
+
+    data = json.loads(output)
+
+    # With x:0:2 and y:0:2, there are 9 total states
+    # S0 should have 3 states: (x=0, y=0), (x=0, y=1), (x=0, y=2)
+    assert data["metadata"]["num_states_enumerated"] == 9
+    assert data["metadata"]["set_sizes"]["S0"] == 3
+
+    # Verify S0 embeddings correspond to states with x=0
+    # In state space with variables [x, y], states are indexed as:
+    # 0:(0,0), 1:(0,1), 2:(0,2), 3:(1,0), 4:(1,1), 5:(1,2), 6:(2,0), 7:(2,1), 8:(2,2)
+    # So S0 should be states 0, 1, 2 (all with x=0)
+    expected_s0_embeddings = [0, 1, 2]
+    assert data["embeddings"]["E_S0"] == expected_s0_embeddings

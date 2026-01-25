@@ -169,15 +169,32 @@ Example:
         action="store_true",
         help="Output inequalities with variable names (e.g., 2x - x' <= 2)"
     )
+    parser.add_argument(
+        "--const",
+        action="append",
+        metavar="NAME=VALUE",
+        help="Override constant value (e.g., --const maxVal=5). Can be used multiple times."
+    )
     args = parser.parse_args(argv)
-    
+
     try:
         text = args.file.read()
         if not text.strip():
             print("Error: empty input", file=sys.stderr)
             return 1
 
-        result = parse_with_constants(text)
+        # Parse constant overrides
+        const_overrides = {}
+        if args.const:
+            for const_arg in args.const:
+                try:
+                    name, value = const_arg.split("=", 1)
+                    const_overrides[name.strip()] = int(value.strip())
+                except ValueError as e:
+                    print(f"Error: Invalid constant override '{const_arg}'. Use format NAME=VALUE.", file=sys.stderr)
+                    return 1
+
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
 
         if args.verbose:
             if result.init_condition:

@@ -23,7 +23,9 @@ def violations_to_json(
     embeddings,
     verification_checks=None,
     verbose=False,
-    sort_embeddings=False
+    sort_embeddings=False,
+    state_space=None,
+    constants=None
 ) -> dict[str, Any]:
     """Convert violation sets and valid sets to JSON format.
 
@@ -33,6 +35,8 @@ def violations_to_json(
         verification_checks: Optional VerificationChecks object
         verbose: If True, include full state dictionaries; if False, only embeddings
         sort_embeddings: If True, sort embedding lists numerically
+        state_space: Optional StateSpace object for bounds information
+        constants: Optional dict of constants for reproducibility
 
     Returns:
         Dictionary with embeddings (always), verification results, and optionally
@@ -115,6 +119,18 @@ def violations_to_json(
             }
         }
     }
+
+    # Add bounds information if available (for reproducibility)
+    if state_space is not None:
+        result["metadata"]["bounds"] = {
+            var: {"min": state_space.bounds[var].min_value, "max": state_space.bounds[var].max_value}
+            for var in state_space.variables
+        }
+
+    # Add constants if available (for reproducibility)
+    if constants is not None and len(constants) > 0:
+        result["metadata"]["constants"] = constants
+
 
     # Verbose mode: include full state dictionaries
     if verbose:
@@ -221,6 +237,13 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
         help="Sort embedding lists numerically (default: maintain order from sorted sets)"
     )
 
+    parser.add_argument(
+        "--const",
+        action="append",
+        metavar="NAME=VALUE",
+        help="Override constant value (e.g., --const maxVal=5). Can be used multiple times."
+    )
+
     args = parser.parse_args(argv)
 
     try:
@@ -230,8 +253,19 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
             print(f"Error: File not found: {args.file}", file=sys.stderr)
             return 1
 
+        # Parse constant overrides
+        const_overrides = {}
+        if args.const:
+            for const_arg in args.const:
+                try:
+                    name, value = const_arg.split("=", 1)
+                    const_overrides[name.strip()] = int(value.strip())
+                except ValueError as e:
+                    print(f"Error: Invalid constant override '{const_arg}'. Use format NAME=VALUE.", file=sys.stderr)
+                    return 1
+
         text = file_path.read_text()
-        result = parse_with_constants(text)
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
 
         # Check required components
         if not result.ranking_functions:
@@ -260,18 +294,34 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
         for enc in aut_encs:
             all_vars.update(enc.variables)
 
-        # From init condition
-        if result.init_condition:
-            init_enc = encode_init(result.init_condition)
-            all_vars.update(init_enc.variables)
-        else:
-            init_enc = None
-
         # From program transitions
         for enc in trans_encs:
             all_vars.update(enc.variables)
 
+        # From init condition (extract variables without encoding yet)
+        if result.init_condition:
+            for guard in result.init_condition:
+                # Extract variables from guard expressions
+                def collect_vars(expr):
+                    from .ast_types import Var, BinOp, Neg
+                    if isinstance(expr, Var):
+                        all_vars.add(expr.name)
+                    elif isinstance(expr, BinOp):
+                        collect_vars(expr.left)
+                        collect_vars(expr.right)
+                    elif isinstance(expr, Neg):
+                        collect_vars(expr.expr)
+
+                collect_vars(guard.left)
+                collect_vars(guard.right)
+
         variables = sorted(all_vars)
+
+        # Now encode init with full variable list
+        if result.init_condition:
+            init_enc = encode_init(result.init_condition, variables)
+        else:
+            init_enc = None
 
         # Create state space from bounds
         try:
@@ -310,7 +360,9 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
             embeddings,
             verification_checks,
             args.verbose,
-            args.sort_embeddings
+            args.sort_embeddings,
+            state_space,
+            result.constants
         )
 
         # Output

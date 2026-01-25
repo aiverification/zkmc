@@ -39,6 +39,12 @@ Example:
         action="store_true",
         help="Skip ranking function validation checks (disjointness, coverage, non-negativity)"
     )
+    parser.add_argument(
+        "--const",
+        action="append",
+        metavar="NAME=VALUE",
+        help="Override constant value (e.g., --const maxVal=5). Can be used multiple times."
+    )
 
     args = parser.parse_args(argv)
 
@@ -49,8 +55,19 @@ Example:
             print(f"Error: File not found: {args.file}", file=sys.stderr)
             return 1
 
+        # Parse constant overrides
+        const_overrides = {}
+        if args.const:
+            for const_arg in args.const:
+                try:
+                    name, value = const_arg.split("=", 1)
+                    const_overrides[name.strip()] = int(value.strip())
+                except ValueError as e:
+                    print(f"Error: Invalid constant override '{const_arg}'. Use format NAME=VALUE.", file=sys.stderr)
+                    return 1
+
         text = file_path.read_text()
-        result = parse_with_constants(text)
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
 
         # Validate ranking functions (unless skipped)
         if not args.skip_validation and result.ranking_functions:

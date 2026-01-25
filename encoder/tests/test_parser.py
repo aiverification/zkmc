@@ -552,3 +552,53 @@ class TestInfinityCases:
         infinity = enc.infinity_cases[0]
         assert infinity.E_k is not None
         assert infinity.f_k is not None
+
+
+def test_const_override():
+    """Test that constant overrides work correctly."""
+    program = """
+        const maxVal = 10
+        const threshold = 5
+
+        init: x = 0
+
+        [] x < maxVal -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= maxVal -> maxVal - x
+    """
+
+    # Parse without override
+    result1 = parse_with_constants(program)
+    assert result1.constants == {"maxVal": 10, "threshold": 5}
+
+    # Parse with single override
+    result2 = parse_with_constants(program, const_overrides={"maxVal": 3})
+    assert result2.constants == {"maxVal": 3, "threshold": 5}
+
+    # Parse with multiple overrides
+    result3 = parse_with_constants(program, const_overrides={"maxVal": 7, "threshold": 2})
+    assert result3.constants == {"maxVal": 7, "threshold": 2}
+
+    # Verify the override affects the AST
+    # The transition guard should be x < maxVal
+    cmd = result2.commands[0]
+    # Find the x < maxVal guard
+    for guard in cmd.guards:
+        if str(guard.left) == "x":
+            # Should be x < 3 (from override)
+            from zkterm_tool import encode_transition
+            enc = encode_transition(cmd)
+            # The guard constraint will be encoded in the matrices
+            # Just verify the encoding works (implicitly uses the overridden value)
+            assert enc.A.shape[1] == 2  # [x, x']
+            break
+
+    # Verify the ranking function also uses the override
+    rank = result2.ranking_functions["q0"]
+    case = rank.cases[0]
+    # The guard should be x <= 3 and expression should be 3 - x
+    from zkterm_tool import encode_ranking_functions
+    rank_encs = encode_ranking_functions(result2.ranking_functions)
+    enc_q0 = rank_encs["q0"]
+    assert enc_q0.finite_cases[0].u_j == 3  # Constant term in maxVal - x

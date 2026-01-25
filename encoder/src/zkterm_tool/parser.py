@@ -65,7 +65,10 @@ class ASTTransformer(Transformer):
 
     def const_def(self, items: list) -> None:
         name, value = items
-        self.constants[str(name)] = int(value)
+        # Don't overwrite constants that are already set (e.g., from command-line overrides)
+        const_name = str(name)
+        if const_name not in self.constants:
+            self.constants[const_name] = int(value)
         return None
     
     def guarded_command(self, items: list) -> GuardedCommand:
@@ -221,11 +224,20 @@ def parse(text: str) -> list[GuardedCommand]:
     return result.commands
 
 
-def parse_with_constants(text: str) -> ParseResult:
+def parse_with_constants(
+    text: str,
+    const_overrides: dict[str, int] | None = None
+) -> ParseResult:
     """Parse text into AST, returning all components.
 
+    Args:
+        text: Program source code
+        const_overrides: Optional dict of constant name -> value to override
+                         constants defined in the file. Command-line overrides
+                         take precedence over file definitions.
+
     Returns ParseResult with:
-    - constants: Named constants
+    - constants: Named constants (merged from file and overrides)
     - init_condition: Initial condition guard (if present)
     - commands: Guarded commands (program transitions)
     - ranking_functions: Ranking functions by state
@@ -234,4 +246,12 @@ def parse_with_constants(text: str) -> ParseResult:
     parser = create_parser()
     tree = parser.parse(text)
     transformer = ASTTransformer()
-    return transformer.transform(tree)
+
+    # Apply const overrides before transformation
+    # This allows overrides to affect the AST construction
+    if const_overrides:
+        transformer.constants.update(const_overrides)
+
+    result = transformer.transform(tree)
+
+    return result

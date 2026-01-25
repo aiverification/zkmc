@@ -254,17 +254,21 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
     return obj
 
 
-def extract_farkas_obligations(file_path: str) -> list[dict[str, Any]]:
+def extract_farkas_obligations(
+    file_path: str,
+    const_overrides: dict[str, int] | None = None
+) -> list[dict[str, Any]]:
     """Extract all Farkas dual formulations from a program file.
 
     Args:
         file_path: Path to .gc file
+        const_overrides: Optional dict of constant overrides
 
     Returns:
         List of obligation dictionaries with Farkas components
     """
     text = Path(file_path).read_text()
-    result = parse_with_constants(text)
+    result = parse_with_constants(text, const_overrides=const_overrides)
 
     # Use Verifier to compute all obligations
     verifier = Verifier(result)
@@ -300,16 +304,49 @@ Example:
         action="store_true",
         help="Pretty-print JSON output with indentation"
     )
+    parser.add_argument(
+        "--const",
+        action="append",
+        metavar="NAME=VALUE",
+        help="Override constant value (e.g., --const maxVal=5). Can be used multiple times."
+    )
 
     args = parser.parse_args(argv)
 
     try:
-        obligations = extract_farkas_obligations(args.file)
+        # Parse constant overrides
+        const_overrides = {}
+        if args.const:
+            for const_arg in args.const:
+                try:
+                    name, value = const_arg.split("=", 1)
+                    const_overrides[name.strip()] = int(value.strip())
+                except ValueError as e:
+                    print(f"Error: Invalid constant override '{const_arg}'. Use format NAME=VALUE.", file=sys.stderr)
+                    return 1
+
+        # Parse the file to get constants
+        text = Path(args.file).read_text()
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
+
+        # Use Verifier to compute all obligations
+        verifier = Verifier(result)
+        verification = verifier.verify_all()
+
+        # Convert to JSON format
+        obligations = [
+            obligation_to_json(verifier, obl)
+            for obl in verification.obligations
+        ]
 
         output = {
             "obligations": obligations,
             "count": len(obligations)
         }
+
+        # Add constants for reproducibility (only if non-empty)
+        if result.constants:
+            output["constants"] = result.constants
 
         if args.pretty:
             print(json.dumps(output, indent=2))

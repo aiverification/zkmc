@@ -619,41 +619,40 @@ Each obligation is encoded in the disjunctive Farkas formulation:
 ∀y: A_s y ≤ b_s ⟹ C y ≤ d ⟹ ∨_k E_k y > f_k
 ```
 
-The tool uses Z3 to find witness values (`lambda_s`, `mu_s`) and computes verification checks (`alpha = 0`, `beta ≤ -1`).
+The tool uses Z3 to find witness values (`lambda_s`, `mu_s`) and computes a convenience value (`neg_b_s_T_lambda_s = -b_s^T λ_s`) for ZK proof systems.
 
 Example output:
 ```json
 {
   "obligations": [
     {
-      "obligation_type": "initial",
+      "obligation_type": "update",
       "matrices": {
-        "A_s": [[1], [-1]],
-        "b_s": [0, 0],
-        "C": [],
-        "d": [],
-        "E_list": [[[-1], [1]]],
-        "f_list": [[-6, -1]]
+        "A_s": [[1, 0], [-1, 1], [1, -1]],
+        "b_s": [4, 1, -1],
+        "G_p": [[-1, 1]],
+        "h_p": [-1]
       },
       "dimensions": {
-        "n_vars": 1,
-        "n_lambda_s": 2,
-        "n_middle": 0,
-        "n_disjuncts": 1,
-        "n_mu_s": 2
+        "n_vars": 2,
+        "n_lambda_s": 3,
+        "n_mu_s": 1
+      },
+      "program_transition": 0,
+      "automaton_transition": {
+        "from": "q0",
+        "to": "q0"
       },
       "source_ranking_state": "q0",
+      "target_ranking_state": "q0",
+      "source_case_idx": 0,
+      "target_case_idx": 0,
       "witness": {
-        "lambda_s": [0, 1],
-        "mu_s": [1, 0]
+        "lambda_s": [1, 0, 2],
+        "mu_s": [3]
       },
       "computed_values": {
-        "alpha": [0],
-        "beta": -1,
-        "verification_check": {
-          "alpha_equals_zero": true,
-          "beta_leq_minus_one": true
-        }
+        "neg_b_s_T_lambda_s": -2
       },
       "satisfiable": true
     }
@@ -663,11 +662,11 @@ Example output:
 ```
 
 Each obligation includes:
-- **matrices**: Disjunctive format (A_s, b_s, C, d, E_list, f_list)
-- **dimensions**: Sizes (n_vars, n_lambda_s, n_middle, n_disjuncts, n_mu_s)
+- **matrices**: Uniform pattern (A_s, b_s secret; G_p, h_p public)
+- **dimensions**: Sizes (n_vars, n_lambda_s, n_mu_s)
 - **witness**: Z3-computed Farkas multipliers (lambda_s, mu_s) if satisfiable
-- **computed_values**: Verification results (alpha, beta, verification_check) if satisfiable
-- **metadata**: obligation_type, source/target states, source_case_idx, is_fair, transitions
+- **computed_values**: Convenience value (neg_b_s_T_lambda_s) for ZK proof systems
+- **metadata**: obligation_type, source/target states, source_case_idx, target_case_idx, is_fair, transitions
 - **satisfiable**: Whether Z3 found a witness for this obligation
 
 #### Python API (Farkas JSON)
@@ -682,28 +681,23 @@ obligations = extract_farkas_obligations("program.gc")
 for obl in obligations:
     print(f"{obl['obligation_type']}: satisfiable={obl['satisfiable']}")
 
-    # Access matrices (disjunctive format)
+    # Access matrices (uniform pattern: A_s y ≤ b_s ⟹ G_p y ≰ h_p)
     matrices = obl["matrices"]
-    A_s = np.array(matrices["A_s"])
-    b_s = np.array(matrices["b_s"])
-    C = np.array(matrices["C"])
-    d = np.array(matrices["d"])
-    E_list = [np.array(E_k) for E_k in matrices["E_list"]]
-    f_list = [np.array(f_k) for f_k in matrices["f_list"]]
+    A_s = np.array(matrices["A_s"])  # Secret premise matrix
+    b_s = np.array(matrices["b_s"])  # Secret premise vector
+    G_p = np.array(matrices["G_p"])  # Public constraint matrix
+    h_p = np.array(matrices["h_p"])  # Public constraint vector
 
     # Access witness values (computed by Z3)
     if obl["witness"] is not None:
-        lambda_s = obl["witness"]["lambda_s"]
-        mu_s = obl["witness"]["mu_s"]
+        lambda_s = obl["witness"]["lambda_s"]  # Secret multipliers
+        mu_s = obl["witness"]["mu_s"]          # Public multipliers
 
-        # Access computed verification checks
-        alpha = obl["computed_values"]["alpha"]
-        beta = obl["computed_values"]["beta"]
-        checks = obl["computed_values"]["verification_check"]
+        # Access convenience value for ZK proofs
+        neg_b_s_T_lambda_s = obl["computed_values"]["neg_b_s_T_lambda_s"]
 
         print(f"  Witness found: lambda_s={lambda_s}, mu_s={mu_s}")
-        print(f"  Verification: alpha={alpha}, beta={beta}")
-        print(f"  Checks: {checks}")
+        print(f"  Convenience: -b_s^T lambda_s = {neg_b_s_T_lambda_s}")
 ```
 
 ### Python API (Verification)
