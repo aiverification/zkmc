@@ -177,23 +177,23 @@ Matrix output (`zkrank program.gc`):
 Variables: [x]
 
 Case 1:
-  Guard A_j x <= b_j:
-    A_j =
+  Guard C_j x <= d_j:
+    C_j =
       [ -1]
       [  1]
-    b_j = [  0  10]
-  Expression C_j x + d_j:
-    C_j = [ -1]
-    d_j = 10
+    d_j = [  0  10]
+  Expression W_j x + u_j:
+    W_j = [ -1]
+    u_j = 10
 
 Case 2:
-  Guard A_j x <= b_j:
-    A_j =
+  Guard C_j x <= d_j:
+    C_j =
       [ -1]
-    b_j = [-10]
-  Expression C_j x + d_j:
-    C_j = [  0]
-    d_j = 1
+    d_j = [-10]
+  Expression W_j x + u_j:
+    W_j = [  0]
+    u_j = 1
 ```
 
 Symbolic output (`zkrank -s program.gc`):
@@ -326,28 +326,26 @@ Matrix output (`zkterm program.gc`):
 Variables: [x]
 
 Transition: q0 -> q1
-  δ encoding A^(q0,q1) x <= b:
-    A =
+  Guard P x <= r:
+    P =
       [ -1]
       [  1]
-    b = [  0   4]
+    r = [  0   4]
   Fair: NO
 
 Transition: q1 -> q1 (FAIR)
-  δ encoding A^(q1,q1) x <= b:
-    A =
+  Guard P x <= r:
+    P =
       [ -1]
       [  1]
-    b = [ -1   9]
-  F encoding A^(q1,q1) x <= b:
-    (same as δ)
+    r = [ -1   9]
   Fair: YES
 
 Transition: q1 -> q0
-  δ encoding A^(q1,q0) x <= b:
-    A =
+  Guard P x <= r:
+    P =
       [ -1]
-    b = [-10]
+    r = [-10]
   Fair: NO
 ```
 
@@ -358,18 +356,16 @@ Variables: [x]
 
 Transition: q0 -> q1
   Guard: -x <= 0 && x <= 4
-  δ encoding A^(q0,q1) x <= b:
+  P x <= r:
     -x <= 0
     x <= 4
   Fair: NO
 
 Transition: q1 -> q1 (FAIR)
   Guard: -x <= -1 && x <= 9
-  δ encoding A^(q1,q1) x <= b:
+  P x <= r:
     -x <= -1
     x <= 9
-  F encoding A^(q1,q1) x <= b:
-    (same as δ)
   Fair: YES
 ...
 ```
@@ -416,8 +412,10 @@ encodings = encode_ranking_functions(result.ranking_functions)
 for state, enc in encodings.items():
     print(f"State: {state}")
     for i, case in enumerate(enc.cases):
-        print(f"  Case {i+1}: A_j={case.A_j}, b_j={case.b_j}")
-        print(f"           C_j={case.C_j}, d_j={case.d_j}")
+        # Guard: C_j x <= d_j
+        print(f"  Case {i+1} guard: C_j={case.C_j}, d_j={case.d_j}")
+        # Expression: W_j x + u_j
+        print(f"           expr: W_j={case.W_j}, u_j={case.u_j}")
 ```
 
 ### Python API
@@ -467,10 +465,8 @@ aut_encodings = encode_automaton_transitions(result.automaton_transitions)
 
 for enc in aut_encodings:
     print(f"Transition: {enc.from_state} -> {enc.to_state}")
+    print(f"Guard: P = {enc.P}, r = {enc.r}")
     print(f"Fair: {enc.is_fair}")
-    print(f"δ: A_delta = {enc.A_delta}, b_delta = {enc.b_delta}")
-    if enc.is_fair:
-        print(f"F: A_fair = {enc.A_fair}, b_fair = {enc.b_fair}")
 ```
 
 ## Verification (zkverify)
@@ -489,19 +485,22 @@ zkverify --verbose program.gc
 
 ### Verification Obligations
 
-The tool checks four types of obligations:
+The tool checks two types of obligations using a disjunctive formulation:
 
-1. **Initial Condition**: A_0 x ≤ b_0 ⟹ V(x,q) well-defined and > 0
-   - Ensures initial states have positive ranking values
+1. **Initial**: A_0 x ≤ b_0 ⟹ ∨_k [V_k(x,q) ≥ 0 ∧ guard_k satisfied]
+   - Ensures initial states satisfy at least one ranking function case with non-negative value
 
-2. **Well-Definedness**: T(x,x') ∧ σ(x) ∧ V(x,q) defined ⟹ V(x',q') well-defined and > 0
-   - Ensures transitions preserve ranking function well-definedness
+2. **Update**: For each source case j, checks T(x,x') ∧ σ(x) ∧ guard_j(x) ⟹ ∨_k [V_j(x,q) - V_k(x',q') ≥ ζ ∧ V_k(x',q') ≥ 0 ∧ guard_k(x')]
+   - Ensures ranking decreases (or non-increasing if ζ=0) and target state is well-defined
+   - ζ=1 for fair transitions (strict decrease), ζ=0 for regular transitions (non-increasing)
 
-3. **Non-Increasing**: T(x,x') ∧ σ(x) ∧ V(x,q) defined ⟹ V(x,q) ≥ V(x',q')
-   - Ensures ranking doesn't increase on any transition
+This disjunctive formulation fully supports multi-case ranking functions.
 
-4. **Strictly Decreasing** (fair transitions only): T(x,x') ∧ σ(x) ∧ V(x,q) defined ⟹ V(x,q) > V(x',q')
-   - Ensures ranking strictly decreases on fair/accepting transitions
+**Obligation count**: For a program with m ranking function cases (source), n target cases, p program transitions, and a automaton transitions:
+- Initial obligations: 1 per automaton state with ranking function
+- Update obligations: p × a × m (one per source case)
+
+**Requirements**: Programs must include automaton transitions for verification. If no automaton transitions are defined, the verifier will raise an error.
 
 ### Example
 
@@ -522,7 +521,7 @@ trans(q0, q0): x < maxVal
 Verification:
 ```bash
 $ zkverify counter.gc
-3/3 obligations verified
+2/2 obligations verified
 ```
 
 With verbose output:
@@ -531,22 +530,19 @@ $ zkverify --verbose counter.gc
 Verification Results for counter.gc
 ============================================================
 
-[1/3] ✓ PASS: initial
-     Ranking state: q0
-     Witness: {'lambda_s_0': 1, 'lambda_s_1': 0, ...}
+[1/2] ✓ PASS: initial
+     Source state: q0
+     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_p_0': 0, 'mu_p_1': 1}
 
-[2/3] ✓ PASS: well_defined
+[2/2] ✓ PASS: update
      Program transition: 0
      Automaton transition: q0 → q0
-     Ranking state: q0
-
-[3/3] ✓ PASS: non_increasing
-     Program transition: 0
-     Automaton transition: q0 → q0
-     Ranking state: q0
+     Source state: q0 [case 0]
+     Target state: q0
+     Witness: {'lambda_s_0': 0, 'lambda_s_1': 1, 'mu_p_0': 0, ...}
 
 ============================================================
-3/3 obligations verified
+2/2 obligations verified
 ```
 
 ### Farkas Dual Formulations (zkfarkas)
@@ -568,15 +564,13 @@ zkfarkas program.gc > obligations.json
 
 #### Output Format
 
-Each obligation is encoded with the matrices needed for the Farkas formulation:
+Each obligation is encoded in the disjunctive Farkas formulation:
 
 ```
-λ_s ≥ 0 ∧ A_s^T λ_s = -α_p ∧ -b_s^T λ_s ≥ β_p + 1
+∀y: A_s y ≤ b_s ⟹ C y ≤ d ⟹ ∨_k E_k y > f_k
 ```
 
-Where `α_p = A_p^T λ_p + C_p^T μ_p` and `β_p = b_p^T λ_p + d_p^T μ_p`.
-
-The tool uses Z3 to find witness values (`lambda_s`, `lambda_p`, `mu_p`) and computes the aggregated terms (`alpha_p`, `beta_p`, `-b_s^T lambda_s`).
+The tool uses Z3 to find witness values (`lambda_s`, `mu_p`) and computes verification checks (`alpha_p = 0`, `beta_p ≤ -1`).
 
 Example output:
 ```json
@@ -587,27 +581,30 @@ Example output:
       "matrices": {
         "A_s": [[1], [-1]],
         "b_s": [0, 0],
-        "A_p": [[-1], [1]],
-        "b_p": [0, 5],
-        "C_p": [[-1]],
-        "d_p": [-6]
+        "C": [],
+        "d": [],
+        "E_list": [[[-1], [1]]],
+        "f_list": [[-6, -1]]
       },
       "dimensions": {
         "n_vars": 1,
         "n_lambda_s": 2,
-        "n_lambda_p": 2,
-        "n_mu_p": 1
+        "n_middle": 0,
+        "n_disjuncts": 1,
+        "n_mu_p": 2
       },
-      "ranking_state": "q0",
+      "source_ranking_state": "q0",
       "witness": {
         "lambda_s": [0, 1],
-        "lambda_p": [0, 1],
-        "mu_p": [1]
+        "mu_p": [1, 0]
       },
       "computed_values": {
         "alpha_p": [0],
         "beta_p": -1,
-        "neg_bs_lambda_s": 0
+        "verification_check": {
+          "alpha_p_equals_zero": true,
+          "beta_p_leq_minus_one": true
+        }
       },
       "satisfiable": true
     }
@@ -617,10 +614,11 @@ Example output:
 ```
 
 Each obligation includes:
-- **matrices**: All constraint matrices (A_s, b_s, A_p, b_p, C_p, d_p)
-- **dimensions**: Sizes of all multiplier vectors (n_vars, n_lambda_s, n_lambda_p, n_mu_p)
-- **witness**: Z3-computed Farkas multipliers (lambda_s, lambda_p, mu_p) if satisfiable
-- **computed_values**: Pre-computed aggregated terms (alpha_p, beta_p, neg_bs_lambda_s) if satisfiable
+- **matrices**: Disjunctive format (A_s, b_s, C, d, E_list, f_list)
+- **dimensions**: Sizes (n_vars, n_lambda_s, n_middle, n_disjuncts, n_mu_p)
+- **witness**: Z3-computed Farkas multipliers (lambda_s, mu_p) if satisfiable
+- **computed_values**: Verification results (alpha_p, beta_p, verification_check) if satisfiable
+- **metadata**: obligation_type, source/target states, source_case_idx, is_fair, transitions
 - **satisfiable**: Whether Z3 found a witness for this obligation
 
 #### Python API (Farkas JSON)
@@ -633,30 +631,30 @@ import numpy as np
 obligations = extract_farkas_obligations("program.gc")
 
 for obl in obligations:
-    print(f"{obl['obligation_type']}: satisfiable={obl['verification']['satisfiable']}")
+    print(f"{obl['obligation_type']}: satisfiable={obl['satisfiable']}")
 
-    # Access matrices
+    # Access matrices (disjunctive format)
     matrices = obl["matrices"]
     A_s = np.array(matrices["A_s"])
     b_s = np.array(matrices["b_s"])
-    A_p = np.array(matrices["A_p"])
-    b_p = np.array(matrices["b_p"])
-    C_p = np.array(matrices["C_p"])
-    d_p = np.array(matrices["d_p"])
+    C = np.array(matrices["C"])
+    d = np.array(matrices["d"])
+    E_list = [np.array(E_k) for E_k in matrices["E_list"]]
+    f_list = [np.array(f_k) for f_k in matrices["f_list"]]
 
     # Access witness values (computed by Z3)
     if obl["witness"] is not None:
         lambda_s = obl["witness"]["lambda_s"]
-        lambda_p = obl["witness"]["lambda_p"]
         mu_p = obl["witness"]["mu_p"]
 
-        # Access pre-computed aggregated terms
+        # Access computed verification checks
         alpha_p = obl["computed_values"]["alpha_p"]
         beta_p = obl["computed_values"]["beta_p"]
-        neg_bs_lambda_s = obl["computed_values"]["neg_bs_lambda_s"]
+        checks = obl["computed_values"]["verification_check"]
 
-        print(f"  Witness found: lambda_s={lambda_s}")
-        print(f"  Alpha_p: {alpha_p}, Beta_p: {beta_p}")
+        print(f"  Witness found: lambda_s={lambda_s}, mu_p={mu_p}")
+        print(f"  Verification: alpha_p={alpha_p}, beta_p={beta_p}")
+        print(f"  Checks: {checks}")
 ```
 
 ### Python API (Verification)
@@ -670,7 +668,7 @@ verification = verify_termination(result)
 
 # Check results
 if verification.passed:
-    print(verification.summary())  # "5/5 obligations verified"
+    print(verification.summary())  # e.g., "2/2 obligations verified"
 else:
     for obl in verification.failed_obligations():
         print(f"Failed: {obl}")
@@ -783,28 +781,31 @@ All constraints are encoded in the $(A, b)$ matrix pair where $Ax \leq b$.
 
 For each case j in ranking function V(x, q):
 
-1. **Guard** `A_j x ≤ b_j` encodes the condition for this case
+1. **Guard** `C_j x ≤ d_j` encodes the condition for this case
    - Comparisons are converted to inequalities
-   - Multiple comparisons in conjunction become multiple rows in A_j
+   - Multiple comparisons in conjunction become multiple rows in C_j
 
-2. **Expression** `C_j x + d_j` encodes the ranking value
-   - C_j is a row vector of variable coefficients
-   - d_j is the constant term
-   - For expression `2x + 3y - 1`: C_j = [2, 3], d_j = -1
+2. **Expression** `W_j x + u_j` encodes the ranking value
+   - W_j is a row vector of variable coefficients
+   - u_j is the constant term
+   - For expression `2x + 3y - 1`: W_j = [2, 3], u_j = -1
 
-Cases are ordered (first satisfied guard determines the value). If no guard is satisfied, V(x, q) = +∞.
+**Notation**: Paper notation V(x,q) = W_k x + u_k if C_k x ≤ d_k maps to code fields (C_j, d_j, W_j, u_j).
+
+Cases are ordered (first satisfied guard determines the value at runtime). The verifier checks all cases using disjunctive formulation. If no guard is satisfied at runtime, V(x, q) = +∞.
 
 ### Büchi Automaton Transition Encoding
 
 Each automaton transition is encoded as:
 
-1. **δ transitions** (all): $A^{(q,q')}_\delta x \leq b^{(q,q')}_\delta$
-   - Guard constraints on current-state variables only
-   - All transitions (regular and fair) are included
+- **Guard**: $P^{(q,q')} x \leq r^{(q,q')}$
+  - Guard constraints on current-state variables only
+  - All transitions (regular and fair) have guard encoding
 
-2. **F transitions** (fair only): $A^{(q,q')}_F x \leq b^{(q,q')}_F$
-   - Only transitions marked with `!` are included
-   - For fair transitions: $A_F = A_\delta$ and $b_F = b_\delta$ (same constraints)
+- **Fair flag**: `is_fair` boolean
+  - Regular transitions (`trans`): `is_fair = False`
+  - Fair transitions (`trans!`): `is_fair = True`
+  - This flag affects verification (ζ parameter): fair requires strict decrease, regular allows non-increasing
 
 Variables in automaton transitions are current-state only (no primed variables).
 

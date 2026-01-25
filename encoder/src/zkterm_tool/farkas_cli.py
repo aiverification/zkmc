@@ -20,30 +20,51 @@ def numpy_to_list(arr: np.ndarray) -> list:
 def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
     """Convert ObligationResult to JSON with all Farkas components.
 
-    Returns obligation with:
-    - Matrices: A_s, b_s, A_p, b_p, C_p, d_p
-    - Witness: lambda_s, lambda_p, mu_p (if SAT)
+    New disjunctive format returns:
+    - Matrices: A_s, b_s, C, d, E_list, f_list
+    - Witness: lambda_s, mu_p (if SAT) - no lambda_p in new system
     - Computed values: alpha_p, beta_p, neg_bs_lambda_s (if SAT)
+
+    The disjunctive format represents:
+        ∀y: A_s y ≤ b_s ⟹ C y ≤ d ⟹ ∨_{k=1}^m E_k y > f_k
     """
     # Get the matrices by reconstructing the obligation
-    # We need to access verifier's internal data to get the matrices
     matrices = verifier._get_obligation_matrices(obl_result)
+
+    # Convert E_list and f_list to JSON-serializable format
+    E_list_json = [numpy_to_list(E_k) for E_k in matrices["E_list"]]
+    f_list_json = [numpy_to_list(f_k) for f_k in matrices["f_list"]]
+
+    # Determine n_vars from matrices
+    if matrices["A_s"].size > 0:
+        n_vars = matrices["A_s"].shape[1]
+    elif matrices["C"].size > 0:
+        n_vars = matrices["C"].shape[1]
+    elif len(matrices["E_list"]) > 0:
+        n_vars = matrices["E_list"][0].shape[1]
+    else:
+        n_vars = 0
+
+    # Count total rows in C_p = [C; E_1; E_2; ...; E_m]
+    # μ_p multipliers correspond to all rows in C_p
+    total_mu_p_rows = matrices["C"].shape[0] + sum(E_k.shape[0] for E_k in matrices["E_list"])
 
     obj = {
         "obligation_type": obl_result.obligation_type,
         "matrices": {
             "A_s": numpy_to_list(matrices["A_s"]),
             "b_s": numpy_to_list(matrices["b_s"]),
-            "A_p": numpy_to_list(matrices["A_p"]),
-            "b_p": numpy_to_list(matrices["b_p"]),
-            "C_p": numpy_to_list(matrices["C_p"]),
-            "d_p": numpy_to_list(matrices["d_p"]),
+            "C": numpy_to_list(matrices["C"]),
+            "d": numpy_to_list(matrices["d"]),
+            "E_list": E_list_json,
+            "f_list": f_list_json,
         },
         "dimensions": {
-            "n_vars": matrices["A_s"].shape[1] if matrices["A_s"].size > 0 else matrices["C_p"].shape[1],
+            "n_vars": n_vars,
             "n_lambda_s": matrices["A_s"].shape[0],
-            "n_lambda_p": matrices["A_p"].shape[0],
-            "n_mu_p": matrices["C_p"].shape[0],
+            "n_middle": matrices["C"].shape[0],
+            "n_disjuncts": len(matrices["E_list"]),
+            "n_mu_p": total_mu_p_rows,
         }
     }
 
@@ -57,55 +78,65 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
             "to": obl_result.automaton_transition[1]
         }
 
-    if obl_result.ranking_state:
-        obj["ranking_state"] = obl_result.ranking_state
+    if obl_result.source_ranking_state:
+        obj["source_ranking_state"] = obl_result.source_ranking_state
+
+    if obl_result.target_ranking_state:
+        obj["target_ranking_state"] = obl_result.target_ranking_state
+
+    if obl_result.source_case_idx is not None:
+        obj["source_case_idx"] = obl_result.source_case_idx
+
+    if obl_result.is_fair:
+        obj["is_fair"] = obl_result.is_fair
 
     # Add witness and computed values if obligation passed
     if obl_result.passed and obl_result.witness:
         n_lambda_s = matrices["A_s"].shape[0]
-        n_lambda_p = matrices["A_p"].shape[0]
-        n_mu_p = matrices["C_p"].shape[0]
-        n_vars = matrices["A_s"].shape[1] if matrices["A_s"].size > 0 else matrices["C_p"].shape[1]
+        n_mu_p = total_mu_p_rows  # Total rows across all E_k matrices
 
-        # Extract witness vectors
+        # Extract witness vectors (only lambda_s and mu_p in new system)
         lambda_s = [obl_result.witness.get(f'lambda_s_{i}', 0) for i in range(n_lambda_s)]
-        lambda_p = [obl_result.witness.get(f'lambda_p_{i}', 0) for i in range(n_lambda_p)]
         mu_p = [obl_result.witness.get(f'mu_p_{i}', 0) for i in range(n_mu_p)]
 
         # Compute aggregated terms
         lambda_s_arr = np.array(lambda_s, dtype=np.int64)
-        lambda_p_arr = np.array(lambda_p, dtype=np.int64)
         mu_p_arr = np.array(mu_p, dtype=np.int64)
 
-        # alpha_p = A_p^T * lambda_p + C_p^T * mu_p
+        # Build C_p = [C; E_1; E_2; ...; E_m] for computing alpha_p
+        C_p_parts = [matrices["C"]] + matrices["E_list"]
+        C_p_stacked = np.vstack(C_p_parts) if any(m.size > 0 for m in C_p_parts) else np.zeros((0, n_vars), dtype=np.int64)
+
+        # Build d_p = [d; f_1; f_2; ...; f_m] for computing beta_p
+        d_p_parts = [matrices["d"]] + matrices["f_list"]
+        d_p_stacked = np.concatenate(d_p_parts) if any(v.size > 0 for v in d_p_parts) else np.zeros(0, dtype=np.int64)
+
+        # alpha_p = [A_s^T; C_p^T] * [lambda_s; mu_p] = A_s^T * lambda_s + C_p^T * mu_p
         alpha_p = np.zeros(n_vars, dtype=np.int64)
-        if matrices["A_p"].size > 0:
-            alpha_p += np.dot(matrices["A_p"].T, lambda_p_arr)
-        if matrices["C_p"].size > 0:
-            alpha_p += np.dot(matrices["C_p"].T, mu_p_arr)
+        if matrices["A_s"].size > 0:
+            alpha_p += np.dot(matrices["A_s"].T, lambda_s_arr)
+        if C_p_stacked.size > 0:
+            alpha_p += np.dot(C_p_stacked.T, mu_p_arr)
 
-        # beta_p = b_p^T * lambda_p + d_p^T * mu_p
+        # beta_p = [b_s; d_p]^T * [lambda_s; mu_p] = b_s^T * lambda_s + d_p^T * mu_p
         beta_p = 0
-        if matrices["b_p"].size > 0:
-            beta_p += np.dot(matrices["b_p"], lambda_p_arr)
-        if matrices["d_p"].size > 0:
-            beta_p += np.dot(matrices["d_p"], mu_p_arr)
-
-        # -b_s^T * lambda_s
-        neg_bs_lambda_s = 0
         if matrices["b_s"].size > 0:
-            neg_bs_lambda_s = -np.dot(matrices["b_s"], lambda_s_arr)
+            beta_p += np.dot(matrices["b_s"], lambda_s_arr)
+        if d_p_stacked.size > 0:
+            beta_p += np.dot(d_p_stacked, mu_p_arr)
 
         obj["witness"] = {
             "lambda_s": lambda_s,
-            "lambda_p": lambda_p,
             "mu_p": mu_p
         }
 
         obj["computed_values"] = {
             "alpha_p": numpy_to_list(alpha_p),
             "beta_p": int(beta_p),
-            "neg_bs_lambda_s": int(neg_bs_lambda_s)
+            "verification_check": {
+                "alpha_p_equals_zero": bool((alpha_p == 0).all()),
+                "beta_p_leq_minus_one": bool(beta_p <= -1)
+            }
         }
 
         obj["satisfiable"] = True

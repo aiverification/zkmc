@@ -456,129 +456,142 @@ class Verifier:
     def _get_obligation_matrices(self, obl_result: ObligationResult) -> dict:
         """Reconstruct matrices for an obligation result.
 
-        Returns dictionary with keys: A_s, b_s, A_p, b_p, C_p, d_p
+        New disjunctive format returns:
+            - A_s, b_s: First premise
+            - C, d: Middle premise (empty for initial obligations)
+            - E_list, f_list: Disjunctive conclusions (list of matrices/vectors)
+
+        Returns:
+            Dictionary with keys: A_s, b_s, C, d, E_list, f_list
         """
         n = len(self.variables)
 
-        # NOTE: This method needs to be rewritten for disjunctive obligations
-        raise NotImplementedError(
-            "Matrix extraction for disjunctive obligations is not yet implemented. "
-            "The new verification system uses disjunctive conclusions (E_list, f_list) "
-            "which require a different export format. See implementation plan for details."
-        )
-
-        # Old code below - needs rewriting for new system
-        if False and obl_result.obligation_type == "initial":
-            # Initial obligation
+        if obl_result.obligation_type == "initial":
+            # Initial obligation: A_0 x ≤ b_0 ⟹ ∨_k [W_k x > -u_k - 1 ∧ C_k x ≤ d_k]
             state = obl_result.source_ranking_state
             rank_enc = self.rank_encs[state]
-            case = rank_enc.cases[0]
 
+            # Premise
             A_s = self.init_enc.A_0
             b_s = self.init_enc.b_0
-            A_p = case.C_j  # Guard
-            b_p = case.d_j
-            C_p = case.W_j.reshape(1, -1)  # Expression
-            d_p = np.array([-case.u_j - 1], dtype=np.int64)
 
-        elif obl_result.obligation_type in ["well_defined", "non_increasing", "strictly_decreasing"]:
-            # Transition obligations
+            # Middle premise (empty for initial)
+            C = np.zeros((0, n), dtype=np.int64)
+            d = np.zeros(0, dtype=np.int64)
+
+            # Disjunctive conclusion: one E_k, f_k per ranking case
+            E_list = []
+            f_list = []
+
+            for case in rank_enc.cases:
+                # Get case encodings (paper notation)
+                C_k = case.C_j  # Guard matrix
+                d_k = case.d_j  # Guard vector
+                W_k = case.W_j  # Expression coeffs
+                u_k = case.u_j  # Expression constant
+
+                # Build E_k = [W_k; -C_k]
+                W_k_row = W_k.reshape(1, -1)  # Shape: (1, n)
+                E_k = np.vstack([W_k_row, -C_k])
+
+                # Build f_k = [-u_k - 1; -d_k - ones]
+                f_k = np.concatenate([
+                    np.array([-u_k - 1], dtype=np.int64),
+                    -d_k - np.ones(len(d_k), dtype=np.int64)
+                ])
+
+                E_list.append(E_k)
+                f_list.append(f_k)
+
+            return {
+                "A_s": A_s,
+                "b_s": b_s,
+                "C": C,
+                "d": d,
+                "E_list": E_list,
+                "f_list": f_list
+            }
+
+        elif obl_result.obligation_type == "update":
+            # Update obligation: A_i [x;x'] ≤ b_i ⟹ [P^(σ) x ≤ r^(σ) ∧ C_j x ≤ d_j] ⟹ ∨_k [...]
             prog_idx = obl_result.program_transition_idx
             from_state, to_state = obl_result.automaton_transition
+            source_case_idx = obl_result.source_case_idx
 
+            # Get encodings
             prog_trans = self.trans_encs[prog_idx]
             aut_trans = next(a for a in self.aut_encs
                            if a.from_state == from_state and a.to_state == to_state)
-
             rank_from = self.rank_encs[from_state]
             rank_to = self.rank_encs[to_state]
-            case_from = rank_from.cases[0]
-            case_to = rank_to.cases[0]
+            case_from = rank_from.cases[source_case_idx]
 
-            # Build premise (same for all transition obligations)
-            A_trans = prog_trans.A
-            b_trans = prog_trans.b
+            # 1. First premise A_s: Program transition (already in [x, x'] space)
+            A_s = prog_trans.A
+            b_s = prog_trans.b
 
-            A_sigma_exp, b_sigma_exp = self._align_and_expand(
+            # 2. Middle premise C, d: Automaton guard + Source ranking guard
+
+            # 2a. Automaton transition guard P^(σ) x ≤ r^(σ) (expand to [x, x'], unprimed)
+            P_sigma_exp, r_sigma_exp = self._align_and_expand(
                 aut_trans.P, aut_trans.r, aut_trans.variables, primed=False
             )
 
-            A_rank_from_exp, b_rank_from_exp = self._align_and_expand(
-                case_from.C_j, case_from.d_j, rank_from.variables, primed=False
+            # 2b. Source ranking guard C_j^(q) x ≤ d_j^(q) (expand to [x, x'], unprimed)
+            C_j_guard = case_from.C_j
+            d_j_guard = case_from.d_j
+            C_j_guard_exp, d_j_guard_exp = self._align_and_expand(
+                C_j_guard, d_j_guard, rank_from.variables, primed=False
             )
 
-            A_s = np.vstack([A_trans, A_sigma_exp, A_rank_from_exp])
-            b_s = np.concatenate([b_trans, b_sigma_exp, b_rank_from_exp])
+            # Stack middle premise
+            C = np.vstack([P_sigma_exp, C_j_guard_exp])
+            d = np.concatenate([r_sigma_exp, d_j_guard_exp])
 
-            # Additional premise and conclusion depend on obligation type
-            if obl_result.obligation_type == "well_defined":
-                A_rank_to_exp, b_rank_to_exp = self._align_and_expand(
-                    case_to.C_j, case_to.d_j, rank_to.variables, primed=True
-                )
+            # 3. Disjunctive conclusion: one E_k, f_k per target ranking case
+            E_list = []
+            f_list = []
 
-                A_p = A_rank_to_exp
-                b_p = b_rank_to_exp
+            zeta = 1 if aut_trans.is_fair else 0
 
-                # Align W_j (expression)
-                W_j_to = case_to.W_j.reshape(1, -1)
-                if rank_to.variables != self.variables:
-                    W_j_to_aligned = np.zeros((1, n), dtype=np.int64)
-                    for i, var in enumerate(rank_to.variables):
-                        if var in self.variables:
-                            j = self.variables.index(var)
-                            W_j_to_aligned[0, j] = W_j_to[0, i]
-                    W_j_to = W_j_to_aligned
+            # Get source case encodings
+            W_j = case_from.W_j
+            u_j = case_from.u_j
+            W_j_row = W_j.reshape(1, -1)
 
-                C_rank_to_exp = np.hstack([np.zeros((1, n), dtype=np.int64), W_j_to])
+            for case_to in rank_to.cases:
+                # Get target case k encodings
+                C_k_guard = case_to.C_j
+                d_k_guard = case_to.d_j
+                W_k = case_to.W_j
+                u_k = case_to.u_j
+                W_k_row = W_k.reshape(1, -1)
 
-                C_p = C_rank_to_exp
-                d_p = np.array([-case_to.u_j - 1], dtype=np.int64)
+                # Build E_k in [x;x'] space (2n variables)
+                E_k = np.vstack([
+                    np.hstack([W_j_row, -W_k_row]),  # Row 1: ranking decrease
+                    np.hstack([np.zeros((1, n), dtype=np.int64), W_k_row]),  # Row 2: target ≥ 0
+                    np.hstack([np.zeros((len(d_k_guard), n), dtype=np.int64), -C_k_guard])  # Rows 3+: target guard
+                ])
 
-            else:  # non_increasing or strictly_decreasing
-                A_rank_to_exp, b_rank_to_exp = self._align_and_expand(
-                    case_to.C_j, case_to.d_j, rank_to.variables, primed=True
-                )
+                # Build f_k
+                f_k = np.concatenate([
+                    np.array([u_k - u_j + zeta - 1], dtype=np.int64),
+                    np.array([-u_k - 1], dtype=np.int64),
+                    -d_k_guard - np.ones(len(d_k_guard), dtype=np.int64)
+                ])
 
-                A_p = A_rank_to_exp
-                b_p = b_rank_to_exp
+                E_list.append(E_k)
+                f_list.append(f_k)
 
-                # Align W_j coefficients (expression)
-                W_j_from = case_from.W_j.reshape(1, -1)
-                if rank_from.variables != self.variables:
-                    W_j_from_aligned = np.zeros((1, n), dtype=np.int64)
-                    for i, var in enumerate(rank_from.variables):
-                        if var in self.variables:
-                            j = self.variables.index(var)
-                            W_j_from_aligned[0, j] = W_j_from[0, i]
-                    W_j_from = W_j_from_aligned
-
-                W_j_to = case_to.W_j.reshape(1, -1)
-                if rank_to.variables != self.variables:
-                    W_j_to_aligned = np.zeros((1, n), dtype=np.int64)
-                    for i, var in enumerate(rank_to.variables):
-                        if var in self.variables:
-                            j = self.variables.index(var)
-                            W_j_to_aligned[0, j] = W_j_to[0, i]
-                    W_j_to = W_j_to_aligned
-
-                C_from_exp = np.hstack([W_j_from, np.zeros((1, n), dtype=np.int64)])
-                C_to_exp = np.hstack([np.zeros((1, n), dtype=np.int64), W_j_to])
-
-                C_p = C_from_exp - C_to_exp
-
-                if obl_result.obligation_type == "non_increasing":
-                    d_p = np.array([case_to.u_j - case_from.u_j - 1], dtype=np.int64)
-                else:  # strictly_decreasing
-                    d_p = np.array([case_to.u_j - case_from.u_j], dtype=np.int64)
+            return {
+                "A_s": A_s,
+                "b_s": b_s,
+                "C": C,
+                "d": d,
+                "E_list": E_list,
+                "f_list": f_list
+            }
 
         else:
             raise ValueError(f"Unknown obligation type: {obl_result.obligation_type}")
-
-        return {
-            "A_s": A_s,
-            "b_s": b_s,
-            "A_p": A_p,
-            "b_p": b_p,
-            "C_p": C_p,
-            "d_p": d_p
-        }
