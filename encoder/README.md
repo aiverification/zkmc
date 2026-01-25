@@ -679,6 +679,217 @@ for w in witnesses:
     print(f"Witness: {w}")  # {'lambda_s_0': 1, 'mu_p_0': 2, ...}
 ```
 
+## Explicit-State Verification (zkexplicit)
+
+The `zkexplicit` tool performs explicit-state verification by enumerating concrete states and identifying which ones violate termination obligations. This supports zero-knowledge proof systems based on polynomial commitments (KZG) by computing violation sets that must be proven disjoint from the secret initial states and transition relation.
+
+### Command Line
+
+```bash
+# Basic usage
+zkexplicit program.gc --bounds x:0:10
+
+# Multiple variables
+zkexplicit program.gc --bounds x:0:10 y:0:5
+
+# Pretty-printed JSON
+zkexplicit program.gc --bounds x:0:10 --pretty
+
+# With field embeddings for polynomial commitments
+zkexplicit program.gc --bounds x:0:10 --embeddings
+
+# Custom field size
+zkexplicit program.gc --bounds x:0:10 --embeddings --field-size 101
+```
+
+### Violation Sets and Valid Sets
+
+The tool computes both violation sets (bad sets) and valid sets needed for ZK proof construction:
+
+**Violation Sets** (by contraposition):
+1. **B_init**: States where V(s,q) = ∞ for some initial automaton state q ∈ Q_0
+   - These are states where the ranking function is undefined
+
+2. **B_step**: Transitions (s,s') where V(s,q) < V(s',q') for enabled transitions
+   - These are transitions where the ranking increases (violates non-increasing requirement)
+
+3. **B_fairstep**: Fair transitions (s,s') where V(s,q) ≤ V(s',q')
+   - These are fair transitions where ranking doesn't strictly decrease
+
+**Valid Sets** (for polynomial construction):
+1. **S**: Complete state space (all enumerated states within bounds)
+2. **S0**: Initial states (states satisfying the init condition)
+3. **T**: Program transition relation (valid transitions according to program semantics)
+
+**Zero-knowledge proof goal**: Prove that S_0 ∩ B_init = ∅, T ∩ B_step = ∅, and T ∩ B_fairstep = ∅.
+
+The tool automatically verifies these disjointness properties and includes the results in the output.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--bounds VAR:MIN:MAX` | Required. State space bounds for each variable (e.g., `x:0:10 y:0:5`) |
+| `--pretty` | Pretty-print JSON output with indentation |
+| `--embeddings` | Include field embeddings e_1 and e_2 for polynomial commitments |
+| `--field-size N` | Prime field size for embeddings (default: 2^256-189, BN254 scalar field) |
+
+### Example
+
+Input file `counter.gc`:
+```
+const maxVal = 10
+
+init: x = 0
+
+[] x < maxVal -> x = x + 1
+
+rank(q0):
+  [] x >= 0 && x <= maxVal -> maxVal - x
+
+trans(q0, q0): x < maxVal
+```
+
+Run explicit-state verification:
+```bash
+$ zkexplicit counter.gc --bounds x:0:15 --pretty
+{
+  "B_init": [{"x": 11}, {"x": 12}, {"x": 13}, {"x": 14}, {"x": 15}],
+  "B_step": [{"from": {"x": 0}, "to": {"x": 11}}, ...],
+  "B_fairstep": [],
+  "S": [{"x": 0}, {"x": 1}, ..., {"x": 15}],
+  "S0": [{"x": 0}],
+  "T": [{"from": {"x": 0}, "to": {"x": 1}}, ..., {"from": {"x": 9}, "to": {"x": 10}}],
+  "verification": {
+    "init_disjoint": true,
+    "step_disjoint": false,
+    "fairstep_disjoint": true,
+    "all_disjoint": false,
+    "init_intersection_size": 0,
+    "step_intersection_size": 95,
+    "fairstep_intersection_size": 0
+  },
+  "metadata": {
+    "variables": ["x"],
+    "automaton_states": ["q0"],
+    "num_states_enumerated": 16,
+    "num_transitions_checked": 256,
+    "set_sizes": {
+      "S": 16,
+      "S0": 1,
+      "T": 10,
+      "B_init": 5,
+      "B_step": 95,
+      "B_fairstep": 0
+    }
+  }
+}
+```
+
+With embeddings:
+```bash
+$ zkexplicit counter.gc --bounds x:8:12 --embeddings --field-size 101 --pretty
+{
+  "B_init": [{"x": 11}, {"x": 12}],
+  "B_step": [...],
+  "B_fairstep": [],
+  "metadata": {...},
+  "embeddings": {
+    "E_init": [11, 12],
+    "E_step": [8, 8, 9, 9, 9],
+    "E_fairstep": [],
+    "field_size": 101
+  }
+}
+```
+
+### Field Embeddings
+
+When `--embeddings` is specified, the tool computes injective mappings for polynomial commitment schemes:
+
+- **e_1: S → F** (state embedding): Maps states to field elements
+  - Formula: e_1([v_1, v_2, ..., v_n]) = ∑_i v_i * base^i mod field_size
+
+- **e_2: S × S → F** (transition embedding): Maps transitions to field elements
+  - Formula: e_2([s, s']) = e_1(s) + e_1(s') * field_size
+
+These embeddings support KZG polynomial commitments for zero-knowledge proofs of set disjointness.
+
+### Python API (Explicit-State)
+
+```python
+from zkterm_tool import (
+    parse_with_constants,
+    encode_program,
+    encode_ranking_functions,
+    encode_automaton_transitions,
+    encode_init,
+    create_state_space,
+    compute_violation_sets,
+    compute_embeddings,
+    verify_disjointness,
+    violations_to_json
+)
+
+# Parse program
+result = parse_with_constants(text)
+
+# Encode components
+rank_encs = encode_ranking_functions(result.ranking_functions)
+aut_encs = encode_automaton_transitions(result.automaton_transitions)
+trans_encs = encode_program(result.commands, nonstrict_only=True)
+init_enc = encode_init(result.init_condition) if result.init_condition else None
+
+# Create state space from bounds
+variables = sorted(set().union(
+    *[set(enc.variables) for enc in rank_encs.values()],
+    *[set(enc.variables) for enc in aut_encs],
+    *[set(enc.variables) for enc in trans_encs]
+))
+state_space = create_state_space(variables, ["x:0:10", "y:0:5"])
+
+# Compute violation sets and valid sets
+violations = compute_violation_sets(
+    state_space,
+    rank_encs,
+    aut_encs,
+    init_enc,
+    list(rank_encs.keys()),  # Initial automaton states
+    trans_encs
+)
+
+# Access violation sets
+print(f"B_init: {len(violations.B_init)} states")
+print(f"B_step: {len(violations.B_step)} transitions")
+print(f"B_fairstep: {len(violations.B_fairstep)} transitions")
+
+# Access valid sets
+print(f"S: {len(violations.S)} states")
+print(f"S0: {len(violations.S0)} initial states")
+print(f"T: {len(violations.T)} transitions")
+
+# Verify disjointness
+verification = verify_disjointness(violations)
+print(f"All disjoint: {verification.all_disjoint}")
+print(f"S0 ∩ B_init = ∅: {verification.init_disjoint}")
+print(f"T ∩ B_step = ∅: {verification.step_disjoint}")
+print(f"T ∩ B_fairstep = ∅: {verification.fairstep_disjoint}")
+
+# Optionally compute embeddings
+embeddings = compute_embeddings(violations, field_size=101)
+print(f"Field size: {embeddings.field_size}")
+
+# Convert to JSON
+output = violations_to_json(violations, embeddings, verification)
+```
+
+### Performance Considerations
+
+**State space size**: O(∏_i (max_i - min_i + 1))
+**Transition checks**: O(n_states² × n_automaton_transitions)
+
+For large state spaces, the tool may be slow. Consider restricting bounds to smaller ranges or using symbolic verification (zkverify) instead.
+
 ## Syntax
 
 ### Constants

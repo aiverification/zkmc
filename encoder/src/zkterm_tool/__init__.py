@@ -19,6 +19,17 @@ from .automaton_encoder import (
 from .verification_types import VerificationResult, ObligationResult
 from .verifier import Verifier
 from .farkas_cli import extract_farkas_obligations
+from .state_enumerator import StateSpace, StateBounds, create_state_space
+from .ranking_evaluator import evaluate_ranking, check_guard
+from .violation_checker import (
+    ViolationSets,
+    FieldEmbeddings,
+    VerificationChecks,
+    compute_violation_sets,
+    compute_embeddings,
+    verify_disjointness
+)
+from .explicit_cli import violations_to_json
 
 
 def verify_termination(result: ParseResult) -> VerificationResult:
@@ -65,4 +76,10 @@ __all__ = [
     # Verification
     "VerificationResult", "ObligationResult", "Verifier", "verify_termination",
     "extract_farkas_obligations",
+    # Explicit-state verification
+    "StateSpace", "StateBounds", "create_state_space",
+    "evaluate_ranking", "check_guard",
+    "ViolationSets", "FieldEmbeddings", "VerificationChecks",
+    "compute_violation_sets", "compute_embeddings", "verify_disjointness",
+    "violations_to_json",
 ]
