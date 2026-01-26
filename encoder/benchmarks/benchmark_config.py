@@ -167,7 +167,7 @@ BENCHMARK_CONFIGS = {
             bounds=None,
             tags=["exp_backoff", "paper"],
             description="Exponential backoff: 3 attempts, delay=4",
-            run_explicit=True
+            run_explicit=False
         ),
         BenchmarkCase(
             name="exp_backoff_initial8_attempts3",
@@ -176,7 +176,7 @@ BENCHMARK_CONFIGS = {
             bounds=None,
             tags=["exp_backoff", "paper"],
             description="Exponential backoff: 3 attempts, delay=8",
-            run_explicit=True
+            run_explicit=False
         ),
         BenchmarkCase(
             name="exp_backoff_initial64_attempts3",
