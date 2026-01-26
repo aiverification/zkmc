@@ -83,6 +83,10 @@ def expr_to_linear(expr: Expr) -> LinearExpr:
                 return left.scale(right.const)
             else:
                 raise ValueError(f"Non-linear multiplication: {expr}")
+        elif expr.op == "**":
+            # Power operation with variables is non-linear
+            # (constant powers are folded during parsing)
+            raise ValueError(f"Non-linear exponentiation: {expr}")
         else:
             raise ValueError(f"Unknown operator: {expr.op}")
     

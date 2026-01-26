@@ -12,7 +12,7 @@ const established = 2
 const exhausted = 3
 
 // Initial delay values for each retry attempt
-const initialDelay = 64
+const initialDelay = 2**6
 
 // Maximum number of retry attempts
 const maxAttempts = 3
@@ -20,7 +20,7 @@ const maxAttempts = 3
 // Variables: status, attemptsDone, delay, ack
 
 // Initially: closed
-init: status == closed && ack == notReceived && delay >= 0 && delay <= 4 * initialDelay && attemptsDone >= 0 && attemptsDone <= maxAttempts
+init: status == closed && ack == notReceived && delay >= 0 && delay <= 2**(maxAttempts - 1) * initialDelay && attemptsDone >= 0 && attemptsDone <= maxAttempts
 
 // ----- Transitions -----
 
@@ -28,18 +28,18 @@ init: status == closed && ack == notReceived && delay >= 0 && delay <= 4 * initi
 [] status == closed -> status = wait; delay = initialDelay - 1; attemptsDone = 0
 
 // Waiting: decrement delay counter while waiting for ACK
-[] ack == notReceived && status == wait && delay > 0 && delay <= 4 * initialDelay && attemptsDone >= 0 && attemptsDone <= maxAttempts -> delay = delay - 1
+[] ack == notReceived && status == wait && delay > 0 && delay <= 2**(maxAttempts - 1) * initialDelay && attemptsDone >= 0 && attemptsDone <= maxAttempts -> delay = delay - 1
 
 // Retry: increment attempts, set delay
-[] ack == notReceived && status == wait && attemptsDone == 0 && delay == 0 -> attemptsDone = 1; delay = 2 * initialDelay - 1
-[] ack == notReceived && status == wait && attemptsDone == 1 && delay == 0 -> attemptsDone = 2; delay = 4 * initialDelay - 1
+[] ack == notReceived && status == wait && attemptsDone == 0 && delay == 0 -> attemptsDone = 1; delay = 2**1 * initialDelay - 1
+[] ack == notReceived && status == wait && attemptsDone == 1 && delay == 0 -> attemptsDone = 2; delay = 2**2 * initialDelay - 1
 
 // Exhausted: all attempts done, delay expired -> give up
 [] ack == notReceived && status == wait && attemptsDone == 2 && delay == 0 -> status = exhausted
 
 // Non-deterministically receive ACK
 // Success: ACK received while waiting -> transition to established state
-[] ack == notReceived && status == wait && delay > 0 && delay <= 4 * initialDelay && attemptsDone >= 0 && attemptsDone <= maxAttempts -> ack = received; status = established
+[] ack == notReceived && status == wait && delay > 0 && delay <= 2**(maxAttempts - 1) * initialDelay && attemptsDone >= 0 && attemptsDone <= maxAttempts -> ack = received; status = established
 
 // ----- Büchi Automaton for ¬(F G wait) -----
 // Property: We never get stuck in wait forever
@@ -50,14 +50,14 @@ trans!(q1, q1): status == wait
 
 // ----- Ranking Functions -----
 rank(q0):
-    [] status > wait -> maxAttempts * 4 * initialDelay
+    [] status > wait -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
     [] status == wait && attemptsDone < maxAttempts -> maxAttempts * 4 * initialDelay
     [] status < wait -> inf
     [] status == wait && attemptsDone >= maxAttempts -> inf
 
 rank(q1):
-    [] status == closed -> maxAttempts * 4 * initialDelay
-    [] status == wait && attemptsDone < maxAttempts && delay >= 0 -> 8 * initialDelay + 1 - 4 * initialDelay * attemptsDone + delay
+    [] status == closed -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
+    [] status == wait && attemptsDone < maxAttempts && delay >= 0 -> 2**maxAttempts * initialDelay + 1 - 2**(maxAttempts - 1) * initialDelay * attemptsDone + delay
     // status == established || exhausted
     [] status >= established && status <= exhausted -> 0
     [] status < wait -> inf

@@ -206,19 +206,40 @@ class ASTTransformer(Transformer):
         return [str(token) for token in items]
 
     @v_args(inline=True)
-    def add(self, left: Expr, right: Expr) -> BinOp:
+    def add(self, left: Expr, right: Expr) -> Expr:
+        # Constant folding: if both operands are numbers, evaluate immediately
+        if isinstance(left, Num) and isinstance(right, Num):
+            return Num(value=left.value + right.value)
         return BinOp(op="+", left=left, right=right)
-    
+
     @v_args(inline=True)
-    def sub(self, left: Expr, right: Expr) -> BinOp:
+    def sub(self, left: Expr, right: Expr) -> Expr:
+        # Constant folding: if both operands are numbers, evaluate immediately
+        if isinstance(left, Num) and isinstance(right, Num):
+            return Num(value=left.value - right.value)
         return BinOp(op="-", left=left, right=right)
-    
+
     @v_args(inline=True)
-    def mul(self, left: Expr, right: Expr) -> BinOp:
+    def mul(self, left: Expr, right: Expr) -> Expr:
+        # Constant folding: if both operands are numbers, evaluate immediately
+        if isinstance(left, Num) and isinstance(right, Num):
+            return Num(value=left.value * right.value)
         return BinOp(op="*", left=left, right=right)
-    
+
     @v_args(inline=True)
-    def neg(self, expr: Expr) -> Neg:
+    def pow(self, left: Expr, right: Expr) -> Expr:
+        # Constant folding: if both operands are numbers, evaluate immediately
+        if isinstance(left, Num) and isinstance(right, Num):
+            if right.value < 0:
+                raise ValueError(f"Negative exponents not supported: {left.value}**{right.value}")
+            return Num(value=left.value ** right.value)
+        return BinOp(op="**", left=left, right=right)
+
+    @v_args(inline=True)
+    def neg(self, expr: Expr) -> Expr:
+        # Constant folding: if operand is a number, evaluate immediately
+        if isinstance(expr, Num):
+            return Num(value=-expr.value)
         return Neg(expr=expr)
     
     @v_args(inline=True)

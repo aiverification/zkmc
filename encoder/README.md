@@ -123,7 +123,16 @@ const maxDelay = 2**(maxAttempts - 1) * initialDelay  // Computed: 256
 [] delay < maxDelay -> delay = delay + 1
 ```
 
-Supported operations: `+`, `-`, `*`, `**` (power), `-` (negation), and parentheses. Constants are evaluated at parse time using previously defined constants. Command-line overrides (via `--const`) are applied before expression evaluation, allowing computed constants to use overridden values.
+**Expressions in code**: Arithmetic operations (`+`, `-`, `*`, `**`) can also be used in guards, assignments, and ranking functions. When all operands are constants or numbers, the expression is evaluated at parse time:
+
+```
+const initialDelay = 64
+
+[] x < 3 -> delay = 2**x * initialDelay - 1  // Error: 2**x is non-linear
+[] x < 3 -> delay = 2**1 * initialDelay - 1  // OK: evaluates to 127
+```
+
+Command-line overrides (via `--const`) are applied before expression evaluation, allowing computed constants to use overridden values.
 
 Comments (starting with `//`) are also supported.
 

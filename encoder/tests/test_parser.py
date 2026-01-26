@@ -68,10 +68,10 @@ class TestParser:
     def test_negative_numbers(self):
         """Test parsing negative numbers."""
         result = parse("[] x > -5 -> x = x - 1")
-        
+
         cmd = result[0]
-        # -5 is parsed as Neg(Num(5))
-        assert cmd.guards[0].right.expr.value == 5
+        # -5 is constant-folded to Num(-5)
+        assert cmd.guards[0].right == Num(-5)
     
     def test_multiplication(self):
         """Test parsing multiplication."""
@@ -669,3 +669,58 @@ def test_const_undefined_reference_error():
     with pytest.raises(Exception) as exc_info:
         parse_with_constants(program)
     assert "undefined_constant" in str(exc_info.value).lower()
+
+
+def test_power_operation():
+    """Test parsing power operations with constant folding."""
+    # Test constant power folding
+    result = parse_with_constants("""
+        const base = 2
+        const exp = 3
+        [] x < 10 -> x = 2**3
+    """)
+    
+    cmd = result.commands[0]
+    # 2**3 should be constant-folded to 8
+    assert cmd.assignments[0].expr == Num(8)
+    
+    # Test with constant references
+    result2 = parse_with_constants("""
+        const base = 2
+        const exp = 3
+        [] x < 10 -> x = base**exp
+    """)
+    
+    cmd2 = result2.commands[0]
+    # base**exp should be constant-folded to 8
+    assert cmd2.assignments[0].expr == Num(8)
+
+
+def test_power_in_complex_expression():
+    """Test power operations in complex expressions with constants."""
+    result = parse_with_constants("""
+        const maxAttempts = 3
+        const initialDelay = 64
+        [] x < 10 -> delay = 2**(maxAttempts - 1) * initialDelay - 1
+    """)
+    
+    cmd = result.commands[0]
+    # Entire expression should be constant-folded to 255
+    # 2**(3-1) * 64 - 1 = 2**2 * 64 - 1 = 4 * 64 - 1 = 256 - 1 = 255
+    assert cmd.assignments[0].expr == Num(255)
+
+
+def test_power_with_override():
+    """Test that power operations respect constant overrides."""
+    program = """
+        const n = 3
+        [] x < 10 -> y = 2**n
+    """
+    
+    # Default: 2**3 = 8
+    result1 = parse_with_constants(program)
+    assert result1.commands[0].assignments[0].expr == Num(8)
+    
+    # Override: 2**4 = 16
+    result2 = parse_with_constants(program, {"n": 4})
+    assert result2.commands[0].assignments[0].expr == Num(16)

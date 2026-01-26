@@ -63,10 +63,15 @@ assignment: VAR "=" expr
 ?term: factor
      | term "*" factor -> mul
 
-?factor: NUMBER        -> number
-       | VAR           -> var
-       | "(" expr ")"
+?factor: power
        | "-" factor    -> neg
+
+?power: atom
+      | atom "**" factor -> pow
+
+?atom: NUMBER        -> number
+     | VAR           -> var
+     | "(" expr ")"
 
 CONST_NAME: /[a-zA-Z_][a-zA-Z_0-9]*/
 STATE_NAME: /[a-zA-Z_][a-zA-Z_0-9]*/
