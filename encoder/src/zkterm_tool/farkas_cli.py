@@ -233,11 +233,29 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
         lambda_s = [obl_result.witness.get(f'lambda_s_{i}', 0) for i in range(n_lambda_s)]
         mu_s = [obl_result.witness.get(f'mu_s_{i}', 0) for i in range(n_mu_s)]
 
-        # Compute convenience value: -b_s^T * lambda_s
+        # Compute convenience values for ZK proofs
         lambda_s_arr = np.array(lambda_s, dtype=np.int64)
+        mu_s_arr = np.array(mu_s, dtype=np.int64)
+
+        # -b_s^T · lambda_s
         neg_b_s_T_lambda_s = 0
         if matrices["b_s"].size > 0:
             neg_b_s_T_lambda_s = -int(np.dot(matrices["b_s"], lambda_s_arr))
+
+        # -h_p^T · mu_s (h_p is stored as matrices["f"])
+        neg_h_p_T_mu_s = 0
+        if matrices["f"].size > 0:
+            neg_h_p_T_mu_s = -int(np.dot(matrices["f"], mu_s_arr))
+
+        # A_s^T · lambda_s (result is a vector)
+        A_s_T_lambda_s = []
+        if matrices["A_s"].size > 0:
+            A_s_T_lambda_s = np.dot(matrices["A_s"].T, lambda_s_arr).tolist()
+
+        # G_p^T · mu_s (G_p is stored as matrices["E"], result is a vector)
+        G_p_T_mu_s = []
+        if matrices["E"].size > 0:
+            G_p_T_mu_s = np.dot(matrices["E"].T, mu_s_arr).tolist()
 
         obj["witness"] = {
             "lambda_s": lambda_s,
@@ -245,7 +263,10 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
         }
 
         obj["computed_values"] = {
-            "neg_b_s_T_lambda_s": neg_b_s_T_lambda_s
+            "neg_b_s_T_lambda_s": neg_b_s_T_lambda_s,
+            "neg_h_p_T_mu_s": neg_h_p_T_mu_s,
+            "A_s_T_lambda_s": A_s_T_lambda_s,
+            "G_p_T_mu_s": G_p_T_mu_s
         }
 
         obj["satisfiable"] = True

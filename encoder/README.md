@@ -619,7 +619,7 @@ Each obligation is encoded in the disjunctive Farkas formulation:
 ∀y: A_s y ≤ b_s ⟹ C y ≤ d ⟹ ∨_k E_k y > f_k
 ```
 
-The tool uses Z3 to find witness values (`lambda_s`, `mu_s`) and computes a convenience value (`neg_b_s_T_lambda_s = -b_s^T λ_s`) for ZK proof systems.
+The tool uses Z3 to find witness values (`lambda_s`, `mu_s`) and computes convenience values for ZK proof systems: `neg_b_s_T_lambda_s = -b_s^T λ_s`, `neg_h_p_T_mu_s = -h_p^T μ_s`, `A_s_T_lambda_s = A_s^T λ_s`, and `G_p_T_mu_s = G_p^T μ_s`.
 
 Example output:
 ```json
@@ -652,7 +652,10 @@ Example output:
         "mu_s": [3]
       },
       "computed_values": {
-        "neg_b_s_T_lambda_s": -2
+        "neg_b_s_T_lambda_s": -2,
+        "neg_h_p_T_mu_s": -1,
+        "A_s_T_lambda_s": [0, 1],
+        "G_p_T_mu_s": [0, 1]
       },
       "satisfiable": true
     }
@@ -665,7 +668,7 @@ Each obligation includes:
 - **matrices**: Uniform pattern (A_s, b_s secret; G_p, h_p public)
 - **dimensions**: Sizes (n_vars, n_lambda_s, n_mu_s)
 - **witness**: Z3-computed Farkas multipliers (lambda_s, mu_s) if satisfiable
-- **computed_values**: Convenience value (neg_b_s_T_lambda_s) for ZK proof systems
+- **computed_values**: Convenience values for ZK proof systems (neg_b_s_T_lambda_s, neg_h_p_T_mu_s, A_s_T_lambda_s, G_p_T_mu_s)
 - **metadata**: obligation_type, source/target states, source_case_idx, target_case_idx, is_fair, transitions
 - **satisfiable**: Whether Z3 found a witness for this obligation
 
@@ -693,11 +696,15 @@ for obl in obligations:
         lambda_s = obl["witness"]["lambda_s"]  # Secret multipliers
         mu_s = obl["witness"]["mu_s"]          # Public multipliers
 
-        # Access convenience value for ZK proofs
-        neg_b_s_T_lambda_s = obl["computed_values"]["neg_b_s_T_lambda_s"]
+        # Access convenience values for ZK proofs
+        computed = obl["computed_values"]
+        neg_b_s_T_lambda_s = computed["neg_b_s_T_lambda_s"]
+        neg_h_p_T_mu_s = computed["neg_h_p_T_mu_s"]
+        A_s_T_lambda_s = computed["A_s_T_lambda_s"]
+        G_p_T_mu_s = computed["G_p_T_mu_s"]
 
         print(f"  Witness found: lambda_s={lambda_s}, mu_s={mu_s}")
-        print(f"  Convenience: -b_s^T lambda_s = {neg_b_s_T_lambda_s}")
+        print(f"  Convenience: -b_s^T lambda_s = {neg_b_s_T_lambda_s}, -h_p^T mu_s = {neg_h_p_T_mu_s}")
 ```
 
 ### Python API (Verification)
