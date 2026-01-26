@@ -379,6 +379,17 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
         # Verify disjointness
         verification_checks = verify_disjointness(violations)
 
+        # Warn if verification failed
+        if not verification_checks.all_disjoint:
+            print("Warning: Verification failed - some sets are not disjoint:", file=sys.stderr)
+            if not verification_checks.init_disjoint:
+                print(f"  - S0 ∩ B_init ≠ ∅ ({verification_checks.init_intersection_size} states in common)", file=sys.stderr)
+            if not verification_checks.step_disjoint:
+                print(f"  - T ∩ B_step ≠ ∅ ({verification_checks.step_intersection_size} transitions in common)", file=sys.stderr)
+            if not verification_checks.fairstep_disjoint:
+                print(f"  - T ∩ B_fairstep ≠ ∅ ({verification_checks.fairstep_intersection_size} transitions in common)", file=sys.stderr)
+            print(file=sys.stderr)  # Empty line for readability
+
         # Always compute embeddings (default behavior)
         embeddings = compute_embeddings(violations, args.field_size)
 
