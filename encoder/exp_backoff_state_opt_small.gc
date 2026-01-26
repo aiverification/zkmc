@@ -15,7 +15,7 @@ const exhausted = 3
 const initialDelay = 2**6
 
 // Maximum number of retry attempts
-const maxAttempts = 3
+const maxAttempts = 2
 
 // Variables: status, attemptsDone, delay, ack
 
@@ -32,10 +32,9 @@ init: status == closed && ack == notReceived && delay >= 0 && delay <= 2**(maxAt
 
 // Retry: increment attempts, set delay
 [] ack == notReceived && status == wait && attemptsDone == 0 && delay == 0 -> attemptsDone = 1; delay = 2**1 * initialDelay - 1
-[] ack == notReceived && status == wait && attemptsDone == 1 && delay == 0 -> attemptsDone = 2; delay = 2**2 * initialDelay - 1
 
 // Exhausted: all attempts done, delay expired -> give up
-[] ack == notReceived && status == wait && attemptsDone == 2 && delay == 0 -> status = exhausted
+[] ack == notReceived && status == wait && attemptsDone == 1 && delay == 0 -> status = exhausted
 
 // Non-deterministically receive ACK
 // Success: ACK received while waiting -> transition to established state
@@ -50,13 +49,13 @@ trans!(q1, q1): status == wait
 
 // ----- Ranking Functions -----
 rank(q0):
-    [] status > wait -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
-    [] status == wait && attemptsDone < maxAttempts -> maxAttempts * 4 * initialDelay
+    [] status > wait -> 3 * 2**(maxAttempts - 1) * initialDelay
+    [] status == wait && attemptsDone < maxAttempts -> 3 * 2**(maxAttempts - 1) * initialDelay
     [] status < wait -> inf
     [] status == wait && attemptsDone >= maxAttempts -> inf
 
 rank(q1):
-    [] status == closed -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
+    [] status == closed -> 3 * 2**(maxAttempts - 1) * initialDelay
     [] status == wait && attemptsDone < maxAttempts && delay >= 0 -> 2**maxAttempts * initialDelay + 1 - 2**(maxAttempts - 1) * initialDelay * attemptsDone + delay
     // status == established || exhausted
     [] status >= established && status <= exhausted -> 0
