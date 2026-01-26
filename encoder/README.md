@@ -760,8 +760,8 @@ The tool computes both violation sets (bad sets) and valid sets needed for ZK pr
 1. **B_init**: States where V(s,q) = ∞ for some initial automaton state q ∈ Q_0
    - These are states where the ranking function is undefined
 
-2. **B_step**: Transitions (s,s') where V(s,q) < V(s',q') for enabled transitions
-   - These are transitions where the ranking increases (violates non-increasing requirement)
+2. **B_step**: Transitions (s,s') where V(s,q) < V(s',q') for enabled non-fair transitions (δ \ F)
+   - These are non-fair transitions where the ranking increases (violates non-increasing requirement)
 
 3. **B_fairstep**: Fair transitions (s,s') where V(s,q) ≤ V(s',q')
    - These are fair transitions where ranking doesn't strictly decrease

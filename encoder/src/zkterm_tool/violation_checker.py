@@ -14,12 +14,12 @@ from .ranking_evaluator import evaluate_ranking, check_automaton_guard, check_gu
 
 @dataclass
 class ViolationSets:
-    """The three violation sets and valid sets for explicit-state verification.
+    r"""The three violation sets and valid sets for explicit-state verification.
 
     Attributes:
         B_init: States where V(s,q) = ∞ for some q ∈ Q_0
-        B_step: Transitions where V increases on regular transitions
-        B_fairstep: Fair transitions where V doesn't strictly decrease
+        B_step: Transitions where V increases on non-fair transitions (δ \ F)
+        B_fairstep: Fair transitions (F) where V doesn't strictly decrease
         S: Complete state space (all enumerated states)
         S0: Initial states (states satisfying init condition)
         T: Transition relation (valid program transitions)
@@ -242,7 +242,7 @@ def compute_violation_sets(
     automaton_initial_states: List[str],
     trans_encs: List[Any] = None
 ) -> ViolationSets:
-    """Compute violation sets (B_init, B_step, B_fairstep) and valid sets (S, S0, T, SxS).
+    r"""Compute violation sets (B_init, B_step, B_fairstep) and valid sets (S, S0, T, SxS).
 
     This function enumerates all states in the state space and checks which
     ones violate the termination obligations by contraposition. It also
@@ -263,7 +263,7 @@ def compute_violation_sets(
     Mathematical Background:
         Violation sets (bad sets):
         - B_init = {s | ∃q ∈ Q_0: V(s,q) = ∞}
-        - B_step = {(s,s') | ∃q,q': V(s,q) ≠ ∞ ∧ (q,⟦s⟧,q') ∈ δ ∧ V(s,q) < V(s',q')}
+        - B_step = {(s,s') | ∃q,q': V(s,q) ≠ ∞ ∧ (q,⟦s⟧,q') ∈ δ \ F ∧ V(s,q) < V(s',q')}
         - B_fairstep = {(s,s') | ∃q,q': V(s,q) ≠ ∞ ∧ (q,⟦s⟧,q') ∈ F ∧ V(s,q) ≤ V(s',q')}
 
         Valid sets:
@@ -303,6 +303,8 @@ def compute_violation_sets(
                 break
 
     # 2. Compute B_step and B_fairstep: transition violations
+    # B_step: non-fair transitions (δ \ F) where V increases
+    # B_fairstep: fair transitions (F) where V doesn't strictly decrease
     # For each pair of states (s, s')
     for s in all_states:
         for s_prime in all_states:
@@ -331,13 +333,13 @@ def compute_violation_sets(
 
                 # Check violations based on transition type
                 if aut_enc.is_fair:
-                    # Fair transition: check if V(s,q) ≤ V(s',q')
+                    # Fair transition (∈ F): check if V(s,q) ≤ V(s',q')
                     # Violation means V doesn't strictly decrease
                     if V_s_prime_q_prime is None or V_s_q <= V_s_prime_q_prime:
                         # Violation: doesn't strictly decrease
                         B_fairstep.append((s, s_prime))
                 else:
-                    # Regular transition: check if V(s,q) < V(s',q')
+                    # Non-fair transition (∈ δ \ F): check if V(s,q) < V(s',q')
                     # Violation means V increases
                     if V_s_prime_q_prime is None or V_s_q < V_s_prime_q_prime:
                         # Violation: increases
