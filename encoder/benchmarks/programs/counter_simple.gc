@@ -1,0 +1,19 @@
+// Simple counter benchmark
+// Increments x from 0 to maxVal
+// Used as baseline for performance measurement
+
+const maxVal = 10
+
+init: x = 0
+
+// Single transition: increment counter
+[] x < maxVal -> x = x + 1
+
+// Ranking function: counts down from maxVal+1
+rank(q0):
+  [] x >= 0 && x <= maxVal -> maxVal - x
+
+// Automaton: single state with self-loop
+automaton_init: q0
+
+trans(q0, q0): x < maxVal

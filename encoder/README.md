@@ -1004,6 +1004,272 @@ output = violations_to_json(violations, embeddings, verification)
 
 For large state spaces, the tool may be slow. Consider restricting bounds to smaller ranges or using symbolic verification (zkverify) instead.
 
+## Performance Benchmarking
+
+The tool includes a pytest-benchmark suite for measuring performance of zkexplicit (explicit-state verification) and zkverify (symbolic verification) with statistical rigor suitable for academic publications.
+
+### Quick Start
+
+```bash
+# Install benchmark dependencies
+uv sync --group dev
+
+# Run all benchmarks
+uv run pytest benchmarks/ --benchmark-only
+
+# Run only zkverify benchmarks (symbolic verification)
+uv run pytest benchmarks/benchmark_zkverify.py --benchmark-only
+
+# Run only zkexplicit benchmarks (explicit-state verification)
+uv run pytest benchmarks/benchmark_zkexplicit.py --benchmark-only
+
+# Save results to JSON for paper tables
+uv run pytest benchmarks/ --benchmark-only --benchmark-json=results.json
+```
+
+### Benchmark Groups
+
+The suite organizes benchmarks into groups:
+
+**zkverify (Symbolic Verification)**:
+- `zkverify-total`: End-to-end time (parsing + encoding + Z3 solving)
+- `zkverify-phases`: Phase breakdown (parse/encode only, Z3 only)
+- `zkfarkas`: Farkas dual extraction time
+
+**zkexplicit (Explicit-State Verification)**:
+- `zkexplicit-total`: End-to-end time (parsing + enumeration + violation checking + embeddings)
+- `zkexplicit-phases`: Phase breakdown (enumeration, violation checking, embeddings)
+
+Run specific groups:
+```bash
+# Only total time benchmarks
+uv run pytest benchmarks/ --benchmark-only --benchmark-group=zkverify-total
+
+# Only phase breakdown benchmarks
+uv run pytest benchmarks/ --benchmark-only --benchmark-group=zkexplicit-phases
+```
+
+### Output Formats
+
+**Console Output** (default):
+```
+---------------------------- benchmark 'zkexplicit-total': 4 tests ----------------------------
+Name                                   Min       Max      Mean    StdDev    Median     IQR
+-------------------------------------------------------------------------------------------
+test_zkexplicit_total[counter_small]  12.34ms   15.67ms  13.45ms  0.89ms   13.21ms   0.67ms
+test_zkexplicit_total[exp_backoff]   543.21ms  589.67ms 567.89ms 18.34ms  562.34ms  24.56ms
+```
+
+**JSON Export** (for paper tables):
+```bash
+# Export all benchmarks
+uv run pytest benchmarks/ --benchmark-only --benchmark-json=results.json
+
+# Export specific group
+uv run pytest benchmarks/ --benchmark-only \
+  --benchmark-group=zkverify-total \
+  --benchmark-json=zkverify_results.json
+```
+
+**Comparison Mode** (before/after optimization):
+```bash
+# Baseline
+uv run pytest benchmarks/ --benchmark-only --benchmark-save=before
+
+# Make optimizations...
+
+# Compare
+uv run pytest benchmarks/ --benchmark-only --benchmark-compare=before
+```
+
+### Statistical Control
+
+```bash
+# High statistical rigor (more rounds)
+uv run pytest benchmarks/ --benchmark-only --benchmark-min-rounds=20
+
+# Disable warmup (for reproducibility experiments)
+uv run pytest benchmarks/ --benchmark-only --benchmark-disable-gc --benchmark-warmup=off
+
+# Verbose output (show all statistics)
+uv run pytest benchmarks/ --benchmark-only --benchmark-verbose
+```
+
+### Adding Custom Benchmarks
+
+#### 1. Add Your Program File
+
+Create a `.gc` file in `benchmarks/programs/`:
+
+```bash
+cat > benchmarks/programs/my_protocol.gc << 'EOF'
+const maxVal = 100
+
+init: x = 0 && y = 0
+
+[] x < maxVal -> x = x + 1
+[] x >= maxVal -> y = y + 1
+
+rank(q0):
+  [] x < maxVal -> maxVal - x
+  [] x >= maxVal -> 1
+
+automaton_init: q0
+trans(q0, q0): x < maxVal || y < 10
+EOF
+```
+
+#### 2. Add Configuration Entry
+
+Edit `benchmarks/benchmark_config.py` and add to the `"custom"` category:
+
+```python
+"custom": [
+    BenchmarkCase(
+        name="my_protocol",
+        program_file="my_protocol.gc",
+        const_overrides={},
+        bounds=["x:0:110", "y:0:15"],
+        tags=["custom", "medium"],
+        description="My custom protocol benchmark"
+    ),
+]
+```
+
+#### 3. Run Your Benchmark
+
+```bash
+# Run specific benchmark by name
+uv run pytest benchmarks/ --benchmark-only -k "my_protocol"
+
+# Run all custom benchmarks
+uv run pytest benchmarks/ --benchmark-only -k "custom"
+```
+
+### Parametric Benchmark Families
+
+Use templates for scaling experiments:
+
+#### 1. Create Template File
+
+```bash
+mkdir -p benchmarks/programs/my_protocol_variants
+cat > benchmarks/programs/my_protocol_variants/my_protocol.gc.template << 'EOF'
+const size = {size}
+
+init: x = 0
+
+[] x < size -> x = x + 1
+
+rank(q0):
+  [] x < size -> size - x
+
+automaton_init: q0
+trans(q0, q0): x < size
+EOF
+```
+
+#### 2. Add Multiple Configurations
+
+```python
+"custom": [
+    BenchmarkCase(
+        name="my_protocol_small",
+        program_file="my_protocol_variants/my_protocol.gc.template",
+        const_overrides={"size": 10},
+        bounds=["x:0:15"],
+        tags=["custom", "small"],
+        description="My protocol: size=10"
+    ),
+    BenchmarkCase(
+        name="my_protocol_large",
+        program_file="my_protocol_variants/my_protocol.gc.template",
+        const_overrides={"size": 100},
+        bounds=["x:0:110"],
+        tags=["custom", "large"],
+        description="My protocol: size=100"
+    ),
+]
+```
+
+### Exporting Data for Academic Papers
+
+#### Extract Statistics from JSON
+
+```python
+import json
+
+# Load benchmark results
+with open('results.json') as f:
+    results = json.load(f)
+
+# Extract data for LaTeX table
+for bench in results['benchmarks']:
+    name = bench['name']
+    mean_ms = bench['stats']['mean'] * 1000  # Convert to ms
+    stddev_ms = bench['stats']['stddev'] * 1000
+    print(f"{name} & {mean_ms:.2f} $\\pm$ {stddev_ms:.2f} ms \\\\")
+```
+
+#### Generate Scaling Plots
+
+```python
+import json
+import matplotlib.pyplot as plt
+
+# Load results from different sizes
+with open('results.json') as f:
+    results = json.load(f)
+
+# Extract mean times for parametric family
+sizes = []
+times = []
+for bench in results['benchmarks']:
+    if 'my_protocol' in bench['name']:
+        # Extract size from name or metadata
+        size = int(bench['name'].split('_')[-1])
+        mean_ms = bench['stats']['mean'] * 1000
+        sizes.append(size)
+        times.append(mean_ms)
+
+# Plot scaling
+plt.plot(sizes, times, 'o-')
+plt.xlabel('Problem Size')
+plt.ylabel('Time (ms)')
+plt.title('Performance Scaling')
+plt.savefig('scaling.pdf')
+```
+
+### Understanding Performance Bottlenecks
+
+**zkexplicit bottlenecks**:
+- State enumeration: O(r^n) where r is range per variable, n is number of variables
+- Violation checking: O(r^(2n) × |δ|) - triple nested loop over state pairs and automaton transitions
+- Embeddings: O(r^(2n)) for transition embeddings
+
+**zkverify bottlenecks**:
+- Obligation generation: O(|prog_trans| × |aut_trans| × |cases|²)
+- Z3 SMT solving: Dominates total time (called once per obligation, can be hundreds of times)
+
+Use phase benchmarks to identify bottlenecks in your programs:
+
+```bash
+# Measure only the bottleneck phase
+uv run pytest benchmarks/benchmark_zkexplicit.py::test_zkexplicit_violation_checking \
+  --benchmark-only -k "counter_small"
+```
+
+### Best Practices
+
+1. **Start small**: Validate with small benchmarks first, then scale up
+2. **Statistical rigor**: Use `--benchmark-min-rounds=10` or higher for papers
+3. **Tag organization**: Use tags like `"paper"`, `"small"`, `"large"` for filtering
+4. **Document purpose**: Add clear descriptions to benchmark cases
+5. **Baseline comparison**: Always include simple baseline benchmarks (like `counter_small`)
+6. **Export metadata**: Save JSON with `--benchmark-json` for reproducibility
+
+See `benchmarks/programs/README.md` for detailed documentation on benchmark programs, template syntax, and configuration options.
+
 ## Syntax
 
 ### Type Annotations
