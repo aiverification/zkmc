@@ -486,7 +486,7 @@ def test_cli_missing_file():
 
 
 def test_cli_missing_bounds(tmp_path):
-    """Test CLI without required --bounds."""
+    """Test CLI without --bounds and no type annotations."""
     program = """
     rank(q0):
         [] x >= 0 -> x
@@ -499,9 +499,9 @@ def test_cli_missing_bounds(tmp_path):
     gc_file = tmp_path / "test.gc"
     gc_file.write_text(program)
 
-    # ArgumentParser will raise SystemExit
-    with pytest.raises(SystemExit):
-        main([str(gc_file)])
+    # Now --bounds is optional, but an error is returned if bounds are missing
+    exit_code = main([str(gc_file)])
+    assert exit_code == 1  # Should fail with missing bounds error
 
 
 def test_cli_invalid_bounds(tmp_path):
@@ -528,7 +528,7 @@ def test_cli_invalid_bounds(tmp_path):
         sys.stderr = old_stderr
 
     assert result == 1
-    assert "Error in bounds" in error
+    assert "Invalid bound specification" in error or "Error in bounds" in error
 
 
 def test_cli_missing_ranking_functions(tmp_path):

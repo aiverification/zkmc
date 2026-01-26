@@ -724,3 +724,82 @@ def test_power_with_override():
     # Override: 2**4 = 16
     result2 = parse_with_constants(program, {"n": 4})
     assert result2.commands[0].assignments[0].expr == Num(16)
+
+
+def test_type_annotation_basic():
+    """Test basic type annotation parsing."""
+    result = parse_with_constants("""
+        type x: 0..10
+        type y: 5..15
+
+        [] x < y -> x = x + 1
+    """)
+
+    assert "x" in result.types
+    assert result.types["x"].min_value == 0
+    assert result.types["x"].max_value == 10
+    assert "y" in result.types
+    assert result.types["y"].min_value == 5
+    assert result.types["y"].max_value == 15
+
+
+def test_type_with_const_expr():
+    """Test type bounds using constant expressions."""
+    result = parse_with_constants("""
+        const n = 3
+        const delay = 64
+        type x: 0..n
+        type y: 0..(2**n * delay)
+
+        [] x < n -> x = x + 1
+    """)
+
+    assert result.types["x"].max_value == 3
+    assert result.types["y"].max_value == 512  # 2^3 * 64
+
+
+def test_type_invalid_range():
+    """Test error on invalid range (min > max)."""
+    with pytest.raises(Exception, match="Invalid type bounds"):
+        parse_with_constants("""
+            type x: 10..5
+            [] x > 0 -> x = x + 1
+        """)
+
+
+def test_type_redefinition():
+    """Test error on type redefinition."""
+    with pytest.raises(Exception, match="already defined"):
+        parse_with_constants("""
+            type x: 0..10
+            type x: 0..20
+            [] x > 0 -> x = x + 1
+        """)
+
+
+def test_unbounded_variable():
+    """Test that variables without types remain unbounded."""
+    result = parse_with_constants("""
+        type x: 0..10
+        [] x < y -> x = x + 1
+    """)
+
+    assert "x" in result.types
+    assert "y" not in result.types  # y has no type annotation
+
+
+def test_type_with_const_override():
+    """Test that type bounds use overridden constants."""
+    program = """
+        const maxVal = 10
+        type x: 0..maxVal
+        [] x < maxVal -> x = x + 1
+    """
+
+    # Default: maxVal=10
+    result1 = parse_with_constants(program)
+    assert result1.types["x"].max_value == 10
+
+    # Override: maxVal=20
+    result2 = parse_with_constants(program, {"maxVal": 20})
+    assert result2.types["x"].max_value == 20

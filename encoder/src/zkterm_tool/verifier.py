@@ -89,10 +89,11 @@ class Verifier:
         self.variables = sorted(all_vars)
 
         # Now encode all components with the correct variable list
-        self.trans_encs = encode_program(result.commands, nonstrict_only=True) if result.commands else []
+        self.trans_encs = encode_program(result.commands, nonstrict_only=True, types=result.types) if result.commands else []
         self.aut_encs = encode_automaton_transitions(result.automaton_transitions) if result.automaton_transitions else []
 
         # Encode ranking functions with the full variable list
+        # NOTE: Ranking functions do NOT get type bounds injected (need unbounded guards for completeness)
         from .ranking_encoder import encode_ranking_function
         self.rank_encs = {
             state: encode_ranking_function(rf, self.variables)
@@ -101,7 +102,7 @@ class Verifier:
 
         # Encode init condition with the full variable list
         # Note: Use 'is not None' because empty list [] is falsy but valid (means 'true')
-        self.init_enc = encode_init(result.init_condition, self.variables) if result.init_condition is not None else None
+        self.init_enc = encode_init(result.init_condition, self.variables, types=result.types) if result.init_condition is not None else None
 
         # Store automaton initial states (Q_0)
         # If not specified, default to all states with ranking functions

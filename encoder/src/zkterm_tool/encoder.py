@@ -15,7 +15,7 @@ from numpy.typing import NDArray
 
 from .ast_types import (
     GuardedCommand, Comparison, Assignment, CompOp,
-    Expr, Var, Num, BinOp, Neg
+    Expr, Var, Num, BinOp, Neg, TypeDef
 )
 
 
@@ -264,19 +264,67 @@ class InitEncoding:
         return "\n".join(lines)
 
 
+def inject_type_bounds(
+    guards: List[Comparison],
+    variables: List[str],
+    types: Dict[str, TypeDef]
+) -> List[Comparison]:
+    """Inject type bounds into guard constraints.
+
+    For each variable with a type annotation, adds:
+        var >= min_value
+        var <= max_value
+
+    Returns new guard list with bounds appended.
+
+    Args:
+        guards: Original guard comparisons
+        variables: All variables in scope
+        types: Type annotations (variable name -> TypeDef)
+
+    Returns:
+        Extended guard list with type bounds
+    """
+    extended_guards = list(guards)  # Copy existing guards
+
+    for var_name in variables:
+        if var_name in types:
+            type_def = types[var_name]
+
+            # Add lower bound: var >= min_value
+            extended_guards.append(Comparison(
+                left=Var(name=var_name),
+                op=CompOp.GE,
+                right=Num(value=type_def.min_value)
+            ))
+
+            # Add upper bound: var <= max_value
+            extended_guards.append(Comparison(
+                left=Var(name=var_name),
+                op=CompOp.LE,
+                right=Num(value=type_def.max_value)
+            ))
+
+    return extended_guards
+
+
 def encode_init(
     guards: List[Comparison],
-    variables: List[str] | None = None
+    variables: List[str] | None = None,
+    types: Dict[str, TypeDef] | None = None
 ) -> InitEncoding:
     """Encode initial condition guards as matrix-vector constraints.
 
     Args:
         guards: List of comparison constraints for initial condition
         variables: Optional ordered list of variables. If None, extracted from guards.
+        types: Optional type annotations for bound injection
 
     Returns:
         InitEncoding with (A_0, b_0) for initial condition
     """
+    types = types or {}
+
     # Extract variables from guards if not provided
     if variables is None:
         vars_set: set[str] = set()
@@ -296,9 +344,12 @@ def encode_init(
 
         variables = sorted(vars_set)
 
+    # Inject type bounds into guards
+    extended_guards = inject_type_bounds(guards, variables, types)
+
     # Encode guards to inequalities (no primed variables)
     all_ineqs: List[Inequality] = []
-    for guard in guards:
+    for guard in extended_guards:
         all_ineqs.extend(comparison_to_inequalities(guard, primed=False))
 
     # Convert to non-strict inequalities only (init conditions don't need strict)
@@ -363,27 +414,34 @@ def encode_transition(
     cmd: GuardedCommand,
     variables: List[str] | None = None,
     nonstrict_only: bool = False,
+    types: Dict[str, TypeDef] | None = None,
 ) -> TransitionEncoding:
     """Encode a guarded command as matrix-vector inequality constraints.
-    
+
     Args:
         cmd: The guarded command to encode
         variables: Optional ordered list of variables. If None, extracted from command.
         nonstrict_only: If True, convert all strict inequalities to non-strict
                         using integer semantics (x < c → x ≤ c-1)
-    
+        types: Optional type annotations for bound injection
+
     Returns:
         TransitionEncoding with (A, b) for ≤ and (C, d) for < constraints
     """
+    types = types or {}
+
     # Get variables
     if variables is None:
         variables = sorted(cmd.get_variables())
-    
+
+    # Inject type bounds into guards
+    extended_guards = inject_type_bounds(cmd.guards, variables, types)
+
     # Collect all inequalities
     all_ineqs: List[Inequality] = []
-    
+
     # Guards (use unprimed variables)
-    for guard in cmd.guards:
+    for guard in extended_guards:
         all_ineqs.extend(comparison_to_inequalities(guard, primed=False))
     
     # Assignments (var' = expr where expr uses unprimed vars)
@@ -433,21 +491,25 @@ def encode_transition(
 def encode_program(
     commands: List[GuardedCommand],
     nonstrict_only: bool = False,
+    types: Dict[str, TypeDef] | None = None,
 ) -> List[TransitionEncoding]:
     """Encode multiple guarded commands with consistent variable ordering.
-    
+
     Args:
         commands: List of guarded commands to encode
         nonstrict_only: If True, convert all strict inequalities to non-strict
-    
+        types: Optional type annotations for bound injection
+
     Returns:
         One TransitionEncoding per guarded command.
     """
+    types = types or {}
+
     # Collect all variables from all commands
     all_vars: set[str] = set()
     for cmd in commands:
         all_vars.update(cmd.get_variables())
-    
+
     variables = sorted(all_vars)
-    
-    return [encode_transition(cmd, variables, nonstrict_only) for cmd in commands]
+
+    return [encode_transition(cmd, variables, nonstrict_only, types) for cmd in commands]

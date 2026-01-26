@@ -101,7 +101,7 @@ Non-strict inequalities Ax ≤ b:
 No strict inequalities
 ```
 
-### Constants
+### Constants and Type Annotations
 
 Define named constants for readability:
 
@@ -121,6 +121,20 @@ const initialDelay = 64
 const maxDelay = 2**(maxAttempts - 1) * initialDelay  // Computed: 256
 
 [] delay < maxDelay -> delay = delay + 1
+```
+
+Combine constants with type annotations to eliminate bounds redundancy:
+
+```
+const maxAttempts = 3
+const maxDelay = 256
+
+type attemptsDone: 0..maxAttempts
+type delay: 0..maxDelay
+
+init: delay = 0 && attemptsDone = 0  // Bounds auto-injected
+
+[] delay > 0 -> delay = delay - 1  // Bounds auto-injected
 ```
 
 **Expressions in code**: Arithmetic operations (`+`, `-`, `*`, `**`) can also be used in guards, assignments, and ranking functions. When all operands are constants or numbers, the expression is evaluated at parse time:
@@ -800,7 +814,7 @@ The tool automatically verifies these disjointness properties and includes the r
 
 | Option | Description |
 |--------|-------------|
-| `--bounds VAR:MIN:MAX` | Required. State space bounds for each variable (e.g., `x:0:10 y:0:5`) |
+| `--bounds VAR:MIN:MAX` | State space bounds for each variable (e.g., `x:0:10 y:0:5`). Optional if type annotations are defined. Can override type annotations. |
 | `--pretty` | Pretty-print JSON output with indentation |
 | `--embeddings` | Include field embeddings e_1 and e_2 for polynomial commitments |
 | `--field-size N` | Prime field size for embeddings (default: 2^256-189, BN254 scalar field) |
@@ -870,6 +884,35 @@ $ zkexplicit counter.gc --bounds x:8:12 --embeddings --field-size 101 --pretty
     "E_step": [8, 8, 9, 9, 9],
     "E_fairstep": [],
     "field_size": 101
+  }
+}
+```
+
+With type annotations (no `--bounds` needed):
+```bash
+$ cat > counter_typed.gc << 'EOF'
+const maxVal = 10
+type x: 0..maxVal
+
+init: x = 0
+
+[] x < maxVal -> x = x + 1
+
+rank(q0):
+  [] x >= 0 && x <= maxVal -> maxVal - x
+
+automaton_init: q0
+trans(q0, q0): x < maxVal
+EOF
+
+$ zkexplicit counter_typed.gc --pretty
+{
+  "B_init": [{"x": 11}, {"x": 12}, {"x": 13}, {"x": 14}, {"x": 15}],
+  "B_step": [...],
+  "verification": {...},
+  "metadata": {
+    "bounds": {"x": {"min": 0, "max": 10}},
+    ...
   }
 }
 ```
@@ -962,6 +1005,33 @@ output = violations_to_json(violations, embeddings, verification)
 For large state spaces, the tool may be slow. Consider restricting bounds to smaller ranges or using symbolic verification (zkverify) instead.
 
 ## Syntax
+
+### Type Annotations
+
+```
+type var: min..max
+```
+
+Optional variable bounds that are automatically injected into init conditions and program transitions (but NOT ranking functions or automaton transitions).
+
+**Example:**
+```
+const maxVal = 10
+type x: 0..maxVal
+type y: -5..5
+
+init: x = 0  // Automatically becomes: x = 0 && x >= 0 && x <= maxVal
+
+[] x < maxVal -> x = x + 1  // Automatically becomes: x < maxVal && x >= 0 && x <= maxVal && y >= -5 && y <= 5 -> x = x + 1
+```
+
+**Why not inject into ranking functions?**
+Ranking functions need unbounded guards for mathematical completeness. For example, `[] x < 0 -> inf` defines ranking behavior for unreachable states. Auto-injecting `x >= 0` would make this guard contradictory.
+
+**Benefits:**
+- Single source of truth for variable domains
+- Eliminates redundant bounds in guards and zkexplicit CLI args
+- zkexplicit uses types as default bounds (no `--bounds` needed)
 
 ### Constants
 

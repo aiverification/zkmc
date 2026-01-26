@@ -6,7 +6,7 @@ from lark import Lark, Transformer, v_args
 
 from .ast_types import (
     GuardedCommand, Comparison, Assignment, CompOp,
-    Var, Num, BinOp, Neg, Expr
+    Var, Num, BinOp, Neg, Expr, TypeDef
 )
 from .ranking_types import RankingCase, RankingFunction
 from .automaton_types import AutomatonTransition
@@ -20,6 +20,7 @@ GRAMMAR_PATH = Path(__file__).parent / "grammar.lark"
 class ParseResult:
     """Result of parsing, including all program components."""
     constants: dict[str, int]
+    types: dict[str, TypeDef]                        # Variable type annotations
     init_condition: list[Comparison] | None          # Initial condition guard
     commands: list[GuardedCommand]                   # Program transitions
     ranking_functions: dict[str, RankingFunction]    # state -> RankingFunction
@@ -37,19 +38,21 @@ class ASTTransformer(Transformer):
     def __init__(self):
         super().__init__()
         self.constants: dict[str, int] = {}
+        self.types: dict[str, TypeDef] = {}  # Variable type annotations
         self._init_guards: list[Comparison] | None = None
         self.ranking_functions: dict[str, RankingFunction] = {}
         self.automaton_transitions: list[AutomatonTransition] = []
         self.automaton_initial_states: list[str] | None = None
 
     def start(self, items: list) -> ParseResult:
-        # Items are a mix of None (from const_def, ranking_function, automaton_trans, automaton_init, init_condition)
+        # Items are a mix of None (from const_def, type_def, ranking_function, automaton_trans, automaton_init, init_condition)
         # and GuardedCommands
         commands = [item for item in items if isinstance(item, GuardedCommand)]
-        # ranking_functions, init_condition, automaton_transitions, and automaton_initial_states
+        # ranking_functions, init_condition, automaton_transitions, automaton_initial_states, and types
         # are collected in their respective fields
         return ParseResult(
             constants=self.constants,
+            types=self.types,
             init_condition=self._init_guards,
             commands=commands,
             ranking_functions=self.ranking_functions,
@@ -71,6 +74,22 @@ class ASTTransformer(Transformer):
             # value is already evaluated to an int by const_expr handlers
             self.constants[const_name] = value
         return None
+
+    def type_def(self, items: list) -> None:
+        """Parse type definition: type var: min..max"""
+        var_token = items[0]
+        min_expr = items[1]  # Already evaluated const_expr (int)
+        max_expr = items[2]  # Already evaluated const_expr (int)
+
+        var_name = str(var_token)
+
+        # Check for redefinition
+        if var_name in self.types:
+            raise ValueError(f"Type for variable '{var_name}' already defined")
+
+        type_def = TypeDef(variable=var_name, min_value=min_expr, max_value=max_expr)
+        self.types[var_name] = type_def
+        return None  # Don't include in items list, stored in self.types
 
     # Constant expression evaluation (happens during parsing)
     def const_number(self, items: list) -> int:

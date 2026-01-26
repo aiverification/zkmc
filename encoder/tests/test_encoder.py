@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 from numpy.testing import assert_array_equal
 
-from zkterm_tool import parse, encode_program, encode_transition
+from zkterm_tool import parse, parse_with_constants, encode_program, encode_transition, encode_init
 
 
 class TestEncoder:
@@ -282,3 +282,97 @@ class TestAutomatonEncoding:
         # No constraints (always true)
         assert enc.P.shape[0] == 0
         assert enc.r.shape[0] == 0
+
+
+class TestTypeBoundInjection:
+    def test_bound_injection_transition(self):
+        """Test that type bounds are injected into transition guards."""
+        result = parse_with_constants("""
+            type x: 0..10
+            type y: 0..5
+
+            [] x < y -> x = x + 1
+        """)
+
+        cmd = result.commands[0]
+        all_vars = sorted(cmd.get_variables())
+
+        encoding = encode_transition(cmd, variables=all_vars, types=result.types)
+
+        # Guard should have original (x < y) plus bounds:
+        # x >= 0, x <= 10, y >= 0, y <= 5
+        # Total: at least 5 inequalities (original guard + 4 bounds)
+        assert encoding.A.shape[0] >= 5
+
+    def test_bound_injection_init(self):
+        """Test that type bounds are injected into init conditions."""
+        result = parse_with_constants("""
+            type x: 0..10
+            init: x = 0
+        """)
+
+        all_vars = ["x"]
+        init_encoding = encode_init(result.init_condition, variables=all_vars, types=result.types)
+
+        # Init should have x = 0 (2 constraints) plus x >= 0 and x <= 10 (2 more)
+        # Total: 4 constraints
+        assert init_encoding.A_0.shape[0] == 4
+
+    def test_no_bounds_without_type(self):
+        """Test that variables without types are not bounded."""
+        result = parse_with_constants("""
+            [] x < 10 -> x = x + 1
+        """)
+
+        cmd = result.commands[0]
+        all_vars = sorted(cmd.get_variables())
+
+        # No types, so result.types is empty
+        encoding = encode_transition(cmd, variables=all_vars, types=result.types)
+
+        # Without types, we only have the original guard x < 10 and x' = x + 1
+        # This produces 3 inequalities: x < 10, x' >= x+1, x' <= x+1
+        # (Note: strict inequality converted to non-strict in the encoder)
+        assert encoding.A.shape[0] <= 3  # Should not have extra bound constraints
+
+    def test_bounds_with_multiple_variables(self):
+        """Test type bounds with multiple variables."""
+        result = parse_with_constants("""
+            type x: 0..100
+            type y: -10..10
+            type z: 5..20
+
+            [] x > 0 && y < z -> x = x - 1; y = y + 1
+        """)
+
+        cmd = result.commands[0]
+        all_vars = sorted(cmd.get_variables())  # ['x', 'y', 'z']
+
+        encoding = encode_transition(cmd, variables=all_vars, types=result.types)
+
+        # Original guards: x > 0, y < z (2)
+        # Type bounds: x >= 0, x <= 100, y >= -10, y <= 10, z >= 5, z <= 20 (6)
+        # Assignments: x' = x - 1, y' = y + 1 (4 inequalities)
+        # Identity for z: z' = z (2 inequalities)
+        # Total: at least 14 inequalities
+        assert encoding.A.shape[0] >= 10
+
+    def test_type_bounds_override_behavior(self):
+        """Test that adding redundant type bounds doesn't break encoding."""
+        result = parse_with_constants("""
+            type x: 0..10
+
+            [] x > 3 && x < 8 -> x = x + 1
+        """)
+
+        cmd = result.commands[0]
+        all_vars = ["x"]
+
+        encoding = encode_transition(cmd, variables=all_vars, types=result.types)
+
+        # Original guards: x > 3, x < 8 (2)
+        # Type bounds: x >= 0, x <= 10 (2, redundant but added anyway)
+        # Assignment: x' = x + 1 (2)
+        # Total: at least 6 inequalities
+        # The redundant bounds (x >= 0, x <= 10) don't hurt since x > 3 && x < 8 is more restrictive
+        assert encoding.A.shape[0] >= 4

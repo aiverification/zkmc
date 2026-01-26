@@ -6,11 +6,13 @@
 // Example automaton initial states: automaton_init: q0, q1
 // Constants: const received = 1
 
-start: (init_condition | const_def | guarded_command | ranking_function | automaton_trans | automaton_init)*
+start: (init_condition | const_def | type_def | guarded_command | ranking_function | automaton_trans | automaton_init)*
 
 init_condition: "init" ":" guard
 
 const_def: "const" CONST_NAME "=" const_expr
+
+type_def: "type" VAR ":" const_expr ".." const_expr
 
 // Constant expressions can reference other constants and use arithmetic
 ?const_expr: const_term

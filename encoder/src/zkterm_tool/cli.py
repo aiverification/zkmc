@@ -219,7 +219,7 @@ Example:
 
         # 1. Display initial condition if present
         if result.init_condition:
-            init_enc = encode_init(result.init_condition)
+            init_enc = encode_init(result.init_condition, types=result.types)
             print(format_init_encoding(init_enc, symbolic=args.symbolic))
             sections_printed = True
 
@@ -228,7 +228,7 @@ Example:
             if sections_printed:
                 print("\n")
 
-            encodings = encode_program(result.commands, nonstrict_only=True)
+            encodings = encode_program(result.commands, nonstrict_only=True, types=result.types)
 
             for i, enc in enumerate(encodings):
                 if i > 0:

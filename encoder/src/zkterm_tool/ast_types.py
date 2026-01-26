@@ -78,20 +78,35 @@ class Assignment:
 
 
 @dataclass(frozen=True)
+class TypeDef:
+    """Variable type annotation with bounds: type var: min..max."""
+    variable: str
+    min_value: int  # Evaluated constant expression
+    max_value: int  # Evaluated constant expression
+
+    def __post_init__(self) -> None:
+        if self.min_value > self.max_value:
+            raise ValueError(f"Invalid type bounds: {self.min_value}..{self.max_value}")
+
+    def __repr__(self) -> str:
+        return f"type {self.variable}: {self.min_value}..{self.max_value}"
+
+
+@dataclass(frozen=True)
 class GuardedCommand:
     """A guarded command: [] guard -> assignments."""
     guards: list[Comparison]  # conjunction of comparisons
     assignments: list[Assignment]
-    
+
     def __repr__(self) -> str:
         guard_str = " && ".join(str(g) for g in self.guards)
         assign_str = "; ".join(str(a) for a in self.assignments)
         return f"[] {guard_str} -> {assign_str}"
-    
+
     def get_variables(self) -> set[str]:
         """Extract all variable names from guards and assignments."""
         variables: set[str] = set()
-        
+
         def collect_from_expr(e: Expr) -> None:
             if isinstance(e, Var):
                 variables.add(e.name)
@@ -100,13 +115,13 @@ class GuardedCommand:
                 collect_from_expr(e.right)
             elif isinstance(e, Neg):
                 collect_from_expr(e.expr)
-        
+
         for guard in self.guards:
             collect_from_expr(guard.left)
             collect_from_expr(guard.right)
-        
+
         for assign in self.assignments:
             variables.add(assign.var)
             collect_from_expr(assign.expr)
-        
+
         return variables

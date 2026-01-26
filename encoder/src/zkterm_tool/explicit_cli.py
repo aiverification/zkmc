@@ -206,10 +206,9 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
 
     parser.add_argument(
         "--bounds",
-        nargs="+",
-        required=True,
+        nargs="*",
         metavar="VAR:MIN:MAX",
-        help="State space bounds for each variable (e.g., x:0:10 y:0:5)"
+        help="State space bounds for each variable (e.g., x:0:10 y:0:5). Optional if types defined."
     )
 
     parser.add_argument(
@@ -280,7 +279,7 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
         rank_encs = encode_ranking_functions(result.ranking_functions)
 
         # Encode program transitions (for computing T)
-        trans_encs = encode_program(result.commands, nonstrict_only=True) if result.commands else []
+        trans_encs = encode_program(result.commands, nonstrict_only=True, types=result.types) if result.commands else []
 
         # Get all variables from all components
         all_vars = set()
@@ -319,13 +318,42 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
 
         # Now encode init with full variable list
         if result.init_condition:
-            init_enc = encode_init(result.init_condition, variables)
+            init_enc = encode_init(result.init_condition, variables, types=result.types)
         else:
             init_enc = None
 
+        # Build bounds: start with types, then override with --bounds
+        bounds_dict = {}
+
+        # First, use type annotations as defaults
+        for var_name, type_def in result.types.items():
+            bounds_dict[var_name] = f"{var_name}:{type_def.min_value}:{type_def.max_value}"
+
+        # Then, override with explicit --bounds args if provided
+        if args.bounds:
+            for bound_spec in args.bounds:
+                # Parse bound to get variable name
+                parts = bound_spec.split(":")
+                if len(parts) == 3:
+                    var_name = parts[0]
+                    bounds_dict[var_name] = bound_spec
+                else:
+                    print(f"Error: Invalid bound specification '{bound_spec}'. Use format VAR:MIN:MAX.", file=sys.stderr)
+                    return 1
+
+        # Convert bounds_dict to list for create_state_space
+        bounds_list = list(bounds_dict.values())
+
+        # Check that all variables have bounds (either from types or CLI)
+        missing_bounds = set(variables) - {b.split(":")[0] for b in bounds_list}
+        if missing_bounds:
+            print(f"Error: No bounds specified for variables: {', '.join(sorted(missing_bounds))}", file=sys.stderr)
+            print(f"Either add type annotations or use --bounds {' '.join(f'{v}:MIN:MAX' for v in sorted(missing_bounds))}", file=sys.stderr)
+            return 1
+
         # Create state space from bounds
         try:
-            state_space = create_state_space(variables, args.bounds)
+            state_space = create_state_space(variables, bounds_list)
         except ValueError as e:
             print(f"Error in bounds: {e}", file=sys.stderr)
             return 1
