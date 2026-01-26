@@ -19,8 +19,8 @@ const maxAttempts = 2
 
 // Variables:
 type status: 0..3
-type attemptsDone: 0..maxAttempts // - 1
-type delay: 0..2**(maxAttempts - 1) * initialDelay
+type attemptsDone: 0..maxAttempts - 1
+type delay: 0..2**(maxAttempts - 1) * initialDelay - 1
 type ack: 0..1
 
 // Initially: closed
