@@ -10,7 +10,25 @@ start: (init_condition | const_def | guarded_command | ranking_function | automa
 
 init_condition: "init" ":" guard
 
-const_def: "const" CONST_NAME "=" NUMBER
+const_def: "const" CONST_NAME "=" const_expr
+
+// Constant expressions can reference other constants and use arithmetic
+?const_expr: const_term
+           | const_expr "+" const_term   -> const_add
+           | const_expr "-" const_term   -> const_sub
+
+?const_term: const_factor
+           | const_term "*" const_factor -> const_mul
+
+?const_factor: const_power
+             | "-" const_factor          -> const_neg
+
+?const_power: const_atom
+            | const_atom "**" const_factor -> const_pow
+
+?const_atom: NUMBER                      -> const_number
+           | CONST_NAME                  -> const_name
+           | "(" const_expr ")"
 
 guarded_command: "[]" guard "->" assignments
 

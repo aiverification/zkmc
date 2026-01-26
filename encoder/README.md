@@ -113,7 +113,19 @@ const success = 1
 [] ack = received && status = wait -> status = success
 ```
 
-Constants are substituted at parse time. Comments (starting with `//`) are also supported.
+Constants support arithmetic expressions and can reference other constants:
+
+```
+const maxAttempts = 3
+const initialDelay = 64
+const maxDelay = 2**(maxAttempts - 1) * initialDelay  // Computed: 256
+
+[] delay < maxDelay -> delay = delay + 1
+```
+
+Supported operations: `+`, `-`, `*`, `**` (power), `-` (negation), and parentheses. Constants are evaluated at parse time using previously defined constants. Command-line overrides (via `--const`) are applied before expression evaluation, allowing computed constants to use overridden values.
+
+Comments (starting with `//`) are also supported.
 
 ### Multiple Transitions
 

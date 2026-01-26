@@ -68,8 +68,37 @@ class ASTTransformer(Transformer):
         # Don't overwrite constants that are already set (e.g., from command-line overrides)
         const_name = str(name)
         if const_name not in self.constants:
-            self.constants[const_name] = int(value)
+            # value is already evaluated to an int by const_expr handlers
+            self.constants[const_name] = value
         return None
+
+    # Constant expression evaluation (happens during parsing)
+    def const_number(self, items: list) -> int:
+        return int(items[0])
+
+    def const_name(self, items: list) -> int:
+        name = str(items[0])
+        if name not in self.constants:
+            raise ValueError(f"Undefined constant '{name}' referenced in constant expression")
+        return self.constants[name]
+
+    def const_add(self, items: list) -> int:
+        return items[0] + items[1]
+
+    def const_sub(self, items: list) -> int:
+        return items[0] - items[1]
+
+    def const_mul(self, items: list) -> int:
+        return items[0] * items[1]
+
+    def const_pow(self, items: list) -> int:
+        base, exponent = items[0], items[1]
+        if exponent < 0:
+            raise ValueError(f"Negative exponents not supported in constant expressions: {base}**{exponent}")
+        return base ** exponent
+
+    def const_neg(self, items: list) -> int:
+        return -items[0]
     
     def guarded_command(self, items: list) -> GuardedCommand:
         guard_comparisons = items[0]  # list of comparisons from guard

@@ -602,3 +602,70 @@ def test_const_override():
     rank_encs = encode_ranking_functions(result2.ranking_functions)
     enc_q0 = rank_encs["q0"]
     assert enc_q0.finite_cases[0].u_j == 3  # Constant term in maxVal - x
+
+
+def test_const_expressions():
+    """Test that constant expressions with arithmetic operations work correctly."""
+    program = """
+        const maxAttempts = 3
+        const initialDelay = 64
+        const maxDelay = 2**(maxAttempts - 1) * initialDelay
+
+        init: x = 0
+        [] x < 10 -> x = x + 1
+    """
+
+    # Parse without override - should compute maxDelay = 2^2 * 64 = 256
+    result1 = parse_with_constants(program)
+    assert result1.constants == {"maxAttempts": 3, "initialDelay": 64, "maxDelay": 256}
+
+    # Parse with override - should recompute maxDelay using overridden value
+    # maxDelay = 2^(4-1) * 64 = 2^3 * 64 = 512
+    result2 = parse_with_constants(program, const_overrides={"maxAttempts": 4})
+    assert result2.constants == {"maxAttempts": 4, "initialDelay": 64, "maxDelay": 512}
+
+    # Test with different override - maxDelay = 2^(2-1) * 64 = 2^1 * 64 = 128
+    result3 = parse_with_constants(program, const_overrides={"maxAttempts": 2})
+    assert result3.constants == {"maxAttempts": 2, "initialDelay": 64, "maxDelay": 128}
+
+
+def test_const_expression_operations():
+    """Test various arithmetic operations in constant expressions."""
+    program = """
+        const a = 10
+        const b = 3
+        const sum = a + b
+        const diff = a - b
+        const prod = a * b
+        const power = 2**5
+        const complex = (a + b) * 2 - 1
+        const neg = -5
+
+        init: x = 0
+        [] x < 10 -> x = x + 1
+    """
+
+    result = parse_with_constants(program)
+    assert result.constants["a"] == 10
+    assert result.constants["b"] == 3
+    assert result.constants["sum"] == 13
+    assert result.constants["diff"] == 7
+    assert result.constants["prod"] == 30
+    assert result.constants["power"] == 32
+    assert result.constants["complex"] == 25
+    assert result.constants["neg"] == -5
+
+
+def test_const_undefined_reference_error():
+    """Test that referencing undefined constants raises an error."""
+    program = """
+        const a = 10
+        const b = undefined_constant + 5
+
+        init: x = 0
+        [] x < 10 -> x = x + 1
+    """
+
+    with pytest.raises(Exception) as exc_info:
+        parse_with_constants(program)
+    assert "undefined_constant" in str(exc_info.value).lower()
