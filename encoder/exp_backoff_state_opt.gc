@@ -54,14 +54,14 @@ trans!(q1, q1): status == wait
 
 // ----- Ranking Functions -----
 rank(q0):
-    [] status > wait -> 3 * 2**(maxAttempts - 1) * initialDelay
-    [] status == wait && attemptsDone < maxAttempts -> 3 * 2**(maxAttempts - 1) * initialDelay
+    [] status > wait -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
+    [] status == wait && attemptsDone < maxAttempts -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
     [] status < wait -> inf
     [] status == wait && attemptsDone >= maxAttempts -> inf
 
 rank(q1):
-    [] status == closed -> 3 * 2**(maxAttempts - 1) * initialDelay
-    [] status == wait && attemptsDone < maxAttempts && delay >= 0 -> 2**maxAttempts * initialDelay + 1 - 2**(maxAttempts - 1) * initialDelay * attemptsDone + delay
+    [] status == closed -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
+    [] status == wait && attemptsDone < maxAttempts && delay >= 0 -> 2**(maxAttempts - 1) * initialDelay * (maxAttempts - 1) + 1 - 2**(maxAttempts - 1) * initialDelay * attemptsDone + delay
     // status == established || exhausted
     [] status >= established && status <= exhausted -> 0
     [] status < wait -> inf
