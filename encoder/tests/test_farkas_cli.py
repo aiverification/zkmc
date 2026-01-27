@@ -162,8 +162,11 @@ def test_extract_farkas_matrix_structure():
         if dims["n_lambda_s"] > 0:
             assert len(matrices["A_s"][0]) == dims["n_vars"]
 
-        # b_s should be length n_lambda_s
+        # b_s should be n × 1 column vector
         assert len(matrices["b_s"]) == dims["n_lambda_s"]
+        if dims["n_lambda_s"] > 0:
+            assert isinstance(matrices["b_s"][0], list)
+            assert len(matrices["b_s"][0]) == 1
 
         # G_p should be n_mu_s × n_vars (public constraint matrix)
         assert isinstance(matrices["G_p"], list)
@@ -172,9 +175,12 @@ def test_extract_farkas_matrix_structure():
             assert isinstance(matrices["G_p"][0], list)
             assert len(matrices["G_p"][0]) == dims["n_vars"]
 
-        # h_p should be vector of length n_mu_s (public constraint vector)
+        # h_p should be n' × 1 column vector
         assert isinstance(matrices["h_p"], list)
         assert len(matrices["h_p"]) == dims["n_mu_s"]
+        if dims["n_mu_s"] > 0:
+            assert isinstance(matrices["h_p"][0], list)
+            assert len(matrices["h_p"][0]) == 1
 
     finally:
         Path(temp_path).unlink()
@@ -259,5 +265,95 @@ def test_witness_structure():
         # Verify it's a number
         assert isinstance(computed["neg_b_s_T_lambda_s"], int)
 
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_witness_column_vector_format():
+    """Test that witness vectors are exported as column vectors."""
+    program = """
+        init: x = 0
+
+        [] x < 5 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 5 -> 6 - x
+
+        trans(q0, q0): x < 5
+    """
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.gc', delete=False) as f:
+        f.write(program)
+        temp_path = f.name
+
+    try:
+        obligations = extract_farkas_obligations(temp_path)
+
+        # Find obligation with witness
+        obl_with_witness = next((o for o in obligations if o.get("satisfiable")), None)
+        if obl_with_witness:
+            witness = obl_with_witness["witness"]
+            dims = obl_with_witness["dimensions"]
+
+            # lambda_s should be n × 1 column vector
+            assert isinstance(witness["lambda_s"], list)
+            assert len(witness["lambda_s"]) == dims["n_lambda_s"]
+            if dims["n_lambda_s"] > 0:
+                assert isinstance(witness["lambda_s"][0], list)
+                assert len(witness["lambda_s"][0]) == 1
+
+            # mu_s should be n' × 1 column vector
+            assert isinstance(witness["mu_s"], list)
+            assert len(witness["mu_s"]) == dims["n_mu_s"]
+            if dims["n_mu_s"] > 0:
+                assert isinstance(witness["mu_s"][0], list)
+                assert len(witness["mu_s"][0]) == 1
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_computed_values_column_vectors():
+    """Test that computed product vectors are column vectors."""
+    program = """
+        init: x = 0
+
+        [] x < 5 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 5 -> 6 - x
+
+        trans(q0, q0): x < 5
+    """
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.gc', delete=False) as f:
+        f.write(program)
+        temp_path = f.name
+
+    try:
+        obligations = extract_farkas_obligations(temp_path)
+
+        # Find obligation with witness
+        obl_with_witness = next((o for o in obligations if o.get("satisfiable")), None)
+        if obl_with_witness:
+            computed = obl_with_witness["computed_values"]
+            dims = obl_with_witness["dimensions"]
+
+            # Scalars should remain scalars
+            assert isinstance(computed["neg_b_s_T_lambda_s"], int)
+            assert isinstance(computed["neg_h_p_T_mu_s"], int)
+
+            # A_s_T_lambda_s should be m × 1 column vector
+            assert isinstance(computed["A_s_T_lambda_s"], list)
+            assert len(computed["A_s_T_lambda_s"]) == dims["n_vars"]
+            if dims["n_vars"] > 0:
+                assert isinstance(computed["A_s_T_lambda_s"][0], list)
+                assert len(computed["A_s_T_lambda_s"][0]) == 1
+
+            # G_p_T_mu_s should be m × 1 column vector
+            assert isinstance(computed["G_p_T_mu_s"], list)
+            assert len(computed["G_p_T_mu_s"]) == dims["n_vars"]
+            if dims["n_vars"] > 0:
+                assert isinstance(computed["G_p_T_mu_s"][0], list)
+                assert len(computed["G_p_T_mu_s"][0]) == 1
     finally:
         Path(temp_path).unlink()

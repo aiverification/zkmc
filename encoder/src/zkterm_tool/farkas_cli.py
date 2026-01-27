@@ -17,6 +17,22 @@ def numpy_to_list(arr: np.ndarray) -> list:
     return arr.tolist()
 
 
+def vector_to_column_list(arr: np.ndarray | list) -> list:
+    """Convert 1D array/list to column vector (list of single-element lists).
+
+    Args:
+        arr: 1D numpy array or list
+
+    Returns:
+        List of lists, e.g., [1, 2, 3] -> [[1], [2], [3]]
+    """
+    if isinstance(arr, np.ndarray):
+        arr = arr.tolist()
+    if not arr:  # Empty list
+        return []
+    return [[x] for x in arr]
+
+
 def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndarray]:
     """Reconstruct matrices for an obligation result.
 
@@ -185,9 +201,9 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
         "obligation_type": obl_result.obligation_type,
         "matrices": {
             "A_s": numpy_to_list(matrices["A_s"]),
-            "b_s": numpy_to_list(matrices["b_s"]),
+            "b_s": vector_to_column_list(matrices["b_s"]),
             "G_p": numpy_to_list(matrices["E"]),  # G_p is the public constraint matrix
-            "h_p": numpy_to_list(matrices["f"]),  # h_p is the public constraint vector
+            "h_p": vector_to_column_list(matrices["f"]),  # h_p is the public constraint vector
         },
         "dimensions": {
             "n_vars": n_vars,
@@ -258,15 +274,15 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
             G_p_T_mu_s = np.dot(matrices["E"].T, mu_s_arr).tolist()
 
         obj["witness"] = {
-            "lambda_s": lambda_s,
-            "mu_s": mu_s
+            "lambda_s": vector_to_column_list(lambda_s),
+            "mu_s": vector_to_column_list(mu_s)
         }
 
         obj["computed_values"] = {
-            "neg_b_s_T_lambda_s": neg_b_s_T_lambda_s,
-            "neg_h_p_T_mu_s": neg_h_p_T_mu_s,
-            "A_s_T_lambda_s": A_s_T_lambda_s,
-            "G_p_T_mu_s": G_p_T_mu_s
+            "neg_b_s_T_lambda_s": neg_b_s_T_lambda_s,           # scalar
+            "neg_h_p_T_mu_s": neg_h_p_T_mu_s,                   # scalar
+            "A_s_T_lambda_s": vector_to_column_list(A_s_T_lambda_s),  # (m × 1) column vector
+            "G_p_T_mu_s": vector_to_column_list(G_p_T_mu_s)           # (m × 1) column vector
         }
 
         obj["satisfiable"] = True
