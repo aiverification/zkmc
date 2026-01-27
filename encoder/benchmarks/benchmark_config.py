@@ -125,6 +125,24 @@ BENCHMARK_CONFIGS = {
 
     "exp_backoff_guard_opt": [
         BenchmarkCase(
+            name="exp_backoff_initial2_attempts1",
+            program_file="../../exp_backoff_guard_opt.gc",
+            const_overrides={"initialDelay": 2, "maxAttempts": 1},
+            bounds=None,
+            tags=["exp_backoff", "small", "paper"],
+            description="Exponential backoff: 1 attempts, delay=2",
+            run_explicit=True
+        ),
+        BenchmarkCase(
+            name="exp_backoff_initial1_attempts2",
+            program_file="../../exp_backoff_guard_opt.gc",
+            const_overrides={"initialDelay": 1, "maxAttempts": 2},
+            bounds=None,
+            tags=["exp_backoff", "small", "paper"],
+            description="Exponential backoff: 2 attempts, delay=1",
+            run_explicit=True
+        ),
+        BenchmarkCase(
             name="exp_backoff_initial2_attempts2",
             program_file="../../exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 2, "maxAttempts": 2},
