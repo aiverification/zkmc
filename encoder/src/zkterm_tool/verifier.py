@@ -352,22 +352,25 @@ class Verifier:
                 # E_k: infinity case guard from target state q'
                 E_exp, f_exp = self._align_and_expand(inf_case.E_k, inf_case.f_k, target_enc.variables, primed=True)
 
-                # Stack premise and middle premise
-                if A_s.shape[0] > 0 and C.shape[0] > 0:
-                    A_s_full = np.vstack([A_s, C])
-                    b_s_full = np.concatenate([b_s, d])
-                elif A_s.shape[0] > 0:
-                    A_s_full = A_s
-                    b_s_full = b_s
+                # Build G_p = [C_p; E_p] - stack public middle premise with conclusion
+                # A_s remains as program transition only (secret)
+                # C is the middle premise [P; C_j] (public)
+                # E_exp is the conclusion (public)
+                if C.shape[0] > 0 and E_exp.shape[0] > 0:
+                    G_p = np.vstack([C, E_exp])
+                    h_p = np.concatenate([d, f_exp])
                 elif C.shape[0] > 0:
-                    A_s_full = C
-                    b_s_full = d
+                    G_p = C
+                    h_p = d
+                elif E_exp.shape[0] > 0:
+                    G_p = E_exp
+                    h_p = f_exp
                 else:
-                    A_s_full = np.zeros((0, 2*n), dtype=np.int64)
-                    b_s_full = np.zeros(0, dtype=np.int64)
+                    G_p = np.zeros((0, 2*n), dtype=np.int64)
+                    h_p = np.zeros(0, dtype=np.int64)
 
-                # Build Farkas dual
-                dual = build_farkas_dual(A_s_full, b_s_full, E_exp, f_exp)
+                # Build Farkas dual with separated secret (A_s) and public (G_p)
+                dual = build_farkas_dual(A_s, b_s, G_p, h_p)
 
                 # Solve
                 sat, witness = solve_farkas_dual(dual)
@@ -482,22 +485,25 @@ class Verifier:
                 # For ranking decrease ≥ ζ, we need V_j - V_k > ζ - 1 (strict inequality for integers)
                 f = np.array([target_case.u_j - source_case.u_j + zeta - 1], dtype=np.int64)
 
-                # Stack premise and middle premise
-                if A_s.shape[0] > 0 and C.shape[0] > 0:
-                    A_s_full = np.vstack([A_s, C])
-                    b_s_full = np.concatenate([b_s, d])
-                elif A_s.shape[0] > 0:
-                    A_s_full = A_s
-                    b_s_full = b_s
+                # Build G_p = [C_p; E_p] - stack public middle premise with conclusion
+                # A_s remains as program transition only (secret)
+                # C is the middle premise [P; C_j; C_k] (public)
+                # E is the conclusion (public)
+                if C.shape[0] > 0 and E.shape[0] > 0:
+                    G_p = np.vstack([C, E])
+                    h_p = np.concatenate([d, f])
                 elif C.shape[0] > 0:
-                    A_s_full = C
-                    b_s_full = d
+                    G_p = C
+                    h_p = d
+                elif E.shape[0] > 0:
+                    G_p = E
+                    h_p = f
                 else:
-                    A_s_full = np.zeros((0, 2*n), dtype=np.int64)
-                    b_s_full = np.zeros(0, dtype=np.int64)
+                    G_p = np.zeros((0, 2*n), dtype=np.int64)
+                    h_p = np.zeros(0, dtype=np.int64)
 
-                # Build Farkas dual
-                dual = build_farkas_dual(A_s_full, b_s_full, E, f)
+                # Build Farkas dual with separated secret (A_s) and public (G_p)
+                dual = build_farkas_dual(A_s, b_s, G_p, h_p)
 
                 # Solve
                 sat, witness = solve_farkas_dual(dual)

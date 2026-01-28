@@ -52,15 +52,16 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
 
     if obl_result.obligation_type == "initial_non_infinity":
         # Type 1: A_0 x ≤ b_0 => E_k x > f_k
+        # No middle premise, so G_p = E_p
         state = obl_result.source_ranking_state
         rank_enc = verifier.rank_encs[state]
         inf_case = rank_enc.infinity_cases[obl_result.infinity_case_idx]
 
         return {
-            "A_s": verifier.init_enc.A_0,
+            "A_s": verifier.init_enc.A_0,  # SECRET
             "b_s": verifier.init_enc.b_0,
-            "E": inf_case.E_k,
-            "f": inf_case.f_k
+            "G_p": inf_case.E_k,            # PUBLIC: just conclusion (no middle premise)
+            "h_p": inf_case.f_k
         }
 
     elif obl_result.obligation_type == "transition_non_infinity":
@@ -81,31 +82,45 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
         fin_case = source_rank_enc.finite_cases[fin_case_idx]
         inf_case = target_rank_enc.infinity_cases[inf_case_idx]
 
-        # Build stacked premise: [A_i; P; C_j]
+        # Build middle premise: [P; C_j] (PUBLIC)
         P_exp, r_exp = verifier._align_and_expand(aut_trans.P, aut_trans.r, aut_trans.variables, primed=False)
         C_j_exp, d_j_exp = verifier._align_and_expand(fin_case.C_j, fin_case.d_j, source_rank_enc.variables, primed=False)
 
-        matrices_to_stack = [prog_trans.A]
-        vectors_to_concat = [prog_trans.b]
+        middle_matrices = []
+        middle_vectors = []
 
         if P_exp.shape[0] > 0:
-            matrices_to_stack.append(P_exp)
-            vectors_to_concat.append(r_exp)
+            middle_matrices.append(P_exp)
+            middle_vectors.append(r_exp)
         if C_j_exp.shape[0] > 0:
-            matrices_to_stack.append(C_j_exp)
-            vectors_to_concat.append(d_j_exp)
+            middle_matrices.append(C_j_exp)
+            middle_vectors.append(d_j_exp)
 
-        A_s_full = np.vstack(matrices_to_stack) if matrices_to_stack else np.zeros((0, 2*n), dtype=np.int64)
-        b_s_full = np.concatenate(vectors_to_concat) if vectors_to_concat else np.zeros(0, dtype=np.int64)
+        C_p = np.vstack(middle_matrices) if middle_matrices else np.zeros((0, 2*n), dtype=np.int64)
+        d_p = np.concatenate(middle_vectors) if middle_vectors else np.zeros(0, dtype=np.int64)
 
         # Expand E_k to [x;x'] space (check next state x')
-        E_exp, f_exp = verifier._align_and_expand(inf_case.E_k, inf_case.f_k, target_rank_enc.variables, primed=True)
+        E_p, f_p = verifier._align_and_expand(inf_case.E_k, inf_case.f_k, target_rank_enc.variables, primed=True)
+
+        # Build G_p = [C_p; E_p] (stack middle premise with conclusion)
+        if C_p.shape[0] > 0 and E_p.shape[0] > 0:
+            G_p = np.vstack([C_p, E_p])
+            h_p = np.concatenate([d_p, f_p])
+        elif C_p.shape[0] > 0:
+            G_p = C_p
+            h_p = d_p
+        elif E_p.shape[0] > 0:
+            G_p = E_p
+            h_p = f_p
+        else:
+            G_p = np.zeros((0, 2*n), dtype=np.int64)
+            h_p = np.zeros(0, dtype=np.int64)
 
         return {
-            "A_s": A_s_full,
-            "b_s": b_s_full,
-            "E": E_exp,
-            "f": f_exp
+            "A_s": prog_trans.A,  # SECRET: just program transition
+            "b_s": prog_trans.b,
+            "G_p": G_p,           # PUBLIC: [C_p; E_p]
+            "h_p": h_p
         }
 
     elif obl_result.obligation_type == "update":
@@ -125,28 +140,28 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
 
         zeta = 1 if aut_trans.is_fair else 0
 
-        # Build stacked premise: [A_i; P; C_j; C_k]
+        # Build middle premise: [P; C_j; C_k] (PUBLIC)
         P_exp, r_exp = verifier._align_and_expand(aut_trans.P, aut_trans.r, aut_trans.variables, primed=False)
         C_j_exp, d_j_exp = verifier._align_and_expand(source_case.C_j, source_case.d_j, source_enc.variables, primed=False)
         C_k_exp, d_k_exp = verifier._align_and_expand(target_case.C_j, target_case.d_j, target_enc.variables, primed=True)
 
-        matrices_to_stack = [prog_trans.A]
-        vectors_to_concat = [prog_trans.b]
+        middle_matrices = []
+        middle_vectors = []
 
         if P_exp.shape[0] > 0:
-            matrices_to_stack.append(P_exp)
-            vectors_to_concat.append(r_exp)
+            middle_matrices.append(P_exp)
+            middle_vectors.append(r_exp)
         if C_j_exp.shape[0] > 0:
-            matrices_to_stack.append(C_j_exp)
-            vectors_to_concat.append(d_j_exp)
+            middle_matrices.append(C_j_exp)
+            middle_vectors.append(d_j_exp)
         if C_k_exp.shape[0] > 0:
-            matrices_to_stack.append(C_k_exp)
-            vectors_to_concat.append(d_k_exp)
+            middle_matrices.append(C_k_exp)
+            middle_vectors.append(d_k_exp)
 
-        A_s_full = np.vstack(matrices_to_stack) if matrices_to_stack else np.zeros((0, 2*n), dtype=np.int64)
-        b_s_full = np.concatenate(vectors_to_concat) if vectors_to_concat else np.zeros(0, dtype=np.int64)
+        C_p = np.vstack(middle_matrices) if middle_matrices else np.zeros((0, 2*n), dtype=np.int64)
+        d_p = np.concatenate(middle_vectors) if middle_vectors else np.zeros(0, dtype=np.int64)
 
-        # Build conclusion: [w_j, -w_k] [x;x'] > u_k - u_j + ζ
+        # Build conclusion: [w_j, -w_k] [x;x'] > u_k - u_j + ζ (PUBLIC)
         w_j_exp = np.zeros(2*n, dtype=np.int64)
         w_k_exp = np.zeros(2*n, dtype=np.int64)
 
@@ -160,15 +175,29 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
                 full_idx = verifier.variables.index(var)
                 w_k_exp[n + full_idx] = target_case.w_j[var_idx]
 
-        E = (w_j_exp - w_k_exp).reshape(1, -1)
+        E_p = (w_j_exp - w_k_exp).reshape(1, -1)
         # For ranking decrease ≥ ζ, we need V_j - V_k > ζ - 1 (strict inequality for integers)
-        f = np.array([target_case.u_j - source_case.u_j + zeta - 1], dtype=np.int64)
+        f_p = np.array([target_case.u_j - source_case.u_j + zeta - 1], dtype=np.int64)
+
+        # Build G_p = [C_p; E_p] (stack middle premise with conclusion)
+        if C_p.shape[0] > 0 and E_p.shape[0] > 0:
+            G_p = np.vstack([C_p, E_p])
+            h_p = np.concatenate([d_p, f_p])
+        elif C_p.shape[0] > 0:
+            G_p = C_p
+            h_p = d_p
+        elif E_p.shape[0] > 0:
+            G_p = E_p
+            h_p = f_p
+        else:
+            G_p = np.zeros((0, 2*n), dtype=np.int64)
+            h_p = np.zeros(0, dtype=np.int64)
 
         return {
-            "A_s": A_s_full,
-            "b_s": b_s_full,
-            "E": E,
-            "f": f
+            "A_s": prog_trans.A,  # SECRET: just program transition
+            "b_s": prog_trans.b,
+            "G_p": G_p,           # PUBLIC: [C_p; E_p]
+            "h_p": h_p
         }
 
     else:
@@ -192,23 +221,23 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
     # Determine n_vars from matrices
     if matrices["A_s"].size > 0:
         n_vars = matrices["A_s"].shape[1]
-    elif matrices["E"].size > 0:
-        n_vars = matrices["E"].shape[1]
+    elif matrices["G_p"].size > 0:
+        n_vars = matrices["G_p"].shape[1]
     else:
         n_vars = 0
 
     obj = {
         "obligation_type": obl_result.obligation_type,
         "matrices": {
-            "A_s": numpy_to_list(matrices["A_s"]),
+            "A_s": numpy_to_list(matrices["A_s"]),     # SECRET: program transition only
             "b_s": vector_to_column_list(matrices["b_s"]),
-            "G_p": numpy_to_list(matrices["E"]),  # G_p is the public constraint matrix
-            "h_p": vector_to_column_list(matrices["f"]),  # h_p is the public constraint vector
+            "G_p": numpy_to_list(matrices["G_p"]),     # PUBLIC: [C_p; E_p] stacked
+            "h_p": vector_to_column_list(matrices["h_p"]),
         },
         "dimensions": {
             "n_vars": n_vars,
-            "n_lambda_s": matrices["A_s"].shape[0],
-            "n_mu_s": matrices["E"].shape[0],
+            "n_lambda_s": matrices["A_s"].shape[0],    # Multipliers for SECRET A_s
+            "n_mu_s": matrices["G_p"].shape[0],        # Multipliers for PUBLIC G_p
         }
     }
 
@@ -243,7 +272,7 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
     # Add witness and computed values if obligation passed
     if obl_result.passed and obl_result.witness:
         n_lambda_s = matrices["A_s"].shape[0]
-        n_mu_s = matrices["E"].shape[0]
+        n_mu_s = matrices["G_p"].shape[0]
 
         # Extract witness vectors
         lambda_s = [obl_result.witness.get(f'lambda_s_{i}', 0) for i in range(n_lambda_s)]
@@ -258,20 +287,20 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
         if matrices["b_s"].size > 0:
             neg_b_s_T_lambda_s = -int(np.dot(matrices["b_s"], lambda_s_arr))
 
-        # -h_p^T · mu_s (h_p is stored as matrices["f"])
+        # -h_p^T · mu_s
         neg_h_p_T_mu_s = 0
-        if matrices["f"].size > 0:
-            neg_h_p_T_mu_s = -int(np.dot(matrices["f"], mu_s_arr))
+        if matrices["h_p"].size > 0:
+            neg_h_p_T_mu_s = -int(np.dot(matrices["h_p"], mu_s_arr))
 
         # A_s^T · lambda_s (result is a vector)
         A_s_T_lambda_s = []
         if matrices["A_s"].size > 0:
             A_s_T_lambda_s = np.dot(matrices["A_s"].T, lambda_s_arr).tolist()
 
-        # G_p^T · mu_s (G_p is stored as matrices["E"], result is a vector)
+        # G_p^T · mu_s (result is a vector)
         G_p_T_mu_s = []
-        if matrices["E"].size > 0:
-            G_p_T_mu_s = np.dot(matrices["E"].T, mu_s_arr).tolist()
+        if matrices["G_p"].size > 0:
+            G_p_T_mu_s = np.dot(matrices["G_p"].T, mu_s_arr).tolist()
 
         obj["witness"] = {
             "lambda_s": vector_to_column_list(lambda_s),
