@@ -37,7 +37,7 @@ init: status = Init && ACK = notReceived && NAK = notReceived && OFF = notReceiv
 
 // ----- Transitions -----
 
-// --- DIS + OFF : WaitOFF ---
+// --- DIS + OFF : WaitOFF --- 
 //First, send DIS and start WaitOFF
 [] status == Init -> status = WaitOFF; delay = k0
 
@@ -51,7 +51,7 @@ init: status = Init && ACK = notReceived && NAK = notReceived && OFF = notReceiv
 [] status == WaitOFF && OFF == notReceived && delay > 0 -> OFF = received; status = Offered
 
 
-// --- REQ + ACK + NAK : WaitAN ---
+// --- REQ + ACK + NAK : WaitAN --- 
 //Send REQ and start WaitAN
 [] status == Offered -> status = WaitAN; i = 1; delay = 2**(1 + 1) + k1
 
@@ -74,7 +74,7 @@ init: status = Init && ACK = notReceived && NAK = notReceived && OFF = notReceiv
 [] status == WaitAN && ACK == notReceived && NAK == notReceived && delay > 0 -> status = Fail
 
 
-// --- ARP + DEC : WaitD ---
+// --- ARP + DEC : WaitD --- 
 //Non-deterministically have ARP be valid (success, transition to Configured) or invalid (send DEC, transition to WaitD)
 [] status == TryARP -> status = Configured
 [] status == TryARP -> status = WaitD; delay = kD
@@ -108,14 +108,14 @@ rank(q0):
     [] status < Init -> inf
     [] status > Fail -> inf
     [] status == WaitOFF && delay > k0 -> inf
-    [] status == WaitOFF && delay < 1 -> inf
+    [] status == WaitOFF && delay < 1 -> inf 
     [] status == WaitD && delay > kD -> inf
     [] status == WaitD && delay < 1 -> inf
     [] status == WaitAN && i >= 1 && i <= 5 && delay < 1 -> inf
-    [] status == WaitAN && i == 1 && delay > (2**2 + k1) -> inf
-    [] status == WaitAN && i == 2 && delay > (2**3 + k2) -> inf
-    [] status == WaitAN && i == 3 && delay > (2**4 + k3) -> inf
-    [] status == WaitAN && i == 4 && delay > (2**5 + k4) -> inf
+    [] status == WaitAN && i == 1 && delay > (2**2 + k1) -> inf 
+    [] status == WaitAN && i == 2 && delay > (2**3 + k2) -> inf 
+    [] status == WaitAN && i == 3 && delay > (2**4 + k3) -> inf 
+    [] status == WaitAN && i == 4 && delay > (2**5 + k4) -> inf 
     [] status == WaitAN && i == 5 && delay > (2**6 + k5) -> inf
     [] status == WaitAN && i < 1 -> inf
     [] status == WaitAN && i > 5 -> inf
