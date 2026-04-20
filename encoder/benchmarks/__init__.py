@@ -5,5 +5,5 @@ This package provides pytest-benchmark based performance measurements for:
 - zkverify: Symbolic verification (Z3-based Farkas witness finding)
 - zkfarkas: Farkas dual extraction for external solvers
 
-For usage instructions, see benchmarks/programs/README.md or the main README.md.
+For usage instructions, see benchmarks/README.md or the main README.md.
 """

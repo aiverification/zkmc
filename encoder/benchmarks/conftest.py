@@ -5,7 +5,7 @@ import pytest
 
 # Benchmark root directory
 BENCHMARK_ROOT = Path(__file__).parent
-PROGRAMS_DIR = BENCHMARK_ROOT / "programs"
+EXAMPLES_DIR = BENCHMARK_ROOT.parent / "examples"
 
 
 @pytest.fixture
@@ -18,12 +18,12 @@ def program_loader():
         """Load a .gc program file.
 
         Args:
-            filename: Relative path from benchmarks/programs/
+            filename: Relative path from the repository's examples/ directory.
 
         Returns:
             Program text content
         """
-        program_path = PROGRAMS_DIR / filename
+        program_path = EXAMPLES_DIR / filename
         if not program_path.exists():
             raise FileNotFoundError(f"Benchmark program not found: {program_path}")
         return program_path.read_text()

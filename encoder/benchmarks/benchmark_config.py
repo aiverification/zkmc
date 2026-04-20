@@ -13,7 +13,7 @@ from typing import Dict, List, NamedTuple
 class BenchmarkCase(NamedTuple):
     """Configuration for a single benchmark case."""
     name: str                          # Display name
-    program_file: str                  # Path relative to benchmarks/programs/
+    program_file: str                  # Path relative to the repo's examples/ directory
     const_overrides: Dict[str, int]    # Constant overrides
     bounds: List[str] | None           # For zkexplicit: ["x:0:10"] or None (use type annotations)
     tags: List[str]                    # For filtering: ["small", "paper", "exp_backoff"]
@@ -51,7 +51,7 @@ BENCHMARK_CONFIGS = {
     "exp_backoff_state_opt": [
         BenchmarkCase(
             name="exp_backoff_initial2_attempts2",
-            program_file="../../exp_backoff_state_opt_small.gc",
+            program_file="exp_backoff_state_opt_small.gc",
             const_overrides={"initialDelay": 2},
             bounds=None,
             tags=["exp_backoff", "small", "paper"],
@@ -60,7 +60,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial4_attempts2",
-            program_file="../../exp_backoff_state_opt_small.gc",
+            program_file="exp_backoff_state_opt_small.gc",
             const_overrides={"initialDelay": 4},
             bounds=None,
             tags=["exp_backoff", "small", "paper"],
@@ -69,7 +69,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial8_attempts2",
-            program_file="../../exp_backoff_state_opt_small.gc",
+            program_file="exp_backoff_state_opt_small.gc",
             const_overrides={"initialDelay": 8},
             bounds=None,
             tags=["exp_backoff", "small", "paper"],
@@ -78,7 +78,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial2_attempts3",
-            program_file="../../exp_backoff_state_opt.gc",
+            program_file="exp_backoff_state_opt.gc",
             const_overrides={"initialDelay": 2},
             bounds=None,
             tags=["exp_backoff", "paper"],
@@ -87,7 +87,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial4_attempts3",
-            program_file="../../exp_backoff_state_opt.gc",
+            program_file="exp_backoff_state_opt.gc",
             const_overrides={"initialDelay": 4},
             bounds=None,
             tags=["exp_backoff", "paper"],
@@ -96,7 +96,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial8_attempts3",
-            program_file="../../exp_backoff_state_opt.gc",
+            program_file="exp_backoff_state_opt.gc",
             const_overrides={"initialDelay": 8},
             bounds=None,
             tags=["exp_backoff", "paper"],
@@ -105,7 +105,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial64_attempts3",
-            program_file="../../exp_backoff_state_opt.gc",
+            program_file="exp_backoff_state_opt.gc",
             const_overrides={"initialDelay": 64},
             bounds=None,
             tags=["exp_backoff", "large", "paper"],
@@ -114,7 +114,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial128_attempts3",
-            program_file="../../exp_backoff_state_opt.gc",
+            program_file="exp_backoff_state_opt.gc",
             const_overrides={"initialDelay": 128},
             bounds=None,
             tags=["exp_backoff", "large", "paper"],
@@ -126,7 +126,7 @@ BENCHMARK_CONFIGS = {
     "exp_backoff_guard_opt": [
         BenchmarkCase(
             name="exp_backoff_initial2_attempts1",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 2, "maxAttempts": 1},
             bounds=None,
             tags=["exp_backoff", "small", "paper"],
@@ -135,7 +135,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial1_attempts2",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 1, "maxAttempts": 2},
             bounds=None,
             tags=["exp_backoff", "small", "paper"],
@@ -144,7 +144,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial2_attempts2",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 2, "maxAttempts": 2},
             bounds=None,
             tags=["exp_backoff", "small", "paper"],
@@ -153,7 +153,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial4_attempts2",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 4, "maxAttempts": 2},
             bounds=None,
             tags=["exp_backoff", "small", "paper"],
@@ -162,7 +162,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial8_attempts2",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 8, "maxAttempts": 2},
             bounds=None,
             tags=["exp_backoff", "small", "paper"],
@@ -171,7 +171,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial2_attempts3",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 2},
             bounds=None,
             tags=["exp_backoff", "paper"],
@@ -180,7 +180,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial4_attempts3",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 4},
             bounds=None,
             tags=["exp_backoff", "paper"],
@@ -189,7 +189,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial8_attempts3",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 8},
             bounds=None,
             tags=["exp_backoff", "paper"],
@@ -198,7 +198,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial64_attempts3",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 64},
             bounds=None,
             tags=["exp_backoff", "large", "paper"],
@@ -207,7 +207,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial128_attempts3",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 128},
             bounds=None,
             tags=["exp_backoff", "large", "paper"],
@@ -216,7 +216,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial64_attempts4",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 64, "maxAttempts": 4},
             bounds=None,
             tags=["exp_backoff", "large", "paper"],
@@ -225,7 +225,7 @@ BENCHMARK_CONFIGS = {
         ),
         BenchmarkCase(
             name="exp_backoff_initial128_attempts4",
-            program_file="../../exp_backoff_guard_opt.gc",
+            program_file="exp_backoff_guard_opt.gc",
             const_overrides={"initialDelay": 128, "maxAttempts": 4},
             bounds=None,
             tags=["exp_backoff", "large", "paper"],

@@ -1,0 +1,121 @@
+//Constants for OFF/ACK/NAK status
+const notReceived = 0
+const received = 1
+
+//Constants for protocol state
+const Init = 0
+const WaitOFF = 1
+const Offered = 2
+const WaitAN = 3
+const TryARP = 4
+const WaitD = 5
+const Configured = 6
+const Fail = 7
+
+//Maximum number of retry attempts during WaitAN
+const maxI = 5
+
+//Set our k values
+const k0 = 32
+const k1 = 1
+const k2 = 1
+const k3 = 0
+const k4 = -1
+const k5 = 0
+const kD = 10
+
+//Variables
+type status: 0..7
+type i: 1..5
+type delay: 1..2**(maxI+1) + k5
+type OFF: 0..1
+type ACK: 0..1
+type NAK: 0..1
+
+//Initially in Init
+init: status = Init && ACK = notReceived && NAK = notReceived && OFF = notReceived
+
+// ----- Transitions -----
+
+// --- DIS + OFF : WaitOFF ---
+//First, send DIS and start WaitOFF
+[] status == Init -> status = WaitOFF; delay = k0
+
+//Waiting in WaitOFF: decrement counter while waiting for OFF
+[] status == WaitOFF && OFF == notReceived && delay > 1 -> delay = delay - 1
+
+//WaitOFF exhausted
+[] status == WaitOFF && OFF == notReceived && delay = 1 -> status = Fail
+
+//Non-deterministically receive OFF
+[] status == WaitOFF && OFF == notReceived && delay > 0 -> OFF = received; status = Offered
+
+
+// --- REQ + ACK + NAK : WaitAN ---
+//Send REQ and start WaitAN
+[] status == Offered -> status = WaitAN; i = 1; delay = 2**(1 + 1) + k1
+
+//Waiting in WaitAN: decrement counter while waiting for ACK or NAK
+[] status == WaitAN && ACK == notReceived && NAK == notReceived && delay > 1 -> delay = delay - 1
+
+//WaitAN next i (retry waiting)
+[] status == WaitAN && ACK == notReceived && NAK == notReceived && delay == 1 && i == 1 -> i = i + 1; delay = 2**(2 + 1) + k2
+[] status == WaitAN && ACK == notReceived && NAK == notReceived && delay == 1 && i == 2 -> i = i + 1; delay = 2**(3 + 1) + k3
+[] status == WaitAN && ACK == notReceived && NAK == notReceived && delay == 1 && i == 3 -> i = i + 1; delay = 2**(4 + 1) + k4
+[] status == WaitAN && ACK == notReceived && NAK == notReceived && delay == 1 && i == 4 -> i = i + 1; delay = 2**(5 + 1) + k5
+
+//WaitAN exhausted
+[] status == WaitAN && ACK == notReceived && NAK == notReceived && delay == 1 && i == 5 -> status = Fail
+
+//Non-deterministically receive ACK OR NAK
+//If ACK, success
+[] status == WaitAN && ACK == notReceived && NAK == notReceived && delay > 0 -> status = TryARP
+//If NAK, fail
+[] status == WaitAN && ACK == notReceived && NAK == notReceived && delay > 0 -> status = Fail
+
+
+// --- ARP + DEC : WaitD ---
+//Non-deterministically have ARP be valid (success, transition to Configured) or invalid (send DEC, transition to WaitD)
+[] status == TryARP -> status = Configured
+[] status == TryARP -> status = WaitD; delay = kD
+
+//Waiting in WaitD
+[] status == WaitD && delay > 1 -> delay = delay - 1
+
+//WaitD exhausted
+[] status == WaitD && delay == 1 -> status = Fail
+
+// ----- Buchi Automaton for G(¬Fail && ¬Configured) -----
+// Property: Eventually we either reach Fail or Configured
+automaton_init: q0
+trans(q0, q0): true
+
+
+// ----- Ranking Function -----
+rank(q0):
+    [] status == Init -> 3 + kD + (2**2 + k1) + (2**3 + k2) + (2**4 + k3) + (2**5 + k4) + (2**6 + k5) + k0
+    [] status == WaitOFF && delay > 0 && delay <= k0 -> 2 + kD + (2**2 + k1) + (2**3 + k2) + (2**4 + k3) + (2**5 + k4) + (2**6 + k5) + delay
+    [] status == Offered -> 2 + kD + (2**2 + k1) + (2**3 + k2) + (2**4 + k3) + (2**5 + k4) + (2**6 + k5)
+    [] status == WaitAN && i == 1 && delay >= 1 && delay <= 2**2 + k1 -> 1 + kD + (2**3 + k2) + (2**4 + k3) + (2**5 + k4) + (2**6 + k5) + delay
+    [] status == WaitAN && i == 2 && delay >= 1 && delay <= 2**3 + k2 -> 1 + kD + (2**4 + k3) + (2**5 + k4) + (2**6 + k5) + delay
+    [] status == WaitAN && i == 3 && delay >= 1 && delay <= 2**4 + k3 -> 1 + kD + (2**5 + k4) + (2**6 + k5) + delay
+    [] status == WaitAN && i == 4 && delay >= 1 && delay <= 2**5 + k4 -> 1 + kD + (2**6 + k5) + delay
+    [] status == WaitAN && i == 5 && delay >= 1 && delay <= 2**6 + k5 -> 1 + kD + delay
+    [] status == TryARP -> 1 + kD
+    [] status == WaitD && delay >= 1 && delay <= kD -> delay
+    [] status >= Configured && status <= Fail -> 0
+    //Cases that can't be reached
+    [] status < Init -> inf
+    [] status > Fail -> inf
+    [] status == WaitOFF && delay > k0 -> inf
+    [] status == WaitOFF && delay < 1 -> inf
+    [] status == WaitD && delay > kD -> inf
+    [] status == WaitD && delay < 1 -> inf
+    [] status == WaitAN && i >= 1 && i <= 5 && delay < 1 -> inf
+    [] status == WaitAN && i == 1 && delay > (2**2 + k1) -> inf
+    [] status == WaitAN && i == 2 && delay > (2**3 + k2) -> inf
+    [] status == WaitAN && i == 3 && delay > (2**4 + k3) -> inf
+    [] status == WaitAN && i == 4 && delay > (2**5 + k4) -> inf
+    [] status == WaitAN && i == 5 && delay > (2**6 + k5) -> inf
+    [] status == WaitAN && i < 1 -> inf
+    [] status == WaitAN && i > 5 -> inf

@@ -15,7 +15,7 @@ from .benchmark_config import get_all_cases
 EXPLICIT_CASES = [
     pytest.param(
         case.name, case.program_file, case.const_overrides, case.bounds, case.description,
-        id=f"{case.name}-{case.program_file.replace('../../', '').replace('.gc', '')}[{','.join(case.tags)}]"
+        id=f"{case.name}-{case.program_file.replace('.gc', '')}[{','.join(case.tags)}]"
     )
     for case in get_all_cases()
     if case.run_explicit
