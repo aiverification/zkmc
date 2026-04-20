@@ -20,6 +20,8 @@ class ObligationResult:
         obligation_type: Type of obligation
         program_transition_idx: Index of program transition (for type 2 and 3)
         automaton_transition: Tuple of (from_state, to_state) for automaton transition
+        automaton_transition_idx: Index into verifier.aut_encs of the exact automaton
+            transition used. Distinguishes multiple transitions that share (from, to).
         source_ranking_state: Source state for ranking function
         target_ranking_state: Target state for ranking function (type 3 only)
         source_case_idx: Index of source finite case (type 2 and 3)
@@ -40,6 +42,7 @@ class ObligationResult:
     is_fair: bool = False
     passed: bool = False
     witness: dict[str, int] | None = None
+    automaton_transition_idx: int | None = None
 
     def __str__(self) -> str:
         status = "PASS" if self.passed else "FAIL"

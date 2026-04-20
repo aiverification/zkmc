@@ -357,3 +357,86 @@ def test_computed_values_column_vectors():
                 assert len(computed["G_p_T_mu_s"][0]) == 1
     finally:
         Path(temp_path).unlink()
+
+
+def test_extract_farkas_duplicate_automaton_transitions():
+    """Regression: witness must match the matrices it was serialized with when
+    multiple automaton transitions share the same (from_state, to_state).
+
+    Prior to the fix, ObligationResult stored only (from, to) for the automaton
+    transition, and farkas_cli used next() to pick the first encoding matching
+    that tuple — so obligations produced from the second duplicate were
+    serialized with the first duplicate's matrices, leaving the stored witness
+    inconsistent with the stored matrices.
+    """
+    program = """
+        init: x = 0
+
+        [] x < 3 -> x = x + 1
+
+        rank(q0):
+            [] x >= 0 && x <= 3 -> 4 - x
+            [] x < 0 -> inf
+            [] x > 3 -> inf
+
+        rank(q1):
+            [] x >= 0 && x <= 3 -> 4 - x
+            [] x < 0 -> inf
+            [] x > 3 -> inf
+
+        automaton_init: q0
+
+        trans(q0, q0): true
+        trans(q0, q1): x >= 1
+        trans!(q1, q1): x == 1
+        trans!(q1, q1): x == 2
+    """
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.gc', delete=False) as f:
+        f.write(program)
+        temp_path = f.name
+
+    try:
+        obligations = extract_farkas_obligations(temp_path)
+
+        q1_self_loop = [
+            o for o in obligations
+            if o.get("automaton_transition") == {"from": "q1", "to": "q1"}
+        ]
+        assert q1_self_loop, "expected obligations for q1->q1 self-loop"
+
+        def to_cols(c):
+            return [row[0] for row in c] if c else []
+
+        for idx, obl in enumerate(obligations):
+            if not obl.get("satisfiable"):
+                continue
+
+            A_s = [list(r) for r in obl["matrices"]["A_s"]] if obl["matrices"]["A_s"] else []
+            b_s = to_cols(obl["matrices"]["b_s"])
+            G_p = [list(r) for r in obl["matrices"]["G_p"]] if obl["matrices"]["G_p"] else []
+            h_p = to_cols(obl["matrices"]["h_p"])
+            lam = to_cols(obl["witness"]["lambda_s"])
+            mu = to_cols(obl["witness"]["mu_s"])
+            n_vars = obl["dimensions"]["n_vars"]
+
+            assert all(v >= 0 for v in lam), f"obligation {idx}: negative lambda_s entry"
+            assert all(v >= 0 for v in mu), f"obligation {idx}: negative mu_s entry"
+
+            for j in range(n_vars):
+                s = sum(A_s[i][j] * lam[i] for i in range(len(lam)))
+                s += sum(G_p[i][j] * mu[i] for i in range(len(mu)))
+                assert s == 0, (
+                    f"obligation {idx} ({obl['obligation_type']}): "
+                    f"(A_s^T lambda + G_p^T mu)[{j}] = {s}, expected 0"
+                )
+
+            const_sum = sum(b_s[i] * lam[i] for i in range(len(lam)))
+            const_sum += sum(h_p[i] * mu[i] for i in range(len(mu)))
+            assert const_sum <= -1, (
+                f"obligation {idx} ({obl['obligation_type']}): "
+                f"b_s^T lambda + h_p^T mu = {const_sum}, expected <= -1"
+            )
+
+    finally:
+        Path(temp_path).unlink()

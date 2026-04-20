@@ -208,17 +208,17 @@ class Verifier:
         # Type 2: Transition non-infinity obligations
         # (one per prog_trans × aut_trans × finite_case(source) × infinity_case(target))
         for prog_idx, prog_trans in enumerate(self.trans_encs):
-            for aut_trans in self.aut_encs:
+            for aut_idx, aut_trans in enumerate(self.aut_encs):
                 obligations.extend(
-                    self._verify_transition_non_infinity(prog_idx, prog_trans, aut_trans)
+                    self._verify_transition_non_infinity(prog_idx, prog_trans, aut_trans, aut_idx)
                 )
 
         # Type 3: Update obligations
         # (one per prog_trans × aut_trans × source_finite_case × target_finite_case)
         for prog_idx, prog_trans in enumerate(self.trans_encs):
-            for aut_trans in self.aut_encs:
+            for aut_idx, aut_trans in enumerate(self.aut_encs):
                 obligations.extend(
-                    self._verify_update(prog_idx, prog_trans, aut_trans)
+                    self._verify_update(prog_idx, prog_trans, aut_trans, aut_idx)
                 )
 
         return VerificationResult(
@@ -286,7 +286,8 @@ class Verifier:
         self,
         prog_idx: int,
         prog_trans: TransitionEncoding,
-        aut_trans: AutomatonTransitionEncoding
+        aut_trans: AutomatonTransitionEncoding,
+        aut_idx: int
     ) -> List[ObligationResult]:
         """Type 2: Verify transitions from finite cases don't reach infinity.
 
@@ -379,6 +380,7 @@ class Verifier:
                     obligation_type="transition_non_infinity",
                     program_transition_idx=prog_idx,
                     automaton_transition=(aut_trans.from_state, aut_trans.to_state),
+                    automaton_transition_idx=aut_idx,
                     source_ranking_state=source_state,
                     target_ranking_state=target_state,
                     source_case_idx=fin_case_idx,
@@ -396,7 +398,8 @@ class Verifier:
         self,
         prog_idx: int,
         prog_trans: TransitionEncoding,
-        aut_trans: AutomatonTransitionEncoding
+        aut_trans: AutomatonTransitionEncoding,
+        aut_idx: int
     ) -> List[ObligationResult]:
         """Type 3: Verify ranking decrease and non-negativity.
 
@@ -512,6 +515,7 @@ class Verifier:
                     obligation_type="update",
                     program_transition_idx=prog_idx,
                     automaton_transition=(source_state, target_state),
+                    automaton_transition_idx=aut_idx,
                     source_ranking_state=source_state,
                     target_ranking_state=target_state,
                     source_case_idx=j,

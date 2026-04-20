@@ -75,8 +75,7 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
         inf_case_idx = obl_result.infinity_case_idx
 
         prog_trans = verifier.trans_encs[prog_idx]
-        aut_trans = next(a for a in verifier.aut_encs
-                       if a.from_state == from_state and a.to_state == to_state)
+        aut_trans = verifier.aut_encs[obl_result.automaton_transition_idx]
         source_rank_enc = verifier.rank_encs[source_state]
         target_rank_enc = verifier.rank_encs[target_state]
         fin_case = source_rank_enc.finite_cases[fin_case_idx]
@@ -131,8 +130,7 @@ def get_obligation_matrices(verifier: Verifier, obl_result) -> dict[str, np.ndar
         target_case_idx = obl_result.target_case_idx
 
         prog_trans = verifier.trans_encs[prog_idx]
-        aut_trans = next(a for a in verifier.aut_encs
-                       if a.from_state == from_state and a.to_state == to_state)
+        aut_trans = verifier.aut_encs[obl_result.automaton_transition_idx]
         source_enc = verifier.rank_encs[from_state]
         target_enc = verifier.rank_encs[to_state]
         source_case = source_enc.finite_cases[source_case_idx]
