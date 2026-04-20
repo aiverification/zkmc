@@ -1,0 +1,124 @@
+// Round Robin Lock
+// N processes share a lock; turns are granted in strict cyclic order 0,1,2,...,N-1,0,...
+
+// Constants for process state
+const idle = 0        // not interested in the lock right now
+const waiting = 1     // wants the lock, waiting for its turn
+const holding = 2     // currently holds the lock
+
+// Scheduler parameters
+const numProcs = 3    // number of processes
+
+// Variables
+type turn: 0..numProcs - 1      // whose turn it currently is
+type state0: 0..2               // state of process 0
+type state1: 0..2               // state of process 1
+type state2: 0..2               // state of process 2
+
+// Initially: it's process 0's turn, everyone idle
+init: turn == 0 && state0 == idle && state1 == idle && state2 == idle
+
+// ----- Transitions -----
+
+// --- Process 0 ---
+// Become interested in acquiring the lock
+[] state0 == idle -> state0 = waiting
+
+// Acquire the lock: it's our turn and we're waiting
+[] state0 == waiting && turn == 0 -> state0 = holding
+
+// Release the lock and pass the turn to the next process
+[] state0 == holding -> state0 = idle; turn = 1
+
+// --- Process 1 ---
+[] state1 == idle -> state1 = waiting
+[] state1 == waiting && turn == 1 -> state1 = holding
+[] state1 == holding -> state1 = idle; turn = 2
+
+// --- Process 2 ---
+[] state2 == idle -> state2 = waiting
+[] state2 == waiting && turn == 2 -> state2 = holding
+[] state2 == holding -> state2 = idle; turn = 0
+
+// Property: G(s0w -> F s0h) /\ G(s1w -> F s1h)  /\ G(s2w -> F s2h)
+automaton_init: q0
+trans(q0, q0): true
+trans(q0, q1): state0 == waiting
+trans!(q1, q1): state0 == idle
+trans!(q1, q1): state0 == waiting
+trans(q0, q2): state1 == waiting
+trans!(q2, q2): state1 == idle
+trans!(q2, q2): state1 == waiting
+trans(q0, q3): state2 == waiting
+trans!(q3, q3): state2 == idle
+trans!(q3, q3): state2 == waiting
+
+// ----- Ranking Functions -----
+// Invariant: state_i == holding (= 2) implies turn == i.
+// Finite case upper bounds encode the invariant; infinity ladder per turn handles
+// everything else (out-of-range + invariant violations in one shot via state_j > upper).
+// Lower bounds on state_i are unnecessary: negative state_i keeps rank strictly positive.
+
+rank(q0):
+    [] turn == 0 && state0 <= 2 && state1 <= 1 && state2 <= 1 -> 12
+    [] turn == 1 && state0 <= 1 && state1 <= 2 && state2 <= 1 -> 12
+    [] turn == 2 && state0 <= 1 && state1 <= 1 && state2 <= 2 -> 12
+    [] turn < 0 -> inf
+    [] turn > 2 -> inf
+    [] turn == 0 && state0 > 2 -> inf
+    [] turn == 0 && state0 <= 2 && state1 > 1 -> inf
+    [] turn == 0 && state0 <= 2 && state1 <= 1 && state2 > 1 -> inf
+    [] turn == 1 && state0 > 1 -> inf
+    [] turn == 1 && state0 <= 1 && state1 > 2 -> inf
+    [] turn == 1 && state0 <= 1 && state1 <= 2 && state2 > 1 -> inf
+    [] turn == 2 && state0 > 1 -> inf
+    [] turn == 2 && state0 <= 1 && state1 > 1 -> inf
+    [] turn == 2 && state0 <= 1 && state1 <= 1 && state2 > 2 -> inf
+
+rank(q1):
+    [] turn == 0 && state0 <= 2 && state1 <= 1 && state2 <= 1 -> -state0 - state1 - state2 + 6
+    [] turn == 1 && state0 <= 1 && state1 <= 2 && state2 <= 1 -> -state0 - state1 - state2 + 12
+    [] turn == 2 && state0 <= 1 && state1 <= 1 && state2 <= 2 -> -state0 - state1 - state2 + 9
+    [] turn < 0 -> inf
+    [] turn > 2 -> inf
+    [] turn == 0 && state0 > 2 -> inf
+    [] turn == 0 && state0 <= 2 && state1 > 1 -> inf
+    [] turn == 0 && state0 <= 2 && state1 <= 1 && state2 > 1 -> inf
+    [] turn == 1 && state0 > 1 -> inf
+    [] turn == 1 && state0 <= 1 && state1 > 2 -> inf
+    [] turn == 1 && state0 <= 1 && state1 <= 2 && state2 > 1 -> inf
+    [] turn == 2 && state0 > 1 -> inf
+    [] turn == 2 && state0 <= 1 && state1 > 1 -> inf
+    [] turn == 2 && state0 <= 1 && state1 <= 1 && state2 > 2 -> inf
+
+rank(q2):
+    [] turn == 1 && state0 <= 1 && state1 <= 2 && state2 <= 1 -> -state0 - state1 - state2 + 6
+    [] turn == 2 && state0 <= 1 && state1 <= 1 && state2 <= 2 -> -state0 - state1 - state2 + 12
+    [] turn == 0 && state0 <= 2 && state1 <= 1 && state2 <= 1 -> -state0 - state1 - state2 + 9
+    [] turn < 0 -> inf
+    [] turn > 2 -> inf
+    [] turn == 0 && state0 > 2 -> inf
+    [] turn == 0 && state0 <= 2 && state1 > 1 -> inf
+    [] turn == 0 && state0 <= 2 && state1 <= 1 && state2 > 1 -> inf
+    [] turn == 1 && state0 > 1 -> inf
+    [] turn == 1 && state0 <= 1 && state1 > 2 -> inf
+    [] turn == 1 && state0 <= 1 && state1 <= 2 && state2 > 1 -> inf
+    [] turn == 2 && state0 > 1 -> inf
+    [] turn == 2 && state0 <= 1 && state1 > 1 -> inf
+    [] turn == 2 && state0 <= 1 && state1 <= 1 && state2 > 2 -> inf
+
+rank(q3):
+    [] turn == 2 && state0 <= 1 && state1 <= 1 && state2 <= 2 -> -state0 - state1 - state2 + 6
+    [] turn == 0 && state0 <= 2 && state1 <= 1 && state2 <= 1 -> -state0 - state1 - state2 + 12
+    [] turn == 1 && state0 <= 1 && state1 <= 2 && state2 <= 1 -> -state0 - state1 - state2 + 9
+    [] turn < 0 -> inf
+    [] turn > 2 -> inf
+    [] turn == 0 && state0 > 2 -> inf
+    [] turn == 0 && state0 <= 2 && state1 > 1 -> inf
+    [] turn == 0 && state0 <= 2 && state1 <= 1 && state2 > 1 -> inf
+    [] turn == 1 && state0 > 1 -> inf
+    [] turn == 1 && state0 <= 1 && state1 > 2 -> inf
+    [] turn == 1 && state0 <= 1 && state1 <= 2 && state2 > 1 -> inf
+    [] turn == 2 && state0 > 1 -> inf
+    [] turn == 2 && state0 <= 1 && state1 > 1 -> inf
+    [] turn == 2 && state0 <= 1 && state1 <= 1 && state2 > 2 -> inf
