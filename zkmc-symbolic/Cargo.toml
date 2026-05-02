@@ -1,0 +1,43 @@
+[package]
+name = "zkmc-symbolic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+zkmatrix = { git = "https://github.com/y1izwnxt0m4dows6/zkMatrix", branch = "master" }
+bls12_381 = { git = "https://github.com/y1izwnxt0m4dows6/bls12_381", branch = "pub_g1" }
+ark-ff = "0.4.0"
+hex = "0.4"
+subtle = { version = "2.2.1", default-features = false }
+ark-bls12-381 = "0.4.0"
+ark-ec = "0.4.0"
+ark-std = "0.4.0"
+rand = "0.8"
+blake2 = "0.10.6"
+
+# New BP stuff
+bls_bulletproofs = "1.1.1"
+blstrs = "0.6.1"
+rand_chacha = "0.3"
+group = "0.12.0"
+merlin = { version = "3", default-features = false }
+
+rayon = "1.11.0"
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+deepsize = "0.2"
+
+[dev-dependencies]
+criterion = { version = "0.7", features = ["html_reports"] }
+
+[[bench]]
+# name = "my_benchmark"
+# name = "my_benchmark_pv_chunked"
+# name = "my_benchmark_pv_new_chunked"
+name = "benchmark_full_parallel"
+harness = false
+
+[patch.crates-io]
+curv-kzen = { git = "https://github.com/y1izwnxt0m4dows6/curv", branch = "fix-div-ceil" }

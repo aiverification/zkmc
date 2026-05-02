@@ -1,0 +1,394 @@
+{
+    "obligations": [
+        {
+            "obligation_type": "update",
+            "matrices": {
+                "A_s": [
+                    [
+                        0,
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        -1,
+                        0,
+                        1
+                    ],
+                    [
+                        0,
+                        1,
+                        0,
+                        -1
+                    ],
+                    [
+                        -1,
+                        0,
+                        1,
+                        0
+                    ],
+                    [
+                        1,
+                        0,
+                        -1,
+                        0
+                    ],
+                    [
+                        1,
+                        0,
+                        0,
+                        0
+                    ],
+                    [
+                        -1,
+                        0,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "b_s": [
+                    [
+                        9
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        -1
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        10
+                    ],
+                    [
+                        10
+                    ]
+                ],
+                "G_p": [
+                    [
+                        -1,
+                        -1,
+                        1,
+                        1
+                    ]
+                ],
+                "h_p": [
+                    [
+                        0
+                    ]
+                ]
+            },
+            "dimensions": {
+                "n_vars": 4,
+                "n_lambda_s": 9,
+                "n_mu_s": 1
+            },
+            "program_transition": 0,
+            "automaton_transition": {
+                "from": "q0",
+                "to": "q0"
+            },
+            "source_ranking_state": "q0",
+            "target_ranking_state": "q0",
+            "source_case_idx": 0,
+            "target_case_idx": 0,
+            "is_fair": true,
+            "witness": {
+                "lambda_s": [
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ]
+                ],
+                "mu_s": [
+                    [
+                        1
+                    ]
+                ]
+            },
+            "computed_values": {
+                "neg_b_s_T_lambda_s": 1,
+                "neg_h_p_T_mu_s": 0,
+                "A_s_T_lambda_s": [
+                    [
+                        1
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        -1
+                    ],
+                    [
+                        -1
+                    ]
+                ],
+                "G_p_T_mu_s": [
+                    [
+                        -1
+                    ],
+                    [
+                        -1
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        1
+                    ]
+                ]
+            },
+            "satisfiable": true
+        },
+        {
+            "obligation_type": "update",
+            "matrices": {
+                "A_s": [
+                    [
+                        0,
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        -1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        1,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        -1,
+                        0
+                    ],
+                    [
+                        0,
+                        -1,
+                        0,
+                        1
+                    ],
+                    [
+                        0,
+                        1,
+                        0,
+                        -1
+                    ],
+                    [
+                        1,
+                        0,
+                        0,
+                        0
+                    ],
+                    [
+                        -1,
+                        0,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        1,
+                        0,
+                        0
+                    ],
+                    [
+                        0,
+                        0,
+                        0,
+                        1
+                    ]
+                ],
+                "b_s": [
+                    [
+                        10
+                    ],
+                    [
+                        -10
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        -1
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        10
+                    ],
+                    [
+                        10
+                    ]
+                ],
+                "G_p": [
+                    [
+                        -1,
+                        -1,
+                        1,
+                        1
+                    ]
+                ],
+                "h_p": [
+                    [
+                        0
+                    ]
+                ]
+            },
+            "dimensions": {
+                "n_vars": 4,
+                "n_lambda_s": 10,
+                "n_mu_s": 1
+            },
+            "program_transition": 1,
+            "automaton_transition": {
+                "from": "q0",
+                "to": "q0"
+            },
+            "source_ranking_state": "q0",
+            "target_ranking_state": "q0",
+            "source_case_idx": 0,
+            "target_case_idx": 0,
+            "is_fair": true,
+            "witness": {
+                "lambda_s": [
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ],
+                    [
+                        0
+                    ]
+                ],
+                "mu_s": [
+                    [
+                        1
+                    ]
+                ]
+            },
+            "computed_values": {
+                "neg_b_s_T_lambda_s": 1,
+                "neg_h_p_T_mu_s": 0,
+                "A_s_T_lambda_s": [
+                    [
+                        1
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        -1
+                    ],
+                    [
+                        -1
+                    ]
+                ],
+                "G_p_T_mu_s": [
+                    [
+                        -1
+                    ],
+                    [
+                        -1
+                    ],
+                    [
+                        1
+                    ],
+                    [
+                        1
+                    ]
+                ]
+            },
+            "satisfiable": true
+        }
+    ],
+    "count": 2,
+    "constants": {
+        "z": 10
+    }
+}
