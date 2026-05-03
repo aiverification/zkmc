@@ -18,8 +18,8 @@ Running either of these will install the required Rust toolchain (if not already
 ## Code structure
 - `benches/` - Contains `benchmark_full_parallel.rs`, which runs the full ZKP on input files specified in this Rust file, and outputs timings.
 - `data/public/` and `data/private/` - **Required folders** for zkMatrix to populate and use during execution.
-- `inputs/` - Contains various input files for testing and benchmarking.
-- `outputs/` - Directory for timing outputs to be written to during benchmarking.
+- `input/` - Contains various input files for testing and benchmarking.
+- `output/` - Directory for timing outputs to be written to during benchmarking.
 
 ### `src`
 - `lib.rs` - Makes code available to use within this crate.
