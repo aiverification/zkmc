@@ -1,3 +1,5 @@
 */target/*
 */Cargo.lock
 */output/*.log
+zkmc-symbolic/data/*/*.cache
+zkmc-symbolic/data/*/*.srs
