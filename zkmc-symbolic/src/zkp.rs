@@ -66,6 +66,7 @@ pub struct ZkpProof {
     pub c_e_3: GtElement,
     pub A_lambda_e1_proof: TranSeq,
     pub b_lambda_e2_proof: TranSeq,
+    // pub equal_proof: EqualProof,
     pub equal_proof: EqualProof,
     pub lambda_zkrp_proof: ZKRPProof,
     pub mu_zkrp_proof: ZKRPProof,
@@ -275,19 +276,14 @@ pub fn prove(
     }
     let mu_T_flat: Vec<ZpElement> = mu_T[0].iter().map(|m| ZpElement::from(*m as u64)).collect();
     let equal_proof = zkmmeq::prove(
-        &mu_T_flat,
-        &first_basis_vec,
-        pp.zk_matrix_srs.blind_base,
-        e_1_r,
-        &second_basis_vec,
-        pp.zk_matrix_srs.blind_base,
-        e_3_r,
-        &third_basis_vec,
-        pp.zk_matrix_srs.blind_base,
-        mu_r,
-        e_1_blind,
-        e_3_blind,
-        mu_blind,
+    &pp, 
+    &vec![e_1_blind, e_3_blind],
+    &vec![e_1_r, e_3_r],
+    &vec![&first_basis_vec, &second_basis_vec],
+    &mu_T_flat,
+    &third_basis_vec,
+    mu_blind,
+    mu_r,
     );
 
     //ZKRPs
@@ -568,14 +564,10 @@ impl ZkpProof {
             third_basis_vec.push(pp.g_hat_mat[k][0])
         }
         let equal_verified = self.equal_proof.verify(
-            &first_basis_vec,
-            pp.zk_matrix_srs.blind_base,
-            &second_basis_vec,
-            pp.zk_matrix_srs.blind_base,
+            &pp,
+            &vec![self.c_e_1, self.c_e_3],
+            &vec![&first_basis_vec, &second_basis_vec],
             &third_basis_vec,
-            pp.zk_matrix_srs.blind_base,
-            self.c_e_1,
-            self.c_e_3,
             self.c_mu,
         );
         if !equal_verified {
