@@ -40,6 +40,7 @@ from .ltl import (
     parse_hoa, parse_label_to_dnf, negate_comparison, find_ltl2tgba,
     HOAAutomaton, HOAEdge,
 )
+from .synth import synthesize_rankings, synthesize_into, SynthesisError
 
 
 def verify_termination(result: ParseResult) -> VerificationResult:
@@ -100,4 +101,6 @@ __all__ = [
     "resolve_automaton", "derive_automaton", "lower_to_transitions",
     "parse_hoa", "parse_label_to_dnf", "negate_comparison", "find_ltl2tgba",
     "HOAAutomaton", "HOAEdge",
+    # Ranking synthesis (Tier 1)
+    "synthesize_rankings", "synthesize_into", "SynthesisError",
 ]

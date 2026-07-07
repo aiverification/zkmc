@@ -40,6 +40,12 @@ Example:
         help="Skip ranking function validation checks (disjointness, coverage, non-negativity)"
     )
     parser.add_argument(
+        "--synthesize",
+        action="store_true",
+        help="Automatically synthesize a linear ranking function for any automaton state that "
+             "lacks one (Tier 1: single linear function per state, requires type-bounded variables)."
+    )
+    parser.add_argument(
         "--const",
         action="append",
         metavar="NAME=VALUE",
@@ -68,6 +74,19 @@ Example:
 
         text = file_path.read_text()
         result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
+
+        # Synthesize missing ranking functions if requested
+        if args.synthesize:
+            from .synth import synthesize_into, SynthesisError
+            try:
+                before = set(result.ranking_functions)
+                synthesize_into(result)
+                added = sorted(set(result.ranking_functions) - before)
+                if added:
+                    print(f"Synthesized ranking functions for: {', '.join(added)}")
+            except SynthesisError as e:
+                print(f"Error: ranking synthesis failed: {e}", file=sys.stderr)
+                return 1
 
         # Validate ranking functions (unless skipped)
         if not args.skip_validation and result.ranking_functions:

@@ -6,6 +6,7 @@ Reference `.gc` programs used across the documentation, the benchmarks, and for 
 |------|------|---------|
 | [`example.gc`](example.gc) | tiny | Minimal walk-through: one variable, one fair self-loop, one-case ranking. Used by [`LANGUAGE.md`](../LANGUAGE.md) as the introductory example. |
 | [`counter_simple.gc`](counter_simple.gc) | small | Simple counter from `0` to `maxVal`. Baseline for the benchmark suite. |
+| [`counter_synth.gc`](counter_synth.gc) | tiny | Counter with **no** `rank(...)` block — the ranking is synthesized (`zksynth` / `zkverify --synthesize`). |
 | [`round-robin.gc`](round-robin.gc) | medium | Round-robin scheduling pattern. |
 | [`exp_backoff_state_opt_small.gc`](exp_backoff_state_opt_small.gc) | small | Exponential backoff with state-based ranking, 2 attempts. |
 | [`exp_backoff_ltl.gc`](exp_backoff_ltl.gc) | small | Same model as above, but the property is written in LTL (`spec: "G F !waiting"`) and the automaton is derived via Spot. Requires `ltl2tgba` on `PATH`. |
@@ -23,6 +24,8 @@ uv run zkverify  examples/dhcp.gc         # verify termination (may need --skip-
 uv run zkfarkas  examples/dhcp.gc --pretty  # Farkas duals as JSON
 uv run zkexplicit examples/counter_simple.gc --pretty  # explicit-state + embeddings
 uv run zkltl     examples/exp_backoff_ltl.gc   # derive the Büchi automaton from the LTL spec (needs Spot)
+uv run zksynth   examples/counter_synth.gc     # synthesize the ranking function
+uv run zkverify --synthesize examples/counter_synth.gc  # synthesize + verify
 ```
 
 Use `--const NAME=VALUE` to override constants without editing the file, e.g.:

@@ -65,16 +65,17 @@ For the full `.gc` language — constants, types, initial conditions, guarded co
 
 ## Command-line tools
 
-The package installs six commands. All accept `.gc` input and share the `--const NAME=VALUE` flag for overriding constants.
+The package installs seven commands. All accept `.gc` input and share the `--const NAME=VALUE` flag for overriding constants.
 
 | Tool | Purpose | Input | Output |
 |------|---------|-------|--------|
 | `zkterm` | Encode guarded commands, init, and automaton transitions as matrix inequalities `A x ≤ b` | `.gc` file or stdin | Matrices (optionally symbolic with `-s`) |
 | `zkrank` | Encode ranking functions as `(W_j, u_j, C_j, d_j)` per case | `.gc` file or stdin | Ranking-function encodings |
-| `zkverify` | Verify termination obligations via Farkas' lemma + Z3 | `.gc` file | Pass/fail summary with witnesses (`-v`) |
+| `zkverify` | Verify termination obligations via Farkas' lemma + Z3 (optionally `--synthesize`) | `.gc` file | Pass/fail summary with witnesses (`-v`) |
 | `zkfarkas` | Export Farkas dual obligations as JSON for external solvers / ZK pipelines | `.gc` file | JSON: `A_s`, `b_s`, `G_p`, `h_p`, multipliers |
 | `zkexplicit` | Explicit-state verification by enumeration, plus BN254 field embeddings | `.gc` file + bounds | JSON: violation/valid sets, embeddings |
 | `zkltl` | Derive the Büchi automaton from an LTL `spec:` via Spot and print it | `.gc` file with `spec:` (needs Spot) | `automaton_init` + `trans`/`trans!` declarations |
+| `zksynth` | Synthesize a linear ranking function per automaton state (Tier 1) and print it | `.gc` file (no `rank(...)` needed) | `rank(q)` declarations |
 
 Each tool has complete flag documentation via `--help`; what follows are one-line intros and minimal invocations.
 
@@ -156,6 +157,17 @@ uv run zkltl examples/exp_backoff_ltl.gc
 ```
 
 Run `uv run zkltl --help` for all flags. See [LANGUAGE.md](LANGUAGE.md#ltl-properties-ap--spec) for the full LTL syntax.
+
+### `zksynth` — synthesize the ranking function
+
+Instead of hand-writing `rank(q): …`, let the tool synthesize a linear ranking function per automaton state. Tier 1 finds a single linear function `V(q,x) = w·x + u` per state over the variables' `type`-bounded domain, via a Farkas-based LP (Podelski–Rybalchenko) solved with Z3 — no extra dependency.
+
+```bash
+uv run zksynth examples/counter_synth.gc            # print the synthesized ranking
+uv run zkverify --synthesize examples/counter_synth.gc   # synthesize missing rank(q) then verify
+```
+
+The synthesizer is **untrusted**: its output is re-checked by `zkverify` (and that check is what gets ZK-proven), so a synthesis bug can only cause a failed verification, never an unsound proof. Programs needing piecewise/lexicographic rankings are not yet supported (Tier 2). Run `uv run zksynth --help` for all flags.
 
 ## Examples and benchmarks
 
