@@ -19,6 +19,18 @@ cd zkterm-tool
 uv sync
 ```
 
+### Optional: Spot (for LTL properties)
+
+To specify properties in LTL (the `spec:` construct) instead of writing the Büchi automaton by hand, install **Spot** so its `ltl2tgba` binary is on `PATH`:
+
+```bash
+brew install spot                     # macOS
+apt install spot                      # Debian/Ubuntu
+conda install -c conda-forge spot     # conda
+```
+
+Spot is a C++ tool, not a Python package, so it is not installed by `uv sync`. If `ltl2tgba` is not on `PATH`, set `ZKTERM_LTL2TGBA` to its location. Everything else works without Spot.
+
 ## Quick start
 
 Save a small program as `counter.gc`:
@@ -53,7 +65,7 @@ For the full `.gc` language — constants, types, initial conditions, guarded co
 
 ## Command-line tools
 
-The package installs five commands. All accept `.gc` input and share the `--const NAME=VALUE` flag for overriding constants.
+The package installs six commands. All accept `.gc` input and share the `--const NAME=VALUE` flag for overriding constants.
 
 | Tool | Purpose | Input | Output |
 |------|---------|-------|--------|
@@ -62,6 +74,7 @@ The package installs five commands. All accept `.gc` input and share the `--cons
 | `zkverify` | Verify termination obligations via Farkas' lemma + Z3 | `.gc` file | Pass/fail summary with witnesses (`-v`) |
 | `zkfarkas` | Export Farkas dual obligations as JSON for external solvers / ZK pipelines | `.gc` file | JSON: `A_s`, `b_s`, `G_p`, `h_p`, multipliers |
 | `zkexplicit` | Explicit-state verification by enumeration, plus BN254 field embeddings | `.gc` file + bounds | JSON: violation/valid sets, embeddings |
+| `zkltl` | Derive the Büchi automaton from an LTL `spec:` via Spot and print it | `.gc` file with `spec:` (needs Spot) | `automaton_init` + `trans`/`trans!` declarations |
 
 Each tool has complete flag documentation via `--help`; what follows are one-line intros and minimal invocations.
 
@@ -126,6 +139,23 @@ uv run zkexplicit program.gc --pretty       # uses type-declared bounds
 ```
 
 Run `uv run zkexplicit --help` for all flags.
+
+### `zkltl` — derive the automaton from an LTL property
+
+Instead of hand-writing the Büchi automaton (`trans`/`trans!`), declare atomic propositions and an LTL property, and let Spot derive the automaton:
+
+```
+ap waiting := status == wait
+spec: "G F !waiting"
+```
+
+`zkverify`, `zkfarkas`, and `zkexplicit` all resolve `spec:` automatically; `zkltl` prints the derived automaton so you can inspect (or materialise) it. Requires Spot's `ltl2tgba` on `PATH` (see Installation).
+
+```bash
+uv run zkltl examples/exp_backoff_ltl.gc
+```
+
+Run `uv run zkltl --help` for all flags. See [LANGUAGE.md](LANGUAGE.md#ltl-properties-ap--spec) for the full LTL syntax.
 
 ## Examples and benchmarks
 

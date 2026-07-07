@@ -67,7 +67,7 @@ Example:
                     return 1
 
         text = file_path.read_text()
-        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
 
         # Validate ranking functions (unless skipped)
         if not args.skip_validation and result.ranking_functions:

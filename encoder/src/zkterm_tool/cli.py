@@ -194,7 +194,7 @@ Example:
                     print(f"Error: Invalid constant override '{const_arg}'. Use format NAME=VALUE.", file=sys.stderr)
                     return 1
 
-        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
 
         if args.verbose:
             if result.init_condition:

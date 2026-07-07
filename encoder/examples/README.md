@@ -8,6 +8,7 @@ Reference `.gc` programs used across the documentation, the benchmarks, and for 
 | [`counter_simple.gc`](counter_simple.gc) | small | Simple counter from `0` to `maxVal`. Baseline for the benchmark suite. |
 | [`round-robin.gc`](round-robin.gc) | medium | Round-robin scheduling pattern. |
 | [`exp_backoff_state_opt_small.gc`](exp_backoff_state_opt_small.gc) | small | Exponential backoff with state-based ranking, 2 attempts. |
+| [`exp_backoff_ltl.gc`](exp_backoff_ltl.gc) | small | Same model as above, but the property is written in LTL (`spec: "G F !waiting"`) and the automaton is derived via Spot. Requires `ltl2tgba` on `PATH`. |
 | [`exp_backoff_state_opt.gc`](exp_backoff_state_opt.gc) | medium | Same family, 3 attempts, parameterised by `initialDelay`. |
 | [`exp_backoff_guard_opt.gc`](exp_backoff_guard_opt.gc) | medium | Exponential backoff with guard-based ranking; parameterised by `initialDelay` and `maxAttempts`. |
 | [`dhcp.gc`](dhcp.gc) | large | Realistic DHCP-client model with constants, type annotations, and a ranking function over seven protocol states. |
@@ -21,6 +22,7 @@ uv run zkterm    examples/example.gc      # encode to matrices
 uv run zkverify  examples/dhcp.gc         # verify termination (may need --skip-validation)
 uv run zkfarkas  examples/dhcp.gc --pretty  # Farkas duals as JSON
 uv run zkexplicit examples/counter_simple.gc --pretty  # explicit-state + embeddings
+uv run zkltl     examples/exp_backoff_ltl.gc   # derive the Büchi automaton from the LTL spec (needs Spot)
 ```
 
 Use `--const NAME=VALUE` to override constants without editing the file, e.g.:

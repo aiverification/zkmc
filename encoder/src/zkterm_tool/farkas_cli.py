@@ -335,7 +335,7 @@ def extract_farkas_obligations(
         List of obligation dictionaries with Farkas components
     """
     text = Path(file_path).read_text()
-    result = parse_with_constants(text, const_overrides=const_overrides)
+    result = parse_with_constants(text, const_overrides=const_overrides, resolve_ltl=True)
 
     # Use Verifier to compute all obligations
     verifier = Verifier(result)
@@ -394,7 +394,7 @@ Example:
 
         # Parse the file to get constants
         text = Path(args.file).read_text()
-        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
 
         # Use Verifier to compute all obligations
         verifier = Verifier(result)

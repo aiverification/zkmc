@@ -264,7 +264,7 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
                     return 1
 
         text = file_path.read_text()
-        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
 
         # Check required components
         if not result.ranking_functions:

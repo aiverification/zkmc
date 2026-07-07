@@ -6,9 +6,16 @@
 // Example automaton initial states: automaton_init: q0, q1
 // Constants: const received = 1
 
-start: (init_condition | const_def | type_def | guarded_command | ranking_function | automaton_trans | automaton_init)*
+start: (init_condition | const_def | type_def | guarded_command | ranking_function | automaton_trans | automaton_init | ap_def | ltl_spec)*
 
 init_condition: "init" ":" guard
+
+// Atomic proposition binding for LTL specs: ap NAME := <conjunction of comparisons>
+ap_def: "ap" VAR ":=" guard
+
+// LTL property (proven by translating !(formula) to a Büchi automaton via Spot's ltl2tgba).
+// The formula is a quoted string in Spot's LTL syntax over the declared atomic propositions.
+ltl_spec: "spec" ":" ESCAPED_STRING
 
 const_def: "const" CONST_NAME "=" const_expr
 
@@ -81,6 +88,7 @@ VAR: /[a-zA-Z_][a-zA-Z_0-9]*/
 NUMBER: /[0-9]+/
 
 %import common.WS
+%import common.ESCAPED_STRING
 %ignore WS
 
 // Single-line comments
