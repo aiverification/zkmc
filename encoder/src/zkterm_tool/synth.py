@@ -564,11 +564,19 @@ def synthesize_rankings(
     ]
     reachable = _reachable_states(result, variables, types, reach_budget)
 
+    # Nondeterministic inputs (havoc'd in some command) are not state — the ranking is independent of
+    # them (their next value is free), so they must not be partition ("mode") variables.
+    input_vars: set[str] = set()
+    for cmd in result.commands or []:
+        input_vars |= set(getattr(cmd, "havoc", frozenset()))
+
     # Interval partition per variable: typed vars over their bounded domain; untyped variables that
     # are compared to constants in guards over an unbounded domain (the symbolic / no-bounds mode).
     splits = _guard_split_points(result)
     var_intervals: Dict[str, List[Tuple[Optional[int], Optional[int]]]] = {}
     for v in variables:
+        if v in input_vars:
+            continue
         if v in types:
             var_intervals[v] = _intervals(splits.get(v, set()), types[v].min_value, types[v].max_value)
         elif v in splits:

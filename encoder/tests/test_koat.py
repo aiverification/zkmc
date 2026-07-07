@@ -1,12 +1,21 @@
 """Tests for the KoAT .koat integer-transition-system importer + end-to-end termination synthesis."""
 
+import importlib.util
 import pathlib
 
 import pytest
 
-from zkterm_tool import import_koat, verify_termination
+from zkterm_tool import import_koat, verify_termination, synthesize_rankings
 from zkterm_tool.synth import synthesize_into, SynthesisError
 from zkterm_tool.ast_types import CompOp
+
+
+def _load_run_its():
+    p = pathlib.Path(__file__).resolve().parents[1] / "benchmarks" / "run_its.py"
+    spec = importlib.util.spec_from_file_location("run_its_mod", p)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 SECT5_LEN = """(GOAL COMPLEXITY)
@@ -83,3 +92,46 @@ class TestEndToEnd:
             assert "pc" in r.types
             assert r.commands
             assert r.automaton_transitions[0].is_fair
+
+
+class TestInputVariableNotPartitioned:
+    def test_havoc_input_var_excluded_from_partition(self):
+        # B is a fresh (havoc'd) nondeterministic input with a guard split point; it must NOT become
+        # a partition variable, so no finite ranking case should be guarded on B.
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0))
+(VAR A B)
+(RULES
+  l0(A) -> Com_1(l0(A - 1)) :|: A >= 1 && B >= 0
+)
+"""
+        r = import_koat(src)
+        assert "B" in r.commands[0].havoc
+        rankings = synthesize_rankings(r)
+        for rf in rankings.values():
+            for case in rf.cases:
+                if not case.is_infinity:
+                    assert "B" not in case.get_variables()  # B never used as a partition dimension
+
+
+class TestHarnessCategorizer:
+    def _classify(self, tmp_path, name, text):
+        run_its = _load_run_its()
+        p = tmp_path / name
+        p.write_text(text)
+        return run_its._classify(str(p), max_mode_vars=2, max_regions=64, emit_dir=None)[0]
+
+    def test_pass_bucket(self, tmp_path):
+        src = ("(GOAL COMPLEXITY)\n(STARTTERM (FUNCTIONSYMBOLS l0))\n(VAR A)\n"
+               "(RULES\n  l0(A) -> Com_1(l0(A - 1)) :|: A >= 1\n)\n")
+        assert self._classify(tmp_path, "ok.koat", src) == "pass"
+
+    def test_comn_bucket(self, tmp_path):
+        src = ("(GOAL COMPLEXITY)\n(STARTTERM (FUNCTIONSYMBOLS l0))\n(VAR A)\n"
+               "(RULES\n  l0(A) -> Com_2(l1(A), l2(A)) :|: A >= 0\n)\n")
+        assert self._classify(tmp_path, "comn.koat", src) == "unsupported-comn"
+
+    def test_nonlinear_bucket(self, tmp_path):
+        src = ("(GOAL COMPLEXITY)\n(STARTTERM (FUNCTIONSYMBOLS l0))\n(VAR A B)\n"
+               "(RULES\n  l0(A,B) -> Com_1(l0(A * B, B)) :|: A >= 1\n)\n")
+        assert self._classify(tmp_path, "nonlin.koat", src) == "unsupported-nonlinear"

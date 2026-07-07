@@ -2,6 +2,18 @@
 
 pytest-benchmark harnesses for `zkverify`, `zkfarkas`, and `zkexplicit`. Benchmark programs live in [`../examples/`](../examples/); this directory contains only the measurement code and its configuration.
 
+## ITS termination-benchmark suite (KoAT `.koat`)
+
+`run_its.py` runs KoAT's `.koat` integer-transition-system benchmarks through import → synthesize → verify (symbolic path, no bounds) and reports coverage statistics with a categorized reason per file. The corpus (KoAT's Complexity_ITS, 838 `.koat` from TermComp's TPDB) is fetched by `fetch_corpus.sh` into a gitignored `corpus/` (not committed).
+
+```bash
+bash benchmarks/fetch_corpus.sh                    # one-time download of 838 .koat into corpus/
+uv run python benchmarks/run_its.py \
+    --corpus benchmarks/corpus/Complexity_ITS --jobs 8 --timeout 20 --out benchmarks/stats.csv
+```
+
+Each file is classified: `pass` / `no-ranking` (search exhausted — needs multiphase/invariants) / `unsupported-comn` (recursion) / `unsupported-nonlinear` / `unsupported-parse` / `timeout` / `error`. `--emit-farkas DIR` dumps the Farkas-dual JSON for passing files (input for the `zkmc-symbolic` prover). See [`REPORT.md`](REPORT.md) for the current coverage snapshot.
+
 ## Running
 
 ```bash
