@@ -445,10 +445,12 @@ def encode_transition(
         all_ineqs.extend(comparison_to_inequalities(guard, primed=False))
     
     # Assignments (var' = expr where expr uses unprimed vars)
-    assigned_vars = {a.var for a in cmd.assignments}
+    # Havoc'd variables count as "assigned" so no identity is added, but they emit no constraint,
+    # leaving their next-state value free (nondeterministic).
+    assigned_vars = {a.var for a in cmd.assignments} | set(getattr(cmd, "havoc", frozenset()))
     for assign in cmd.assignments:
         all_ineqs.extend(assignment_to_inequalities(assign))
-    
+
     # Identity constraints for unassigned variables
     all_ineqs.extend(identity_constraints(variables, assigned_vars))
     

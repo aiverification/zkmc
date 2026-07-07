@@ -281,18 +281,21 @@ def _guard_split_points(result: ParseResult) -> Dict[str, set]:
     return splits
 
 
-def _intervals(points: set, td: TypeDef) -> List[Tuple[int, int]]:
-    """Partition [lo, hi] into integer intervals induced by the split points."""
-    lo, hi = td.min_value, td.max_value
-    pts = sorted(p for p in points if lo <= p <= hi)
-    intervals: List[Tuple[int, int]] = []
+def _intervals(points: set, lo: Optional[int], hi: Optional[int]) -> List[Tuple[Optional[int], Optional[int]]]:
+    """Partition [lo, hi] into integer intervals induced by the split points.
+
+    `lo`/`hi` may be None to denote -∞/+∞ (untyped, unbounded variables), in which case the
+    resulting outer intervals are one-sided. Interval bounds are inclusive; None means unbounded.
+    """
+    pts = sorted(p for p in points if (lo is None or p >= lo) and (hi is None or p <= hi))
+    intervals: List[Tuple[Optional[int], Optional[int]]] = []
     prev = lo
     for c in pts:
-        if prev <= c - 1:
+        if prev is None or prev <= c - 1:
             intervals.append((prev, c - 1))
         intervals.append((c, c))
         prev = c + 1
-    if prev <= hi:
+    if hi is None or prev is None or prev <= hi:
         intervals.append((prev, hi))
     return intervals
 
@@ -348,8 +351,10 @@ def _region_box(
 def _region_mode_comparisons(region: Region) -> List[Comparison]:
     comps: List[Comparison] = []
     for v, (a, b) in region.items():
-        comps.append(Comparison(left=Var(v), right=Num(a), op=CompOp.GE))
-        comps.append(Comparison(left=Var(v), right=Num(b), op=CompOp.LE))
+        if a is not None:
+            comps.append(Comparison(left=Var(v), right=Num(a), op=CompOp.GE))
+        if b is not None:
+            comps.append(Comparison(left=Var(v), right=Num(b), op=CompOp.LE))
     return comps
 
 
@@ -485,7 +490,9 @@ def _assemble(
     def region_order() -> List[int]:
         if len(subset) == 1:
             v = subset[0]
-            return sorted(range(len(regions)), key=lambda ri: regions[ri][v][0])
+            # Order by lower bound; None (=-∞) sorts first.
+            return sorted(range(len(regions)),
+                          key=lambda ri: (regions[ri][v][0] is not None, regions[ri][v][0] or 0))
         return list(range(len(regions)))
 
     rankings: Dict[str, RankingFunction] = {}
@@ -500,7 +507,9 @@ def _assemble(
                 pv = subset[0]
                 prev_region, prev_box, prev_piece = merged[-1]
                 if (piece is not None and prev_piece is not None and piece == prev_piece
-                        and box == prev_box and prev_region[pv][1] + 1 == regions[ri][pv][0]):
+                        and box == prev_box
+                        and prev_region[pv][1] is not None and regions[ri][pv][0] is not None
+                        and prev_region[pv][1] + 1 == regions[ri][pv][0]):
                     merged[-1] = ({pv: (prev_region[pv][0], regions[ri][pv][1])}, box, piece)
                     continue
             merged.append((regions[ri], box, piece))
@@ -555,15 +564,23 @@ def synthesize_rankings(
     ]
     reachable = _reachable_states(result, variables, types, reach_budget)
 
+    # Interval partition per variable: typed vars over their bounded domain; untyped variables that
+    # are compared to constants in guards over an unbounded domain (the symbolic / no-bounds mode).
     splits = _guard_split_points(result)
-    var_intervals: Dict[str, List[Tuple[int, int]]] = {
-        v: _intervals(splits.get(v, set()), types[v]) for v in variables if v in types
-    }
+    var_intervals: Dict[str, List[Tuple[Optional[int], Optional[int]]]] = {}
+    for v in variables:
+        if v in types:
+            var_intervals[v] = _intervals(splits.get(v, set()), types[v].min_value, types[v].max_value)
+        elif v in splits:
+            var_intervals[v] = _intervals(splits[v], None, None)
 
     if mode_vars is not None:
         missing = [v for v in mode_vars if v not in var_intervals]
         if missing:
-            raise SynthesisError(f"--mode variables must be type-declared: {', '.join(missing)}")
+            raise SynthesisError(
+                "--mode variables must be type-declared or compared to constants in guards: "
+                + ", ".join(missing)
+            )
         candidate_subsets = [mode_vars]
     else:
         candidate_subsets = _mode_partitions(variables, var_intervals, max_regions, max_mode_vars)

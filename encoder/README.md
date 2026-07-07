@@ -65,7 +65,7 @@ For the full `.gc` language — constants, types, initial conditions, guarded co
 
 ## Command-line tools
 
-The package installs seven commands. All accept `.gc` input and share the `--const NAME=VALUE` flag for overriding constants.
+The package installs eight commands. All accept `.gc` input (and `zkverify`/`zksynth`/`zkits` also accept KoAT `.koat` integer transition systems) and share the `--const NAME=VALUE` flag for overriding constants.
 
 | Tool | Purpose | Input | Output |
 |------|---------|-------|--------|
@@ -76,6 +76,7 @@ The package installs seven commands. All accept `.gc` input and share the `--con
 | `zkexplicit` | Explicit-state verification by enumeration, plus BN254 field embeddings | `.gc` file + bounds | JSON: violation/valid sets, embeddings |
 | `zkltl` | Derive the Büchi automaton from an LTL `spec:` via Spot and print it | `.gc` file with `spec:` (needs Spot) | `automaton_init` + `trans`/`trans!` declarations |
 | `zksynth` | Synthesize a linear ranking function per automaton state (Tier 1) and print it | `.gc` file (no `rank(...)` needed) | `rank(q)` declarations |
+| `zkits` | Import a KoAT `.koat` integer transition system and print the derived guarded commands | `.koat` file | guarded commands + termination automaton |
 
 Each tool has complete flag documentation via `--help`; what follows are one-line intros and minimal invocations.
 
@@ -171,6 +172,18 @@ uv run zksynth examples/round-robin.gc --mode turn       # force a partition var
 How it works: the state space is partitioned on the constants the program's guards compare variables against (control-flow refinement), searching **coarsest-first** so the ranking has as few finite cases as possible (fewer cases → fewer obligations → smaller proofs). For bounded programs, each piece is guarded by the *reachable* sub-box of its region, so conditional invariants (e.g. "`state1 ≤ 1` when `turn == 0`") are captured automatically — this is what lets `round-robin` and `dhcp` synthesize. Use `--mode VAR` to force partition variables and `--max-regions N` to cap the search.
 
 The synthesizer is **untrusted**: its output is re-checked by `zkverify` (and that check is what gets ZK-proven), so a synthesis bug can only cause a failed verification, never an unsound proof. Programs needing lexicographic rankings, or invariants beyond a per-region bounding box, are not yet supported. Run `uv run zksynth --help` for all flags.
+
+### `zkits` — import KoAT integer transition systems
+
+Termination benchmarks in the KoAT / termCOMP `.koat` format can be imported directly: locations become a `pc` variable, rules become guarded commands, fresh variables become nondeterministic (havoc'd) inputs, and an all-fair *termination* automaton (`trans!(q0,q0): true`) is attached so "every transition strictly decreases" is the property. Data variables stay **unbounded** — the synthesizer runs on the symbolic path (no `type` bounds needed), partitioning on guard boundaries. `Com_n` (n>1, recursion) and non-linear updates are rejected. C/SV-COMP benchmarks reach `.koat` via the external `llvm2kittel` translator.
+
+```bash
+uv run zkits program.koat               # inspect the derived guarded commands + termination automaton
+uv run zkverify --synthesize program.koat   # import, synthesize a ranking, and verify termination
+uv run python benchmarks/run_its.py --corpus DIR   # batch-run a directory of .koat files
+```
+
+Programs whose termination needs a multiphase/lexicographic measure (e.g. nested loops) are not yet handled — those are the target of the future MΦRF upgrade to the synthesizer.
 
 ## Examples and benchmarks
 

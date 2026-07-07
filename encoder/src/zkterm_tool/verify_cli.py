@@ -85,7 +85,11 @@ Example:
                     return 1
 
         text = file_path.read_text()
-        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
+        if str(file_path).endswith(".koat"):
+            from .koat import import_koat
+            result = import_koat(text)  # KoAT ITS -> guarded commands + termination automaton
+        else:
+            result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
 
         # Synthesize missing ranking functions if requested
         if args.synthesize:

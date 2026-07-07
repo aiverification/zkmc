@@ -14,7 +14,7 @@ Reference `.gc` programs used across the documentation, the benchmarks, and for 
 | [`exp_backoff_guard_opt.gc`](exp_backoff_guard_opt.gc) | medium | Exponential backoff with guard-based ranking; parameterised by `initialDelay` and `maxAttempts`. |
 | [`dhcp.gc`](dhcp.gc) | large | Realistic DHCP-client model with constants, type annotations, and a ranking function over seven protocol states. |
 
-All files use the language described in [`../LANGUAGE.md`](../LANGUAGE.md).
+All `.gc` files use the language described in [`../LANGUAGE.md`](../LANGUAGE.md). The [`its/`](its/) subdirectory holds real KoAT `.koat` integer transition systems (from the termCOMP corpus) used to test the ITS importer + termination synthesis; run them with `uv run zkverify --synthesize its/<file>.koat` or the batch harness `uv run python benchmarks/run_its.py`.
 
 ## Running an example
 

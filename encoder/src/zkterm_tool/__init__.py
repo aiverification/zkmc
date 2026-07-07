@@ -41,6 +41,7 @@ from .ltl import (
     HOAAutomaton, HOAEdge,
 )
 from .synth import synthesize_rankings, synthesize_into, SynthesisError
+from .koat import import_koat, import_koat_file
 
 
 def verify_termination(result: ParseResult) -> VerificationResult:
@@ -103,4 +104,6 @@ __all__ = [
     "HOAAutomaton", "HOAEdge",
     # Ranking synthesis (Tier 1)
     "synthesize_rankings", "synthesize_into", "SynthesisError",
+    # KoAT ITS import
+    "import_koat", "import_koat_file",
 ]

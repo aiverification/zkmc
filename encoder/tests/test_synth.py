@@ -93,10 +93,24 @@ class TestUnsatisfiable:
         with pytest.raises(SynthesisError):
             synthesize_rankings(parse_with_constants(src))
 
-    def test_unbounded_variable_raises(self):
+    def test_unbounded_guarded_loop_synthesizes(self):
+        # No type bounds: the no-bounds mode partitions the untyped `y` by its guard split point and
+        # proves termination symbolically (V = y on y>=1, constant on y<=0).
         src = """
         init: y = 0
         [] y > 0 -> y = y - 1
+        automaton_init: q0
+        trans!(q0, q0): true
+        """
+        r = parse_with_constants(src)
+        r.ranking_functions.update(synthesize_rankings(r))
+        assert verify_termination(r).passed is True
+
+    def test_unbounded_nonterminating_raises(self):
+        # An untyped loop with no decrease has no ranking, even in no-bounds mode.
+        src = """
+        init: y = 0
+        [] y > 0 -> y = y + 1
         automaton_init: q0
         trans!(q0, q0): true
         """
@@ -117,7 +131,6 @@ class TestTier2Piecewise:
 
     def test_guard_split_points(self):
         from zkterm_tool.synth import _guard_split_points, _intervals
-        from zkterm_tool.ast_types import TypeDef
         # delay compared only to 0 -> split at 0 -> two intervals over 0..255, not 256.
         r = parse_with_constants(
             "type delay: 0..255\ntype x: 0..2\n"
@@ -128,7 +141,9 @@ class TestTier2Piecewise:
         )
         splits = _guard_split_points(r)
         assert 0 in splits.get("delay", set())
-        assert len(_intervals(splits["delay"], TypeDef("delay", 0, 255))) == 2
+        assert len(_intervals(splits["delay"], 0, 255)) == 2
+        # Untyped variable -> unbounded intervals from the split point: (-inf,-1], {0}, [1,+inf).
+        assert len(_intervals({0}, None, None)) == 3
 
     def test_round_robin_synthesizes_minimally(self):
         r = self._example("round-robin.gc")

@@ -94,13 +94,20 @@ class TypeDef:
 
 @dataclass(frozen=True)
 class GuardedCommand:
-    """A guarded command: [] guard -> assignments."""
+    """A guarded command: [] guard -> assignments.
+
+    `havoc` names variables whose next-state value is nondeterministic (unconstrained): no
+    assignment is emitted for them and the implicit `var' = var` identity is suppressed, leaving
+    `var'` free. Used to model nondeterministic updates / fresh inputs (e.g. from ITS benchmarks).
+    """
     guards: list[Comparison]  # conjunction of comparisons
     assignments: list[Assignment]
+    havoc: frozenset[str] = frozenset()  # variables with unconstrained next-state
 
     def __repr__(self) -> str:
         guard_str = " && ".join(str(g) for g in self.guards)
-        assign_str = "; ".join(str(a) for a in self.assignments)
+        parts = [str(a) for a in self.assignments] + [f"{v} = *" for v in sorted(self.havoc)]
+        assign_str = "; ".join(parts)
         return f"[] {guard_str} -> {assign_str}"
 
     def get_variables(self) -> set[str]:
@@ -123,5 +130,7 @@ class GuardedCommand:
         for assign in self.assignments:
             variables.add(assign.var)
             collect_from_expr(assign.expr)
+
+        variables.update(self.havoc)
 
         return variables
