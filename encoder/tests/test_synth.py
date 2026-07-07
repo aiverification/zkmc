@@ -109,6 +109,61 @@ class TestUnsatisfiable:
             synthesize_rankings(parse_with_constants(src))
 
 
+class TestTier2Piecewise:
+    def _example(self, name):
+        import pathlib
+        p = pathlib.Path(__file__).resolve().parents[1] / "examples" / name
+        return parse_with_constants(p.read_text())
+
+    def test_guard_split_points(self):
+        from zkterm_tool.synth import _guard_split_points, _intervals
+        from zkterm_tool.ast_types import TypeDef
+        # delay compared only to 0 -> split at 0 -> two intervals over 0..255, not 256.
+        r = parse_with_constants(
+            "type delay: 0..255\ntype x: 0..2\n"
+            "init: delay = 0\n"
+            "[] delay > 0 -> delay = delay - 1\n"
+            "[] x < 2 -> x = x + 1\n"
+            "automaton_init: q0\ntrans!(q0, q0): delay > 0\n"
+        )
+        splits = _guard_split_points(r)
+        assert 0 in splits.get("delay", set())
+        assert len(_intervals(splits["delay"], TypeDef("delay", 0, 255))) == 2
+
+    def test_round_robin_synthesizes_minimally(self):
+        r = self._example("round-robin.gc")
+        r.ranking_functions.clear()
+        rankings = synthesize_rankings(r)
+        # Minimal partition: split on `turn` (0..2) -> 3 finite cases per state, not the 81 of turn×states.
+        for rf in rankings.values():
+            finite = [c for c in rf.cases if not c.is_infinity]
+            assert len(finite) == 3
+            # Reachability invariant is captured (e.g. state1/state2 bounded tighter than their type box).
+            ok, errors = _validate(rf)
+            assert ok, errors
+        # Full end-to-end verification is exercised by test_dhcp_synthesizes_and_verifies (fast);
+        # round-robin's 6230-obligation verify is confirmed manually to keep the suite quick.
+
+    def test_dhcp_synthesizes_and_verifies(self):
+        r = self._example("dhcp.gc")
+        r.ranking_functions.clear()
+        synthesize_into(r)
+        assert verify_termination(r).passed is True
+
+    def test_mode_override(self):
+        r = self._example("round-robin.gc")
+        r.ranking_functions.clear()
+        rankings = synthesize_rankings(r, mode_vars=["turn"])
+        for rf in rankings.values():
+            assert len([c for c in rf.cases if not c.is_infinity]) == 3
+
+    def test_mode_override_requires_typed_var(self):
+        r = self._example("round-robin.gc")
+        r.ranking_functions.clear()
+        with pytest.raises(SynthesisError, match="type-declared"):
+            synthesize_rankings(r, mode_vars=["nonexistent"])
+
+
 @pytest.mark.skipif(not shutil.which("ltl2tgba"), reason="Spot's ltl2tgba not installed")
 def test_synthesis_from_ltl_spec():
     """End-to-end: derive the automaton from LTL, then synthesize and verify (Part A + Part C)."""

@@ -26,6 +26,8 @@ uv run zkexplicit examples/counter_simple.gc --pretty  # explicit-state + embedd
 uv run zkltl     examples/exp_backoff_ltl.gc   # derive the Büchi automaton from the LTL spec (needs Spot)
 uv run zksynth   examples/counter_synth.gc     # synthesize the ranking function
 uv run zkverify --synthesize examples/counter_synth.gc  # synthesize + verify
+uv run zksynth   examples/round-robin.gc        # piecewise synthesis (partitions on `turn`)
+uv run zksynth   examples/dhcp.gc               # synthesis with reachability invariants
 ```
 
 Use `--const NAME=VALUE` to override constants without editing the file, e.g.:

@@ -160,14 +160,17 @@ Run `uv run zkltl --help` for all flags. See [LANGUAGE.md](LANGUAGE.md#ltl-prope
 
 ### `zksynth` — synthesize the ranking function
 
-Instead of hand-writing `rank(q): …`, let the tool synthesize a linear ranking function per automaton state. Tier 1 finds a single linear function `V(q,x) = w·x + u` per state over the variables' `type`-bounded domain, via a Farkas-based LP (Podelski–Rybalchenko) solved with Z3 — no extra dependency.
+Instead of hand-writing `rank(q): …`, let the tool synthesize a (piecewise) linear ranking function per automaton state, via a Farkas-based LP (Podelski–Rybalchenko) solved with Z3 — no extra dependency.
 
 ```bash
-uv run zksynth examples/counter_synth.gc            # print the synthesized ranking
+uv run zksynth examples/counter_synth.gc                 # print the synthesized ranking
 uv run zkverify --synthesize examples/counter_synth.gc   # synthesize missing rank(q) then verify
+uv run zksynth examples/round-robin.gc --mode turn       # force a partition variable
 ```
 
-The synthesizer is **untrusted**: its output is re-checked by `zkverify` (and that check is what gets ZK-proven), so a synthesis bug can only cause a failed verification, never an unsound proof. Programs needing piecewise/lexicographic rankings are not yet supported (Tier 2). Run `uv run zksynth --help` for all flags.
+How it works: the state space is partitioned on the constants the program's guards compare variables against (control-flow refinement), searching **coarsest-first** so the ranking has as few finite cases as possible (fewer cases → fewer obligations → smaller proofs). For bounded programs, each piece is guarded by the *reachable* sub-box of its region, so conditional invariants (e.g. "`state1 ≤ 1` when `turn == 0`") are captured automatically — this is what lets `round-robin` and `dhcp` synthesize. Use `--mode VAR` to force partition variables and `--max-regions N` to cap the search.
+
+The synthesizer is **untrusted**: its output is re-checked by `zkverify` (and that check is what gets ZK-proven), so a synthesis bug can only cause a failed verification, never an unsound proof. Programs needing lexicographic rankings, or invariants beyond a per-region bounding box, are not yet supported. Run `uv run zksynth --help` for all flags.
 
 ## Examples and benchmarks
 

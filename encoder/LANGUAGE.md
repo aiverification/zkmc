@@ -147,7 +147,7 @@ rank(q0):
 
 Infinity cases are how you document which parts of the state space the ranking does not need to decrease on.
 
-**Synthesis.** Ranking functions can also be synthesized automatically instead of written by hand: `zksynth program.gc` prints a synthesized ranking, and `zkverify --synthesize program.gc` fills in any missing `rank(q)` before verifying. Tier 1 synthesizes a single linear function per automaton state over the variables' `type`-bounded domain (via a Farkas/Z3 LP); programs needing piecewise or lexicographic rankings are not yet covered.
+**Synthesis.** Ranking functions can also be synthesized automatically instead of written by hand: `zksynth program.gc` prints a synthesized ranking, and `zkverify --synthesize program.gc` fills in any missing `rank(q)` before verifying. The synthesizer (Farkas/Z3 LP, Podelski–Rybalchenko) finds a **piecewise** linear ranking: it partitions the state space on the constants the program's guards compare variables against (control-flow refinement), searching coarsest-first so the result has as few cases as possible, and — for bounded programs — guards each piece by the *reachable* sub-box of its region (so conditional invariants like "state1 ≤ 1 when turn == 0" are captured automatically). Force partition variables with `--mode VAR`. Programs needing lexicographic rankings, or invariants beyond a per-region bounding box, are not yet covered.
 
 ## Büchi automaton transitions
 

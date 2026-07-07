@@ -44,6 +44,19 @@ programs needing piecewise/lexicographic rankings are not yet supported.
         default=None,
         help="Bound on |ranking coefficients| searched (default: 65536).",
     )
+    parser.add_argument(
+        "--mode",
+        action="append",
+        metavar="VAR",
+        help="Force a variable to be a partition ('mode') variable (repeatable). Overrides "
+             "auto-detection; the variable must be type-declared.",
+    )
+    parser.add_argument(
+        "--max-regions",
+        type=int,
+        default=None,
+        help="Cap on the number of regions a partition may have during auto-search (default: 64).",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -71,6 +84,10 @@ programs needing piecewise/lexicographic rankings are not yet supported.
         kwargs = {}
         if args.coeff_bound is not None:
             kwargs["coeff_bound"] = args.coeff_bound
+        if args.mode:
+            kwargs["mode_vars"] = args.mode
+        if args.max_regions is not None:
+            kwargs["max_regions"] = args.max_regions
 
         try:
             rankings = synthesize_rankings(result, **kwargs)

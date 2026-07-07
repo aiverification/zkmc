@@ -42,8 +42,20 @@ Example:
     parser.add_argument(
         "--synthesize",
         action="store_true",
-        help="Automatically synthesize a linear ranking function for any automaton state that "
-             "lacks one (Tier 1: single linear function per state, requires type-bounded variables)."
+        help="Automatically synthesize a (piecewise) linear ranking function for any automaton "
+             "state that lacks one. Requires type-bounded variables."
+    )
+    parser.add_argument(
+        "--mode",
+        action="append",
+        metavar="VAR",
+        help="With --synthesize: force a variable to be a partition ('mode') variable (repeatable)."
+    )
+    parser.add_argument(
+        "--max-regions",
+        type=int,
+        default=None,
+        help="With --synthesize: cap on regions per partition during auto-search (default: 64)."
     )
     parser.add_argument(
         "--const",
@@ -78,9 +90,14 @@ Example:
         # Synthesize missing ranking functions if requested
         if args.synthesize:
             from .synth import synthesize_into, SynthesisError
+            synth_kwargs = {}
+            if args.mode:
+                synth_kwargs["mode_vars"] = args.mode
+            if args.max_regions is not None:
+                synth_kwargs["max_regions"] = args.max_regions
             try:
                 before = set(result.ranking_functions)
-                synthesize_into(result)
+                synthesize_into(result, **synth_kwargs)
                 added = sorted(set(result.ranking_functions) - before)
                 if added:
                     print(f"Synthesized ranking functions for: {', '.join(added)}")
