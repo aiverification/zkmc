@@ -26,10 +26,13 @@ To specify properties in LTL (the `spec:` construct) instead of writing the Büc
 ```bash
 brew install spot                     # macOS
 apt install spot                      # Debian/Ubuntu
+dnf install spot                      # Fedora
 conda install -c conda-forge spot     # conda
 ```
 
 Spot is a C++ tool, not a Python package, so it is not installed by `uv sync`. If `ltl2tgba` is not on `PATH`, set `ZKTERM_LTL2TGBA` to its location. Everything else works without Spot.
+
+For Debian/Ubuntu and Fedora installations, you may need to add an external repository before installation. Alternatively, you may wish to compile `Spot` locally. For both of these cases and others, see the [Spot installation guide](https://spot.lre.epita.fr/install.html).
 
 ## Quick start
 
