@@ -54,5 +54,7 @@ Two search-depth settings for the partition search (`--max-mode-vars`):
 ```bash
 bash benchmarks/fetch_corpus.sh
 uv run python benchmarks/run_its.py --corpus benchmarks/corpus/Complexity_ITS \
-    --jobs 8 --timeout 25 --max-mode-vars 1 --out benchmarks/stats.csv
+    --jobs 8 --timeout 25 --max-mode-vars 1 --out benchmarks/stats_mmv1.csv
+uv run python benchmarks/run_its.py --corpus benchmarks/corpus/Complexity_ITS \
+    --jobs 8 --timeout 20 --max-mode-vars 2 --out benchmarks/stats_mmv2.csv
 ```

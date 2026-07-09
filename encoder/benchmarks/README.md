@@ -14,6 +14,8 @@ uv run python benchmarks/run_its.py \
 
 Each file is classified: `pass` / `no-ranking` (search exhausted — needs multiphase/invariants) / `unsupported-comn` (recursion) / `unsupported-nonlinear` / `unsupported-parse` / `timeout` / `error`. `--emit-farkas DIR` dumps the Farkas-dual JSON for passing files (input for the `zkmc-symbolic` prover). See [`REPORT.md`](REPORT.md) for the current coverage snapshot.
 
+Use the argument `--max-mode-vars` to control whether the ranking function search strategy uses pair partitions (set to `2`) or not (set to `1`). Default is `2`.
+
 ## Running
 
 ```bash
