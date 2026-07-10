@@ -79,6 +79,7 @@ def parse_result_symbols(result: ParseResult) -> set[str]:
     symbols.update(result.constants)
     symbols.update(result.types)
     symbols.update(result.aps)
+    symbols.update(result.observable_definitions)
 
     def collect_expr(expr: Expr) -> None:
         if isinstance(expr, Var):
@@ -115,6 +116,10 @@ def parse_result_symbols(result: ParseResult) -> set[str]:
 
     for comparisons in result.aps.values():
         collect_comparisons(comparisons)
+
+    for dnf in result.observable_definitions.values():
+        for comparisons in dnf:
+            collect_comparisons(comparisons)
 
     return symbols
 

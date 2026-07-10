@@ -45,6 +45,12 @@ from .koat import import_koat, import_koat_file
 from .smv_parser import parse_smv, parse_smv_file
 from .smv_to_gc import smv_to_gc, smv_to_symbol_parse_result, import_smv, import_smv_file
 from .hq_parser import parse_hq, parse_hq_file
+from .hyperltl_reduce import (
+    HyperLtlReductionError,
+    reduce_hyperltl_to_ltl,
+    self_compose_parse_result,
+    trace_var,
+)
 from .hyperltl_support import (
     HyperLtlSupport,
     UnsupportedHyperLtlError,
@@ -161,4 +167,7 @@ __all__ = [
     "require_hyperltl_parse_result_references",
     "HyperLtlSupport", "UnsupportedHyperLtlError",
     "HyperAtom", "HyperAtomRef", "HyperFormula", "TraceQuantifier",
+    # HyperLTL reduction
+    "HyperLtlReductionError", "reduce_hyperltl_to_ltl", "self_compose_parse_result",
+    "trace_var",
 ]

@@ -29,6 +29,8 @@ class ParseResult:
     aps: dict[str, list[Comparison]]                 # LTL atomic propositions: name -> conjunction of comparisons
     ltl_formula: str | None                          # LTL property (Spot syntax); automaton derived from !(formula)
     observable_symbols: set[str] = field(default_factory=set)  # Extra symbols properties may reference
+    observable_definitions: dict[str, list[list[Comparison]]] = field(default_factory=dict)
+    # Extra observable symbols with definitions as DNF over GC comparisons.
 
 
 class ASTTransformer(Transformer):

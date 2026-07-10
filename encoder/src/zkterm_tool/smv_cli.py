@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from .hq_parser import parse_hq
+from .hyperltl_reduce import reduce_hyperltl_to_ltl
 from .hyperltl_support import require_hyperltl_parse_result_references, require_supported_hyperltl
 from .hyperltl_types import HyperFormula
 from .parser import ParseResult
@@ -40,7 +41,11 @@ def format_smv_model(model: SmvModel) -> str:
 
 def format_gc_result_from_smv(model: SmvModel, result: ParseResult | None = None) -> str:
     result = result or smv_to_gc(model)
-    lines: list[str] = [f"// SMV module {model.module} -> guarded commands"]
+    return format_gc_parse_result(result, header=f"// SMV module {model.module} -> guarded commands")
+
+
+def format_gc_parse_result(result: ParseResult, header: str) -> str:
+    lines: list[str] = [header]
 
     if result.types:
         for type_def in result.types.values():
@@ -52,6 +57,15 @@ def format_gc_result_from_smv(model: SmvModel, result: ParseResult | None = None
 
     for command in result.commands:
         lines.append(str(command))
+
+    if result.aps:
+        lines.append("")
+        for name, comparisons in result.aps.items():
+            guard = " && ".join(str(comparison) for comparison in comparisons)
+            lines.append(f"ap {name} := {guard}")
+
+    if result.ltl_formula is not None:
+        lines.append(f'spec: "{result.ltl_formula}"')
 
     return "\n".join(lines)
 
@@ -66,7 +80,7 @@ def format_hyperltl_property(formula: HyperFormula) -> str:
         refs = ", ".join(str(ref) for ref in atom.references) or "<none>"
         lines.append(f"  {atom} refs=[{refs}]")
     lines.append("support: supported parser fragment")
-    lines.append("reduction: not implemented in this step")
+    lines.append("reduction: available for universal quantifier blocks")
     return "\n".join(lines)
 
 
@@ -95,7 +109,7 @@ Example:
 
 Use --ast to print the parsed SMV AST summary instead of the derived guarded commands.
 Use --hyper property.hq or --hyper-text 'forall A. forall B. ...' to parse and
-check a HyperLTL property. Reduction is intentionally not wired in yet.
+reduce a supported universal HyperLTL property to LTL over self-composed GC.
         """,
     )
     parser.add_argument(
@@ -134,7 +148,14 @@ check a HyperLTL property. Reduction is intentionally not wired in yet.
         if args.ast:
             output = format_smv_model(model)
         else:
-            output = format_gc_result_from_smv(model, result)
+            if hyper_formula is not None:
+                result = reduce_hyperltl_to_ltl(result, hyper_formula)
+                output = format_gc_parse_result(
+                    result,
+                    header=f"// SMV module {model.module} + HyperLTL -> self-composed guarded commands",
+                )
+            else:
+                output = format_gc_result_from_smv(model, result)
         if hyper_formula is not None:
             output += format_hyperltl_property(hyper_formula)
         print(output)

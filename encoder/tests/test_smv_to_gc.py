@@ -187,7 +187,9 @@ ASSIGN
     assert exit_code == 0
     assert "HyperLTL property" in output
     assert "support: supported parser fragment" in output
-    assert "reduction: not implemented in this step" in output
+    assert "self-composed guarded commands" in output
+    assert "ap hq_ap_0" in output
+    assert 'spec: "G(hq_ap_0)"' in output
 
 
 def test_smv_cli_rejects_unsupported_hyperltl(tmp_path, capsys):

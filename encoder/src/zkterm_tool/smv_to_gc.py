@@ -39,6 +39,8 @@ class _SmvLowerer:
         self.variables = model.variable_map()
         self.defines = model.define_map()
         self.enum_values = self._build_enum_value_map()
+        self._types_cache: dict[str, TypeDef] | None = None
+        self._observable_definitions_cache: dict[str, list[list[Comparison]]] | None = None
 
     def lower(self) -> ParseResult:
         current_assignments = [a for a in self.model.assignments if a.kind == "current"]
@@ -56,7 +58,8 @@ class _SmvLowerer:
             automaton_initial_states=None,
             aps={},
             ltl_formula=None,
-            observable_symbols=set(self.variables) | set(self.defines),
+            observable_symbols=set(self.variables) | set(self._lower_observable_definitions()),
+            observable_definitions=self._lower_observable_definitions(),
         )
 
     def _build_enum_value_map(self) -> dict[str, int]:
@@ -74,6 +77,9 @@ class _SmvLowerer:
         return result
 
     def _lower_types(self) -> dict[str, TypeDef]:
+        if self._types_cache is not None:
+            return self._types_cache
+
         types: dict[str, TypeDef] = {}
         for name, smv_type in self.variables.items():
             if isinstance(smv_type, SmvBooleanType):
@@ -84,7 +90,21 @@ class _SmvLowerer:
                 types[name] = TypeDef(name, 0, len(smv_type.values) - 1)
             else:
                 raise ValueError(f"Unsupported SMV type for {name}: {smv_type}")
+        self._types_cache = types
         return types
+
+    def _lower_observable_definitions(self) -> dict[str, list[list[Comparison]]]:
+        if self._observable_definitions_cache is not None:
+            return self._observable_definitions_cache
+
+        definitions: dict[str, list[list[Comparison]]] = {}
+        for name, expr in self.defines.items():
+            try:
+                definitions[name] = self._guard_dnf(expr)
+            except ValueError:
+                continue
+        self._observable_definitions_cache = definitions
+        return definitions
 
     def _lower_init(self) -> list[Comparison] | None:
         init_guards: list[Comparison] = []
@@ -373,7 +393,8 @@ def smv_to_symbol_parse_result(model: SmvModel) -> ParseResult:
         automaton_initial_states=None,
         aps={},
         ltl_formula=None,
-        observable_symbols=set(lowerer.variables) | set(lowerer.defines),
+        observable_symbols=set(lowerer.variables) | set(lowerer._lower_observable_definitions()),
+        observable_definitions=lowerer._lower_observable_definitions(),
     )
 
 
