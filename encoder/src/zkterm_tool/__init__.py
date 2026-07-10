@@ -43,7 +43,13 @@ from .ltl import (
 from .synth import synthesize_rankings, synthesize_into, SynthesisError
 from .koat import import_koat, import_koat_file
 from .smv_parser import parse_smv, parse_smv_file
-from .smv_to_gc import smv_to_gc, smv_to_symbol_parse_result, import_smv, import_smv_file
+from .smv_to_gc import (
+    SmvLoweringStrategy,
+    smv_to_gc,
+    smv_to_symbol_parse_result,
+    import_smv,
+    import_smv_file,
+)
 from .hq_parser import parse_hq, parse_hq_file
 from .hyperltl_reduce import (
     HyperLtlReductionError,
@@ -153,8 +159,8 @@ __all__ = [
     # KoAT ITS import
     "import_koat", "import_koat_file",
     # SMV parser
-    "parse_smv", "parse_smv_file", "smv_to_gc", "smv_to_symbol_parse_result",
-    "import_smv", "import_smv_file",
+    "parse_smv", "parse_smv_file", "SmvLoweringStrategy", "smv_to_gc",
+    "smv_to_symbol_parse_result", "import_smv", "import_smv_file",
     "SmvAssignment", "SmvBinary", "SmvBool", "SmvBooleanType", "SmvCase",
     "SmvCaseArm", "SmvDefine", "SmvEnumType", "SmvExpr", "SmvInt",
     "SmvModel", "SmvName", "SmvRangeType", "SmvSet", "SmvType",

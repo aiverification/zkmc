@@ -11,7 +11,7 @@ from .hyperltl_support import require_hyperltl_parse_result_references, require_
 from .hyperltl_types import HyperFormula
 from .parser import ParseResult
 from .smv_parser import parse_smv
-from .smv_to_gc import smv_to_gc, smv_to_symbol_parse_result
+from .smv_to_gc import SmvLoweringStrategy, smv_to_gc, smv_to_symbol_parse_result
 from .smv_types import SmvModel
 
 
@@ -39,8 +39,18 @@ def format_smv_model(model: SmvModel) -> str:
     return "\n".join(lines)
 
 
-def format_gc_result_from_smv(model: SmvModel, result: ParseResult | None = None) -> str:
-    result = result or smv_to_gc(model)
+def format_gc_result_from_smv(
+    model: SmvModel,
+    result: ParseResult | None = None,
+    *,
+    lowering_strategy: SmvLoweringStrategy = "naive",
+    control_variables: tuple[str, ...] | None = None,
+) -> str:
+    result = result or smv_to_gc(
+        model,
+        lowering_strategy=lowering_strategy,
+        control_variables=control_variables,
+    )
     return format_gc_parse_result(result, header=f"// SMV module {model.module} -> guarded commands")
 
 
@@ -100,6 +110,18 @@ def read_hyperltl_input(path, text: str | None, result: ParseResult) -> HyperFor
     return formula
 
 
+def parse_control_variables(values: list[str] | None) -> tuple[str, ...] | None:
+    if not values:
+        return None
+    result: list[str] = []
+    for raw in values:
+        for name in raw.split(","):
+            stripped = name.strip()
+            if stripped and stripped not in result:
+                result.append(stripped)
+    return tuple(result)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Import a NuSMV/SMV file and print the derived guarded-command model.",
@@ -135,6 +157,24 @@ reduce a supported universal HyperLTL property to LTL over self-composed GC.
         default=None,
         help="Inline HyperLTL property text to parse/check.",
     )
+    parser.add_argument(
+        "--smv-lowering",
+        choices=("naive", "partition"),
+        default="naive",
+        help=(
+            "SMV next-state lowering strategy. 'naive' expands per-variable alternatives. "
+            "'partition' fixes control-variable cells first, defaulting to pc when present."
+        ),
+    )
+    parser.add_argument(
+        "--control-var",
+        action="append",
+        default=None,
+        help=(
+            "Control variable for --smv-lowering partition. May be repeated or comma-separated. "
+            "If omitted, partition lowering uses pc when the model declares it."
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -143,7 +183,12 @@ reduce a supported universal HyperLTL property to LTL over self-composed GC.
             print("Error: empty input", file=sys.stderr)
             return 1
         model = parse_smv(text)
-        result = smv_to_symbol_parse_result(model) if args.ast else smv_to_gc(model)
+        control_variables = parse_control_variables(args.control_var)
+        result = smv_to_symbol_parse_result(model) if args.ast else smv_to_gc(
+            model,
+            lowering_strategy=args.smv_lowering,
+            control_variables=control_variables,
+        )
         hyper_formula = read_hyperltl_input(args.hyper, args.hyper_text, result)
         if args.ast:
             output = format_smv_model(model)

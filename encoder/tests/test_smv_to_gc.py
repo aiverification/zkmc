@@ -168,6 +168,101 @@ ASSIGN
     assert "x = 1" in output
 
 
+def test_partition_lowering_compacts_same_update_vector_over_pc_ranges():
+    model = parse_smv("""
+MODULE main
+VAR
+  pc : 0..2;
+  x : 0..2;
+  y : 0..2;
+ASSIGN
+  init(pc) := 0;
+  init(x) := 0;
+  init(y) := 0;
+  next(pc) := pc;
+  next(x) :=
+    case
+      pc = 0 : 1;
+      pc = 1 : 1;
+      TRUE : 2;
+    esac;
+  next(y) :=
+    case
+      pc = 0 : 1;
+      pc = 1 : 1;
+      TRUE : 2;
+    esac;
+""")
+
+    naive = smv_to_gc(model)
+    partitioned = smv_to_gc(model, lowering_strategy="partition")
+
+    assert len(naive.commands) == 3
+    assert len(partitioned.commands) == 2
+    assert (partitioned.commands[0].guards[0].left, partitioned.commands[0].guards[0].op) == (
+        Var("pc"),
+        CompOp.LE,
+    )
+    assert partitioned.commands[0].guards[0].right == Num(1)
+
+
+def test_partition_lowering_accepts_explicit_control_variable_set():
+    result = import_smv(
+        """
+MODULE main
+VAR
+  phase : 0..1;
+  x : 0..1;
+ASSIGN
+  init(phase) := 0;
+  init(x) := 0;
+  next(phase) := phase;
+  next(x) :=
+    case
+      phase = 0 : 0;
+      TRUE : 1;
+    esac;
+""",
+        lowering_strategy="partition",
+        control_variables=("phase",),
+    )
+
+    assert len(result.commands) == 2
+    assert all(command.guards[0].left == Var("phase") for command in result.commands)
+
+
+def test_smv_cli_accepts_partition_lowering_option(tmp_path, capsys):
+    smv_path = tmp_path / "model.smv"
+    smv_path.write_text("""
+MODULE main
+VAR
+  pc : 0..1;
+  x : 0..1;
+ASSIGN
+  init(pc) := 0;
+  init(x) := 0;
+  next(pc) := pc;
+  next(x) :=
+    case
+      pc = 0 : 0;
+      TRUE : 1;
+    esac;
+""")
+
+    exit_code = smv_cli_main([
+        str(smv_path),
+        "--smv-lowering",
+        "partition",
+        "--control-var",
+        "pc",
+    ])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "[] pc = 0 -> pc = pc; x = 0" in output
+    assert "[] pc = 1 -> pc = pc; x = 1" in output
+
+
 def test_smv_cli_accepts_supported_hyperltl(tmp_path, capsys):
     smv_path = tmp_path / "model.smv"
     hq_path = tmp_path / "property.hq"
