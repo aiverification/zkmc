@@ -1,6 +1,6 @@
 """Parser for guarded commands, ranking functions, init conditions, and automaton transitions using Lark."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from lark import Lark, Transformer, v_args
 
@@ -28,6 +28,7 @@ class ParseResult:
     automaton_initial_states: list[str] | None       # Q_0 (None = use all states with ranking functions)
     aps: dict[str, list[Comparison]]                 # LTL atomic propositions: name -> conjunction of comparisons
     ltl_formula: str | None                          # LTL property (Spot syntax); automaton derived from !(formula)
+    observable_symbols: set[str] = field(default_factory=set)  # Extra symbols properties may reference
 
 
 class ASTTransformer(Transformer):

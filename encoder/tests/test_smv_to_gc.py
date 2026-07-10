@@ -4,7 +4,7 @@ import pytest
 
 from zkterm_tool import import_smv, parse_smv, smv_to_gc
 from zkterm_tool.ast_types import BinOp, CompOp, Num, Var
-from zkterm_tool.smv_cli import format_gc_result_from_smv
+from zkterm_tool.smv_cli import format_gc_result_from_smv, main as smv_cli_main
 
 
 def test_lower_types_and_init_conditions():
@@ -166,3 +166,69 @@ ASSIGN
     assert "type x: 0..1" in output
     assert "init: x = 0" in output
     assert "x = 1" in output
+
+
+def test_smv_cli_accepts_supported_hyperltl(tmp_path, capsys):
+    smv_path = tmp_path / "model.smv"
+    hq_path = tmp_path / "property.hq"
+    smv_path.write_text("""
+MODULE main
+VAR
+  x : 0..1;
+ASSIGN
+  init(x) := 0;
+  next(x) := x;
+""")
+    hq_path.write_text('forall A. forall B. G({"x"_A = "x"_B})')
+
+    exit_code = smv_cli_main([str(smv_path), "--hyper", str(hq_path)])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "HyperLTL property" in output
+    assert "support: supported parser fragment" in output
+    assert "reduction: not implemented in this step" in output
+
+
+def test_smv_cli_rejects_unsupported_hyperltl(tmp_path, capsys):
+    smv_path = tmp_path / "model.smv"
+    smv_path.write_text("""
+MODULE main
+VAR
+  x : 0..1;
+ASSIGN
+  init(x) := 0;
+  next(x) := x;
+""")
+
+    exit_code = smv_cli_main([
+        str(smv_path),
+        "--hyper-text",
+        'forall A. exists B. G({"x"_A = "x"_B})',
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "quantifier alternation" in captured.err
+
+
+def test_smv_cli_rejects_hyperltl_unknown_smv_symbol(tmp_path, capsys):
+    smv_path = tmp_path / "model.smv"
+    smv_path.write_text("""
+MODULE main
+VAR
+  x : 0..1;
+ASSIGN
+  init(x) := 0;
+  next(x) := x;
+""")
+
+    exit_code = smv_cli_main([
+        str(smv_path),
+        "--hyper-text",
+        'forall A. forall B. G({"missing"_A = "x"_B})',
+    ])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "unknown SMV symbol" in captured.err

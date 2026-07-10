@@ -56,6 +56,7 @@ class _SmvLowerer:
             automaton_initial_states=None,
             aps={},
             ltl_formula=None,
+            observable_symbols=set(self.variables) | set(self.defines),
         )
 
     def _build_enum_value_map(self) -> dict[str, int]:
@@ -352,6 +353,28 @@ class _SmvLowerer:
 def smv_to_gc(model: SmvModel) -> ParseResult:
     """Lower a parsed SMV model into the guarded-command ParseResult IR."""
     return _SmvLowerer(model).lower()
+
+
+def smv_to_symbol_parse_result(model: SmvModel) -> ParseResult:
+    """Build a lightweight ParseResult for symbol/reference checks.
+
+    This does not lower next-state semantics. It exists so parser/support
+    operations can use the common ParseResult interface without forcing command
+    expansion.
+    """
+    lowerer = _SmvLowerer(model)
+    return ParseResult(
+        constants={},
+        types=lowerer._lower_types(),
+        init_condition=None,
+        commands=[],
+        ranking_functions={},
+        automaton_transitions=[],
+        automaton_initial_states=None,
+        aps={},
+        ltl_formula=None,
+        observable_symbols=set(lowerer.variables) | set(lowerer.defines),
+    )
 
 
 def import_smv(text: str) -> ParseResult:

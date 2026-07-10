@@ -233,6 +233,7 @@ def import_koat(text: str) -> ParseResult:
         automaton_initial_states=["q0"],
         aps={},
         ltl_formula=None,
+        observable_symbols=set(program_vars) | {pc},
     )
 
 
