@@ -1,4 +1,4 @@
-"""CLI for parsing a NuSMV/SMV file and printing the parsed SMV AST summary."""
+"""CLI for importing a NuSMV/SMV file and printing the derived guarded commands."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from .smv_parser import parse_smv
+from .smv_to_gc import smv_to_gc
 from .smv_types import SmvModel
 
 
@@ -33,14 +34,32 @@ def format_smv_model(model: SmvModel) -> str:
     return "\n".join(lines)
 
 
+def format_gc_result_from_smv(model: SmvModel) -> str:
+    result = smv_to_gc(model)
+    lines: list[str] = [f"// SMV module {model.module} -> guarded commands"]
+
+    if result.types:
+        for type_def in result.types.values():
+            lines.append(str(type_def))
+
+    init_str = " && ".join(str(c) for c in result.init_condition) if result.init_condition else "true"
+    lines.append(f"init: {init_str}")
+    lines.append("")
+
+    for command in result.commands:
+        lines.append(str(command))
+
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Parse a NuSMV/SMV file and print the parsed model summary.",
+        description="Import a NuSMV/SMV file and print the derived guarded-command model.",
         epilog="""
 Example:
   zksmv model.smv
 
-This command only parses SMV. SMV-to-GC lowering is intentionally not wired in yet.
+Use --ast to print the parsed SMV AST summary instead of the derived guarded commands.
         """,
     )
     parser.add_argument(
@@ -50,6 +69,11 @@ This command only parses SMV. SMV-to-GC lowering is intentionally not wired in y
         default=sys.stdin,
         help="Input .smv file (default: stdin)",
     )
+    parser.add_argument(
+        "--ast",
+        action="store_true",
+        help="Print the parsed SMV AST summary instead of the lowered guarded commands.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -58,7 +82,10 @@ This command only parses SMV. SMV-to-GC lowering is intentionally not wired in y
             print("Error: empty input", file=sys.stderr)
             return 1
         model = parse_smv(text)
-        print(format_smv_model(model))
+        if args.ast:
+            print(format_smv_model(model))
+        else:
+            print(format_gc_result_from_smv(model))
         return 0
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
