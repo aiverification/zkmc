@@ -22,6 +22,7 @@ zkexplicit = "zkterm_tool.explicit_cli:main"
 zkltl = "zkterm_tool.ltl_cli:main"
 zksynth = "zkterm_tool.synth_cli:main"
 zkits = "zkterm_tool.koat_cli:main"
+zksmv = "zkterm_tool.smv_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.18,<0.10.0"]

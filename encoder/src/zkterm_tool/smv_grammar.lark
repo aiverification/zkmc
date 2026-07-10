@@ -1,0 +1,95 @@
+// Small NuSMV/SMV grammar for the first parser-only import step.
+//
+// Supported:
+//   MODULE main
+//   VAR declarations with boolean, integer ranges, and enum types
+//   DEFINE declarations
+//   ASSIGN init(x), next(x), and current assignment forms
+//   expressions with arithmetic, comparisons, boolean connectives, sets, and case/esac
+
+start: module
+
+module: "MODULE" NAME module_args? section*
+module_args: "(" name_list? ")"
+name_list: NAME ("," NAME)*
+
+section: var_section
+       | define_section
+       | assign_section
+
+var_section: "VAR" var_decl+
+var_decl: NAME ":" smv_type ";"
+
+smv_type: BOOLEAN_TYPE              -> boolean_type
+        | SIGNED_INT ".." SIGNED_INT -> range_type
+        | "{" enum_values "}"     -> enum_type
+
+enum_values: enum_value ("," enum_value)*
+enum_value: NAME
+          | SIGNED_INT
+          | TRUE
+          | FALSE
+
+define_section: "DEFINE" define_decl+
+define_decl: NAME ":=" expr ";"
+
+assign_section: "ASSIGN" assign_decl+
+assign_decl: "init" "(" NAME ")" ":=" expr ";" -> init_assign
+           | "next" "(" NAME ")" ":=" expr ";" -> next_assign
+           | NAME ":=" expr ";"                 -> current_assign
+
+?expr: case_expr
+     | or_expr
+
+case_expr: "case" case_arm+ "esac"
+case_arm: expr ":" expr ";"
+
+?or_expr: or_expr "|" and_expr       -> or_expr
+        | and_expr
+
+?and_expr: and_expr "&" equality_expr -> and_expr
+         | equality_expr
+
+?equality_expr: equality_expr EQ_OP relation_expr -> op_binary
+              | relation_expr
+
+?relation_expr: relation_expr REL_OP sum -> op_binary
+              | sum
+
+?sum: sum ADD_OP product -> op_binary
+    | product
+
+?product: product MUL_OP unary -> op_binary
+        | unary
+
+?unary: "!" unary -> not_expr
+      | "-" unary -> neg_expr
+      | atom
+
+?atom: SIGNED_INT         -> int_expr
+     | TRUE               -> true_expr
+     | FALSE              -> false_expr
+     | NAME               -> name_expr
+     | set_expr
+     | "(" expr ")"
+
+set_expr: "{" expr_list? "}"
+expr_list: expr ("," expr)*
+
+BOOLEAN_TYPE.2: "boolean" | "BOOLEAN"
+TRUE.2: "TRUE" | "true"
+FALSE.2: "FALSE" | "false"
+EQ_OP: "=" | "!="
+REL_OP: "<=" | ">=" | "<" | ">"
+ADD_OP: "+" | "-"
+MUL_OP: "*"
+
+NAME: /[A-Za-z_][A-Za-z_0-9$]*/
+SIGNED_INT: /-?[0-9]+/
+INT: /[0-9]+/
+
+COMMENT: /--[^\n]*/
+
+%import common.WS
+%ignore WS
+%ignore COMMENT

@@ -70,16 +70,16 @@ For the full `.gc` language — constants, types, initial conditions, guarded co
 
 The package installs eight commands. All accept `.gc` input (and `zkverify`/`zksynth`/`zkits` also accept KoAT `.koat` integer transition systems) and share the `--const NAME=VALUE` flag for overriding constants.
 
-| Tool | Purpose | Input | Output |
-|------|---------|-------|--------|
-| `zkterm` | Encode guarded commands, init, and automaton transitions as matrix inequalities `A x ≤ b` | `.gc` file or stdin | Matrices (optionally symbolic with `-s`) |
-| `zkrank` | Encode ranking functions as `(W_j, u_j, C_j, d_j)` per case | `.gc` file or stdin | Ranking-function encodings |
-| `zkverify` | Verify termination obligations via Farkas' lemma + Z3 (optionally `--synthesize`) | `.gc` file | Pass/fail summary with witnesses (`-v`) |
-| `zkfarkas` | Export Farkas dual obligations as JSON for external solvers / ZK pipelines | `.gc` file | JSON: `A_s`, `b_s`, `G_p`, `h_p`, multipliers |
-| `zkexplicit` | Explicit-state verification by enumeration, plus BN254 field embeddings | `.gc` file + bounds | JSON: violation/valid sets, embeddings |
-| `zkltl` | Derive the Büchi automaton from an LTL `spec:` via Spot and print it | `.gc` file with `spec:` (needs Spot) | `automaton_init` + `trans`/`trans!` declarations |
-| `zksynth` | Synthesize a linear ranking function per automaton state (Tier 1) and print it | `.gc` file (no `rank(...)` needed) | `rank(q)` declarations |
-| `zkits` | Import a KoAT `.koat` integer transition system and print the derived guarded commands | `.koat` file | guarded commands + termination automaton |
+| Tool           | Purpose                                                                                     | Input                                    | Output                                                 |
+| -------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
+| `zkterm`     | Encode guarded commands, init, and automaton transitions as matrix inequalities`A x ≤ b` | `.gc` file or stdin                    | Matrices (optionally symbolic with`-s`)              |
+| `zkrank`     | Encode ranking functions as`(W_j, u_j, C_j, d_j)` per case                                | `.gc` file or stdin                    | Ranking-function encodings                             |
+| `zkverify`   | Verify termination obligations via Farkas' lemma + Z3 (optionally`--synthesize`)          | `.gc` file                             | Pass/fail summary with witnesses (`-v`)              |
+| `zkfarkas`   | Export Farkas dual obligations as JSON for external solvers / ZK pipelines                  | `.gc` file                             | JSON:`A_s`, `b_s`, `G_p`, `h_p`, multipliers   |
+| `zkexplicit` | Explicit-state verification by enumeration, plus BN254 field embeddings                     | `.gc` file + bounds                    | JSON: violation/valid sets, embeddings                 |
+| `zkltl`      | Derive the Büchi automaton from an LTL`spec:` via Spot and print it                      | `.gc` file with `spec:` (needs Spot) | `automaton_init` + `trans`/`trans!` declarations |
+| `zksynth`    | Synthesize a linear ranking function per automaton state (Tier 1) and print it              | `.gc` file (no `rank(...)` needed)   | `rank(q)` declarations                               |
+| `zkits`      | Import a KoAT`.koat` integer transition system and print the derived guarded commands     | `.koat` file                           | guarded commands + termination automaton               |
 
 Each tool has complete flag documentation via `--help`; what follows are one-line intros and minimal invocations.
 

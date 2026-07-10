@@ -42,6 +42,26 @@ from .ltl import (
 )
 from .synth import synthesize_rankings, synthesize_into, SynthesisError
 from .koat import import_koat, import_koat_file
+from .smv_parser import parse_smv, parse_smv_file
+from .smv_types import (
+    SmvAssignment,
+    SmvBinary,
+    SmvBool,
+    SmvBooleanType,
+    SmvCase,
+    SmvCaseArm,
+    SmvDefine,
+    SmvEnumType,
+    SmvExpr,
+    SmvInt,
+    SmvModel,
+    SmvName,
+    SmvRangeType,
+    SmvSet,
+    SmvType,
+    SmvUnary,
+    SmvVar,
+)
 
 
 def verify_termination(result: ParseResult) -> VerificationResult:
@@ -106,4 +126,10 @@ __all__ = [
     "synthesize_rankings", "synthesize_into", "SynthesisError",
     # KoAT ITS import
     "import_koat", "import_koat_file",
+    # SMV parser
+    "parse_smv", "parse_smv_file",
+    "SmvAssignment", "SmvBinary", "SmvBool", "SmvBooleanType", "SmvCase",
+    "SmvCaseArm", "SmvDefine", "SmvEnumType", "SmvExpr", "SmvInt",
+    "SmvModel", "SmvName", "SmvRangeType", "SmvSet", "SmvType",
+    "SmvUnary", "SmvVar",
 ]
