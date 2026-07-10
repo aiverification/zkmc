@@ -274,9 +274,9 @@ pub fn prove(
         second_basis_vec.push(pp.g_hat_mat[0][0] * (-h_p_T[0][k]));
         third_basis_vec.push(pp.g_hat_mat[k][0])
     }
-    let mu_T_flat: Vec<ZpElement> = mu_T[0].iter().map(|m| ZpElement::from(*m as u64)).collect();
+    let mu_T_flat: Vec<ZpElement> = mu_T[0].iter().map(|m| ZpElement::from(*m as u64)).collect(); // m > 0 so this is fine
     let equal_proof = zkmmeq::prove(
-    &pp, 
+    &pp.zk_matrix_srs, 
     &vec![e_1_blind, e_3_blind],
     &vec![e_1_r, e_3_r],
     &vec![&first_basis_vec, &second_basis_vec],
@@ -564,7 +564,7 @@ impl ZkpProof {
             third_basis_vec.push(pp.g_hat_mat[k][0])
         }
         let equal_verified = self.equal_proof.verify(
-            &pp,
+            &pp.zk_matrix_srs,
             &vec![self.c_e_1, self.c_e_3],
             &vec![&first_basis_vec, &second_basis_vec],
             &third_basis_vec,

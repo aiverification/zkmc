@@ -123,3 +123,11 @@ pub fn get_bls_gt_zero() -> bls::GtElement {
     let P = bls::GtElement::generator();
     return P - P;
 }
+
+pub fn i64_to_zp(v: i64) -> bls::ZpElement {
+    if v >= 0 {
+        bls::ZpElement::from(v as u64)
+    } else {
+        -bls::ZpElement::from(v.unsigned_abs() as u64)
+    }
+}

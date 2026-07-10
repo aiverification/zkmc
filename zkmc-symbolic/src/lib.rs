@@ -1,3 +1,4 @@
+pub mod execution_proof;
 pub mod range_proof;
 pub mod utils;
 pub mod zkmmeq;

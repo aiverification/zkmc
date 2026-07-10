@@ -1,9 +1,9 @@
 use bls::{GtElement, ZpElement};
+use zkmatrix::setup::SRS;
 use zkmatrix::utils::curve as bls;
 use zkmatrix::utils::fiat_shamir::{TranElem, TranSeq};
 
 use crate::utils::get_bls_gt_zero;
-use crate::zkp::ZkpSRS;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EqualProof {
@@ -16,7 +16,7 @@ pub struct EqualProof {
 
 //We calculate g_hat_j and g_hat_x vectors inside ZKP itself
 pub fn prove(
-    sp: &ZkpSRS,
+    sp: &SRS,
     c_j: &Vec<GtElement>,
     r_j: &Vec<ZpElement>,
     g_j: &Vec<&Vec<GtElement>>,
@@ -41,9 +41,9 @@ pub fn prove(
             t_j[k] += g_j[k][i] * *r;
         }
     }
-    t_x += sp.zk_matrix_srs.blind_base * sigma_x;
+    t_x += sp.blind_base * sigma_x;
     for k in 0..j{
-        t_j[k] += sp.zk_matrix_srs.blind_base * sigma_j[k];
+        t_j[k] += sp.blind_base * sigma_j[k];
     }
 
     //Order differs to paper but this doesn't matter as long as we are consistent
@@ -80,7 +80,7 @@ impl EqualProof {
     //TODO - add abort checks in verify (IF t, h == zero OR t, h not on curve)
     pub fn verify(
         &self,
-        sp: &ZkpSRS,
+        sp: &SRS,
         c_j: &Vec<GtElement>,
         g_j: &Vec<&Vec<GtElement>>,
         g_x: &Vec<GtElement>,
@@ -107,9 +107,9 @@ impl EqualProof {
             }
         }
 
-        lhs_x += sp.zk_matrix_srs.blind_base * self.w_x;
+        lhs_x += sp.blind_base * self.w_x;
         for k in 0..j{
-            lhs_j[k] += sp.zk_matrix_srs.blind_base * self.w_j[k];
+            lhs_j[k] += sp.blind_base * self.w_j[k];
         }
         let rhs_x = self.t_x + (c_x * e);
         let mut rhs_j = vec![];
