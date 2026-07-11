@@ -10,12 +10,140 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .parser import parse_with_constants
+from .ast_types import BinOp, Neg, Var
+from .parser import ParseResult, parse_with_constants
 from .encoder import encode_init, encode_program
 from .ranking_encoder import encode_ranking_functions
 from .automaton_encoder import encode_automaton_transitions
+from .ltl import resolve_automaton
+from .synth import synthesize_into
 from .state_enumerator import create_state_space
 from .violation_checker import compute_violation_sets, compute_embeddings, verify_disjointness
+
+
+DEFAULT_FIELD_SIZE = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+
+
+def _collect_expr_vars(expr, variables: set[str]) -> None:
+    if isinstance(expr, Var):
+        variables.add(expr.name)
+    elif isinstance(expr, BinOp):
+        _collect_expr_vars(expr.left, variables)
+        _collect_expr_vars(expr.right, variables)
+    elif isinstance(expr, Neg):
+        _collect_expr_vars(expr.expr, variables)
+
+
+def explicit_json_from_parse_result(
+    result: ParseResult,
+    *,
+    bounds: list[str] | None = None,
+    field_size: int = DEFAULT_FIELD_SIZE,
+    verbose: bool = False,
+    sort_embeddings: bool = False,
+    ltl2tgba_path: str | None = None,
+    synthesize: bool = False,
+    synth_kwargs: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[str]]:
+    """Compute explicit-state ZKMC JSON from an already-built ParseResult.
+
+    This is the reusable core behind `zkexplicit` and the `.smv + .hq`
+    pipeline. If `result` contains an LTL `spec:`, the Büchi automaton for the
+    negated property is derived before enumeration. If `synthesize` is true,
+    missing ranking functions are generated with the same synthesizer used by
+    `zkverify --synthesize`.
+    """
+    warnings: list[str] = []
+    if result.ltl_formula is not None and not result.automaton_transitions:
+        result = resolve_automaton(result, ltl2tgba_path)
+
+    if synthesize:
+        synthesize_into(result, **(synth_kwargs or {}))
+
+    if not result.ranking_functions:
+        raise ValueError("No ranking functions defined")
+
+    if not result.automaton_transitions:
+        raise ValueError("No automaton transitions defined")
+
+    rank_encs = encode_ranking_functions(result.ranking_functions)
+    trans_encs = encode_program(result.commands, nonstrict_only=True, types=result.types) if result.commands else []
+
+    all_vars: set[str] = set()
+    for enc in rank_encs.values():
+        all_vars.update(enc.variables)
+
+    aut_encs = encode_automaton_transitions(result.automaton_transitions)
+    for enc in aut_encs:
+        all_vars.update(enc.variables)
+
+    for enc in trans_encs:
+        all_vars.update(enc.variables)
+
+    if result.init_condition:
+        for guard in result.init_condition:
+            _collect_expr_vars(guard.left, all_vars)
+            _collect_expr_vars(guard.right, all_vars)
+
+    variables = sorted(all_vars)
+    init_enc = encode_init(result.init_condition, variables, types=result.types) if result.init_condition else None
+
+    bounds_dict: dict[str, str] = {}
+    for var_name, type_def in result.types.items():
+        bounds_dict[var_name] = f"{var_name}:{type_def.min_value}:{type_def.max_value}"
+
+    if bounds:
+        for bound_spec in bounds:
+            parts = bound_spec.split(":")
+            if len(parts) != 3:
+                raise ValueError(f"Invalid bound specification '{bound_spec}'. Use format VAR:MIN:MAX.")
+            bounds_dict[parts[0]] = bound_spec
+
+    bounds_list = list(bounds_dict.values())
+    missing_bounds = set(variables) - {b.split(":")[0] for b in bounds_list}
+    if missing_bounds:
+        missing = ", ".join(sorted(missing_bounds))
+        raise ValueError(
+            f"No bounds specified for variables: {missing}. "
+            f"Either add type annotations or use --bounds "
+            f"{' '.join(f'{v}:MIN:MAX' for v in sorted(missing_bounds))}"
+        )
+
+    state_space = create_state_space(variables, bounds_list)
+
+    if result.automaton_initial_states is None:
+        raise ValueError("No automaton initial states specified. Add `automaton_init: q0, ...`.")
+
+    violations = compute_violation_sets(
+        state_space,
+        rank_encs,
+        aut_encs,
+        init_enc,
+        result.automaton_initial_states,
+        trans_encs,
+    )
+
+    verification_checks = verify_disjointness(violations)
+    if not verification_checks.all_disjoint:
+        warnings.append("Verification failed - some sets are not disjoint")
+        if not verification_checks.init_disjoint:
+            warnings.append(f"S0 ∩ B_init != empty ({verification_checks.init_intersection_size} states)")
+        if not verification_checks.step_disjoint:
+            warnings.append(f"T ∩ B_step != empty ({verification_checks.step_intersection_size} transitions)")
+        if not verification_checks.fairstep_disjoint:
+            warnings.append(f"T ∩ B_fairstep != empty ({verification_checks.fairstep_intersection_size} transitions)")
+
+    embeddings = compute_embeddings(violations, field_size)
+    output = violations_to_json(
+        violations,
+        embeddings,
+        verification_checks,
+        verbose,
+        sort_embeddings,
+        state_space,
+        result.constants,
+    )
+    return output, warnings
 
 
 def violations_to_json(
@@ -226,7 +354,7 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
     parser.add_argument(
         "--field-size",
         type=int,
-        default=52435875175126190479447740508185965837690552500527637822603658699938581184513,
+        default=DEFAULT_FIELD_SIZE,
         help="Prime field size for embeddings (default: BLS12-381 scalar field)"
     )
 
@@ -264,145 +392,16 @@ Use --sort-embeddings to sort embedding lists numerically instead of maintaining
                     return 1
 
         text = file_path.read_text()
-        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
-
-        # Check required components
-        if not result.ranking_functions:
-            print("Error: No ranking functions defined", file=sys.stderr)
-            return 1
-
-        if not result.automaton_transitions:
-            print("Error: No automaton transitions defined", file=sys.stderr)
-            return 1
-
-        # Encode ranking functions
-        rank_encs = encode_ranking_functions(result.ranking_functions)
-
-        # Encode program transitions (for computing T)
-        trans_encs = encode_program(result.commands, nonstrict_only=True, types=result.types) if result.commands else []
-
-        # Get all variables from all components
-        all_vars = set()
-
-        # From ranking functions
-        for enc in rank_encs.values():
-            all_vars.update(enc.variables)
-
-        # From automaton transitions
-        aut_encs = encode_automaton_transitions(result.automaton_transitions)
-        for enc in aut_encs:
-            all_vars.update(enc.variables)
-
-        # From program transitions
-        for enc in trans_encs:
-            all_vars.update(enc.variables)
-
-        # From init condition (extract variables without encoding yet)
-        if result.init_condition:
-            for guard in result.init_condition:
-                # Extract variables from guard expressions
-                def collect_vars(expr):
-                    from .ast_types import Var, BinOp, Neg
-                    if isinstance(expr, Var):
-                        all_vars.add(expr.name)
-                    elif isinstance(expr, BinOp):
-                        collect_vars(expr.left)
-                        collect_vars(expr.right)
-                    elif isinstance(expr, Neg):
-                        collect_vars(expr.expr)
-
-                collect_vars(guard.left)
-                collect_vars(guard.right)
-
-        variables = sorted(all_vars)
-
-        # Now encode init with full variable list
-        if result.init_condition:
-            init_enc = encode_init(result.init_condition, variables, types=result.types)
-        else:
-            init_enc = None
-
-        # Build bounds: start with types, then override with --bounds
-        bounds_dict = {}
-
-        # First, use type annotations as defaults
-        for var_name, type_def in result.types.items():
-            bounds_dict[var_name] = f"{var_name}:{type_def.min_value}:{type_def.max_value}"
-
-        # Then, override with explicit --bounds args if provided
-        if args.bounds:
-            for bound_spec in args.bounds:
-                # Parse bound to get variable name
-                parts = bound_spec.split(":")
-                if len(parts) == 3:
-                    var_name = parts[0]
-                    bounds_dict[var_name] = bound_spec
-                else:
-                    print(f"Error: Invalid bound specification '{bound_spec}'. Use format VAR:MIN:MAX.", file=sys.stderr)
-                    return 1
-
-        # Convert bounds_dict to list for create_state_space
-        bounds_list = list(bounds_dict.values())
-
-        # Check that all variables have bounds (either from types or CLI)
-        missing_bounds = set(variables) - {b.split(":")[0] for b in bounds_list}
-        if missing_bounds:
-            print(f"Error: No bounds specified for variables: {', '.join(sorted(missing_bounds))}", file=sys.stderr)
-            print(f"Either add type annotations or use --bounds {' '.join(f'{v}:MIN:MAX' for v in sorted(missing_bounds))}", file=sys.stderr)
-            return 1
-
-        # Create state space from bounds
-        try:
-            state_space = create_state_space(variables, bounds_list)
-        except ValueError as e:
-            print(f"Error in bounds: {e}", file=sys.stderr)
-            return 1
-
-        # Determine automaton initial states (Q_0)
-        # Require explicit automaton_init declaration
-        if result.automaton_initial_states is None:
-            print("Error: No automaton initial states specified. Add 'automaton_init: q0, ...' to your program.", file=sys.stderr)
-            return 1
-
-        automaton_initial_states = result.automaton_initial_states
-
-        # Compute violation sets and valid sets
-        violations = compute_violation_sets(
-            state_space,
-            rank_encs,
-            aut_encs,
-            init_enc,
-            automaton_initial_states,
-            trans_encs
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
+        output, warnings = explicit_json_from_parse_result(
+            result,
+            bounds=args.bounds,
+            field_size=args.field_size,
+            verbose=args.verbose,
+            sort_embeddings=args.sort_embeddings,
         )
-
-        # Verify disjointness
-        verification_checks = verify_disjointness(violations)
-
-        # Warn if verification failed
-        if not verification_checks.all_disjoint:
-            print("Warning: Verification failed - some sets are not disjoint:", file=sys.stderr)
-            if not verification_checks.init_disjoint:
-                print(f"  - S0 ∩ B_init ≠ ∅ ({verification_checks.init_intersection_size} states in common)", file=sys.stderr)
-            if not verification_checks.step_disjoint:
-                print(f"  - T ∩ B_step ≠ ∅ ({verification_checks.step_intersection_size} transitions in common)", file=sys.stderr)
-            if not verification_checks.fairstep_disjoint:
-                print(f"  - T ∩ B_fairstep ≠ ∅ ({verification_checks.fairstep_intersection_size} transitions in common)", file=sys.stderr)
-            print(file=sys.stderr)  # Empty line for readability
-
-        # Always compute embeddings (default behavior)
-        embeddings = compute_embeddings(violations, args.field_size)
-
-        # Convert to JSON with verbose and sort_embeddings flags
-        output = violations_to_json(
-            violations,
-            embeddings,
-            verification_checks,
-            args.verbose,
-            args.sort_embeddings,
-            state_space,
-            result.constants
-        )
+        for warning in warnings:
+            print(f"Warning: {warning}", file=sys.stderr)
 
         # Output
         if args.pretty:

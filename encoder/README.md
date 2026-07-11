@@ -8,6 +8,7 @@ The toolkit covers four concerns:
 2. **Ranking encoding** — piecewise-linear ranking functions → `(W_j, u_j, C_j, d_j)` per case.
 3. **Symbolic verification** — check termination obligations via Farkas' lemma and Z3.
 4. **ZK-friendly export** — Farkas duals as JSON, or explicit-state enumeration with field embeddings.
+5. **SMV + HyperLTL import** — supported `.smv` models and universal `.hq` HyperLTL properties can be lowered to self-composed `.gc`/explicit ZKMC JSON.
 
 The `.gc` input language is described in [LANGUAGE.md](LANGUAGE.md).
 
@@ -68,7 +69,7 @@ For the full `.gc` language — constants, types, initial conditions, guarded co
 
 ## Command-line tools
 
-The package installs eight commands. All accept `.gc` input (and `zkverify`/`zksynth`/`zkits` also accept KoAT `.koat` integer transition systems) and share the `--const NAME=VALUE` flag for overriding constants.
+The package installs ten commands. Most accept `.gc` input; `zkits` imports KoAT `.koat`, `zksmv` imports `.smv`, and `zkhypersmv` runs the integrated `.smv + .hq` HyperLTL pipeline.
 
 | Tool           | Purpose                                                                                     | Input                                    | Output                                                 |
 | -------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------ |
@@ -80,6 +81,8 @@ The package installs eight commands. All accept `.gc` input (and `zkverify`/`zks
 | `zkltl`      | Derive the Büchi automaton from an LTL`spec:` via Spot and print it                      | `.gc` file with `spec:` (needs Spot) | `automaton_init` + `trans`/`trans!` declarations |
 | `zksynth`    | Synthesize a linear ranking function per automaton state (Tier 1) and print it              | `.gc` file (no `rank(...)` needed)   | `rank(q)` declarations                               |
 | `zkits`      | Import a KoAT`.koat` integer transition system and print the derived guarded commands     | `.koat` file                           | guarded commands + termination automaton               |
+| `zksmv`      | Parse/lower a supported SMV model, optionally reducing a supported HyperLTL property       | `.smv`, optional `.hq`                 | guarded commands / self-composed guarded commands       |
+| `zkhypersmv` | Full SMV + HyperLTL explicit ZKMC pipeline                                                  | `.smv` + `.hq` + rank harness          | explicit ZKMC JSON, optionally prover invocation         |
 
 Each tool has complete flag documentation via `--help`; what follows are one-line intros and minimal invocations.
 
@@ -187,6 +190,51 @@ uv run python benchmarks/run_its.py --corpus DIR   # batch-run a directory of .k
 ```
 
 Programs whose termination needs a multiphase/lexicographic measure (e.g. nested loops) are not yet handled — those are the target of the future MΦRF upgrade to the synthesizer.
+
+### `zksmv` — inspect SMV lowering
+
+Parses the supported NuSMV/SMV subset and lowers it to guarded commands. The lowering can be naive or partition-based. Partition lowering fixes control-state cells first, defaulting to `pc`, which avoids per-variable Cartesian explosion for `case`-heavy SMV models.
+
+```bash
+uv run zksmv model.smv --smv-lowering partition --control-var pc
+uv run zksmv model.smv --hyper property.hq --smv-lowering partition
+```
+
+### `zkhypersmv` — SMV + HyperLTL to ZKMC JSON
+
+Runs the integrated model-checking preparation pipeline:
+
+```text
+.smv model
+-> guarded commands
+-> .hq universal HyperLTL
+-> self-composed model
+-> reduced LTL spec
+-> Spot-derived bad-run automaton
+-> explicit ZKMC JSON
+```
+
+After the HyperLTL reduction reaches a normal `ParseResult` with `ap`/`spec`, `zkhypersmv` follows the same flow as the `.gc` tools: Spot derives the bad-run automaton and the existing synthesizer generates missing `rank(q)` declarations automatically. A `.gc` rank harness is optional and only needed as a manual override/fallback when the current synthesizer cannot find a ranking.
+
+```bash
+uv run zkhypersmv model.smv property.hq \
+  --smv-lowering partition --control-var pc \
+  --pretty --output proof-input.json
+```
+
+To inspect the reduced self-composed model before proof export:
+
+```bash
+uv run zkhypersmv model.smv property.hq --emit-gc
+```
+
+To run the explicit prover after JSON generation:
+
+```bash
+uv run zkhypersmv model.smv property.hq \
+  --output proof-input.json \
+  --prove-verify ../zkmc-explicit/target/release/prove_verify
+```
 
 ## Examples and benchmarks
 

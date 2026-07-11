@@ -34,7 +34,7 @@ from .violation_checker import (
     compute_embeddings,
     verify_disjointness
 )
-from .explicit_cli import violations_to_json
+from .explicit_cli import DEFAULT_FIELD_SIZE, explicit_json_from_parse_result, violations_to_json
 from .ltl import (
     resolve_automaton, derive_automaton, lower_to_transitions,
     parse_hoa, parse_label_to_dnf, negate_comparison, find_ltl2tgba,
@@ -149,7 +149,7 @@ __all__ = [
     "evaluate_ranking", "check_guard",
     "ViolationSets", "FieldEmbeddings", "VerificationChecks",
     "compute_violation_sets", "compute_embeddings", "verify_disjointness",
-    "violations_to_json",
+    "DEFAULT_FIELD_SIZE", "explicit_json_from_parse_result", "violations_to_json",
     # LTL -> automaton (via Spot)
     "resolve_automaton", "derive_automaton", "lower_to_transitions",
     "parse_hoa", "parse_label_to_dnf", "negate_comparison", "find_ltl2tgba",

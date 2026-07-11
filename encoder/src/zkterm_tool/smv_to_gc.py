@@ -218,29 +218,20 @@ class _SmvLowerer:
         if not next_assignments:
             return [GuardedCommand(guards=[], assignments=[], havoc=frozenset(self.variables))]
 
-        alternatives_by_target = [
-            (assignment.target, self._value_alternatives(assignment.expr))
-            for assignment in next_assignments
-        ]
-
         commands: list[GuardedCommand] = []
         for cell_guards in self._partition_cells():
             feasible_by_target: list[tuple[str, list[_ValueAlternative]]] = []
-            for target, alternatives in alternatives_by_target:
+            for assignment in next_assignments:
+                alternatives = self._value_alternatives_for_cell(assignment.expr, cell_guards)
                 feasible: list[_ValueAlternative] = []
                 for alternative in alternatives:
                     if not self._is_consistent(list(cell_guards) + list(alternative.guards)):
                         continue
-                    feasible.append(
-                        _ValueAlternative(
-                            guards=tuple(self._remove_control_guards(alternative.guards)),
-                            value=alternative.value,
-                        )
-                    )
+                    feasible.append(alternative)
                 if not feasible:
                     feasible_by_target = []
                     break
-                feasible_by_target.append((target, feasible))
+                feasible_by_target.append((assignment.target, feasible))
 
             if not feasible_by_target:
                 continue
@@ -431,6 +422,103 @@ class _SmvLowerer:
             return alternatives
 
         return [_ValueAlternative(guards=(), value=self._lower_value(expr))]
+
+    def _value_alternatives_for_cell(
+        self,
+        expr: SmvExpr,
+        cell_guards: tuple[Comparison, ...],
+    ) -> list[_ValueAlternative]:
+        if isinstance(expr, SmvSet):
+            return [
+                _ValueAlternative(guards=(), value=self._lower_value(value))
+                for value in expr.values
+            ]
+
+        if isinstance(expr, SmvCase):
+            alternatives: list[_ValueAlternative] = []
+            no_previous_arm: list[list[Comparison]] = [[]]
+
+            for arm in expr.arms:
+                arm_dnf = self._simplify_dnf_under_cell(self._guard_dnf(arm.guard), cell_guards)
+                active_dnf = self._dnf_and(no_previous_arm, arm_dnf)
+
+                for guards in active_dnf:
+                    for value_alt in self._value_alternatives_for_cell(arm.value, cell_guards):
+                        combined = self._dedupe_guards(list(guards) + list(value_alt.guards))
+                        if self._is_consistent(list(cell_guards) + combined):
+                            alternatives.append(
+                                _ValueAlternative(
+                                    guards=tuple(combined),
+                                    value=value_alt.value,
+                                )
+                            )
+
+                arm_not_dnf = self._simplify_dnf_under_cell(
+                    self._guard_not_dnf(arm.guard),
+                    cell_guards,
+                )
+                no_previous_arm = self._dnf_and(no_previous_arm, arm_not_dnf)
+                if not no_previous_arm:
+                    break
+
+            return alternatives
+
+        return [_ValueAlternative(guards=(), value=self._lower_value(expr))]
+
+    def _simplify_dnf_under_cell(
+        self,
+        dnf: list[list[Comparison]],
+        cell_guards: tuple[Comparison, ...],
+    ) -> list[list[Comparison]]:
+        simplified: list[list[Comparison]] = []
+        for conjunction in dnf:
+            if not self._is_consistent(list(cell_guards) + conjunction):
+                continue
+
+            residual: list[Comparison] = []
+            for guard in conjunction:
+                if self._guard_is_satisfied_by_cell(guard, cell_guards):
+                    continue
+                residual.append(guard)
+
+            if not residual:
+                return [[]]
+            simplified.append(self._dedupe_guards(residual))
+        return simplified
+
+    def _guard_is_satisfied_by_cell(
+        self,
+        guard: Comparison,
+        cell_guards: tuple[Comparison, ...],
+    ) -> bool:
+        if not isinstance(guard.left, Var) or not isinstance(guard.right, Num):
+            return False
+
+        cell_values = {
+            cell.left.name: cell.right.value
+            for cell in cell_guards
+            if (
+                isinstance(cell.left, Var)
+                and isinstance(cell.right, Num)
+                and cell.op == CompOp.EQ
+            )
+        }
+        value = cell_values.get(guard.left.name)
+        if value is None:
+            return False
+
+        bound = guard.right.value
+        if guard.op == CompOp.EQ:
+            return value == bound
+        if guard.op == CompOp.LT:
+            return value < bound
+        if guard.op == CompOp.LE:
+            return value <= bound
+        if guard.op == CompOp.GT:
+            return value > bound
+        if guard.op == CompOp.GE:
+            return value >= bound
+        return False
 
     def _lower_value(self, expr: SmvExpr) -> Expr:
         expr = self._resolve_define_expr(expr)
