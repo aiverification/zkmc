@@ -25,5 +25,9 @@ criterion = { version = "0.7", features = ["html_reports"] }
 name = "benchmark_full_parallel"
 harness = false
 
+[[bench]]
+name = "benchmark_full_parallel_cached"
+harness = false
+
 [patch.crates-io]
 curv-kzen = { git = "https://github.com/y1izwnxt0m4dows6/curv", branch = "fix-div-ceil" }
