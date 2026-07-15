@@ -3,6 +3,7 @@
 
 # Generated benchmark output
 /artifacts/
+/examples/exb_i1a2.json
 *.log
 
 # Python caches and local environments
