@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "benchmark": "phase2_smoke",
+  "model_tag": 101,
+  "certificate_tag": 202,
+  "bound": 255,
+  "obligations": [
+    {
+      "kind": "init",
+      "label": "initial finite rank",
+      "a_s": [[-1, 0]],
+      "b_s": [0],
+      "g_p": [[1, 0]],
+      "h_p": [-2],
+      "lambda": [1],
+      "mu": [1]
+    },
+    {
+      "kind": "step",
+      "label": "ordinary nonincrease",
+      "a_s": [[1, 1], [-1, -1]],
+      "b_s": [0, -1],
+      "g_p": [[1, 1]],
+      "h_p": [0],
+      "lambda": [1, 2],
+      "mu": [1]
+    },
+    {
+      "kind": "fair",
+      "label": "fair strict decrease",
+      "a_s": [[-2, 0], [1, -1]],
+      "b_s": [-2, 0],
+      "g_p": [[1, 1]],
+      "h_p": [0],
+      "lambda": [1, 1],
+      "mu": [1]
+    }
+  ]
+}
