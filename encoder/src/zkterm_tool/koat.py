@@ -6,13 +6,15 @@ A `.koat` file describes an integer transition system: variables, a start locati
 - each **location** becomes a value of a fresh `pc` variable (`type pc: 0..L-1`);
 - each **rule** becomes a guarded command `[] pc == src && guard -> <updates>; pc = dst`;
 - **fresh variables** (declared in `VAR` but not a location parameter) are nondeterministic inputs,
-  modelled as always-**havoc'd** variables;
+  modelled as always-**havoc'd** variables; identifiers used in guards/updates that are declared
+  nowhere are per-application nondeterministic temporaries and are havoc'd the same way;
 - since ITS benchmarks pose a *termination* question, we attach the **all-fair termination automaton**
   `automaton_init: q0` / `trans!(q0,q0): true` — every transition must strictly decrease the ranking.
 
 Data variables are left **untyped** (unbounded): the symbolic path proves termination over the
-integers. Only `pc` is bounded (finitely many locations). `Com_n` (n>1, recursion) and non-linear
-updates are rejected. Nondeterministic branching is expressed as multiple rules (guarded commands).
+integers. Only `pc` is bounded (finitely many locations). `Com_n` (n>1, recursion), non-linear
+arithmetic (`^` exponentiation; variable products are rejected later at encoding), and disequality
+(`!=`) guards are rejected. Nondeterministic branching is expressed as multiple rules.
 """
 
 from __future__ import annotations
@@ -139,8 +141,24 @@ class _KoatTransformer(Transformer):
         return {"vars": var_list, "start": start_locs, "rules": rules}
 
 
+_PARSER: Optional[Lark] = None
+
+
 def _create_parser() -> Lark:
-    return Lark(_GRAMMAR_PATH.read_text(), parser="lalr")
+    global _PARSER
+    if _PARSER is None:
+        _PARSER = Lark(_GRAMMAR_PATH.read_text(), parser="lalr")
+    return _PARSER
+
+
+def _expr_vars(e: Expr) -> set:
+    if isinstance(e, Var):
+        return {e.name}
+    if isinstance(e, BinOp):
+        return _expr_vars(e.left) | _expr_vars(e.right)
+    if isinstance(e, Neg):
+        return _expr_vars(e.expr)
+    return set()
 
 
 def _pc_name(variables: List[str]) -> str:
@@ -152,6 +170,8 @@ def _pc_name(variables: List[str]) -> str:
 
 def import_koat(text: str) -> ParseResult:
     """Parse a `.koat` integer transition system into a ParseResult (termination framing)."""
+    if "^" in text:
+        raise ValueError("Non-linear exponentiation ('^') is not supported.")
     tree = _create_parser().parse(text)
     parsed = _KoatTransformer().transform(tree)
 
@@ -163,6 +183,11 @@ def import_koat(text: str) -> ParseResult:
         raise ValueError("KoAT file has no rules.")
     if not start_locs:
         raise ValueError("KoAT file has no STARTTERM/FUNCTIONSYMBOLS start location.")
+    if len(start_locs) > 1:
+        raise ValueError(
+            f"Multiple start symbols {start_locs} are not supported (the init condition can only "
+            "pin a single start location)."
+        )
     start_loc = start_locs[0]
 
     # Formals = the parameter names of the first rule's left-hand side (must be plain variables).
@@ -172,6 +197,8 @@ def import_koat(text: str) -> ParseResult:
             if not isinstance(a, Var):
                 raise ValueError(f"Location head {ft.name}(...) must list plain variables, got {a!r}")
             names.append(a.name)
+        if len(set(names)) != len(names):
+            raise ValueError(f"Duplicate parameter names in {ft.name}({', '.join(names)}).")
         return names
 
     formals = formals_of(rules[0].src)
@@ -184,7 +211,20 @@ def import_koat(text: str) -> ParseResult:
 
     # Program variables = declared VARs (fall back to the formals if VAR is absent).
     program_vars = var_list or list(formals)
-    fresh = [v for v in program_vars if v not in formals]  # nondeterministic inputs
+
+    # Identifiers used in guards / successor arguments that are neither formals nor declared in
+    # VAR are per-application nondeterministic temporaries under KoAT semantics; treating them as
+    # ordinary (rigid) state variables would fix their value forever and unsoundly shrink the set
+    # of runs, so they are havoc'd exactly like declared fresh variables.
+    used: set = set()
+    for r in rules:
+        for g in r.guard:
+            used |= _expr_vars(g.left) | _expr_vars(g.right)
+        for ft in r.targets:
+            for a in ft.args:
+                used |= _expr_vars(a)
+    temps = sorted(used - set(formals) - set(program_vars))
+    fresh = [v for v in program_vars if v not in formals] + temps  # nondeterministic inputs
 
     # Locations -> indices, in order of first appearance (start location first).
     locations: List[str] = [start_loc]
@@ -194,7 +234,7 @@ def import_koat(text: str) -> ParseResult:
                 locations.append(ft.name)
     loc_idx = {name: i for i, name in enumerate(locations)}
 
-    pc = _pc_name(program_vars)
+    pc = _pc_name(sorted(set(program_vars) | set(formals) | used))
     types = {pc: TypeDef(variable=pc, min_value=0, max_value=len(locations) - 1)}
 
     init_condition = [Comparison(left=Var(pc), right=Num(loc_idx[start_loc]), op=CompOp.EQ)]
@@ -202,6 +242,11 @@ def import_koat(text: str) -> ParseResult:
     commands: List[GuardedCommand] = []
     havoc_set = frozenset(fresh)
     for r in rules:
+        if r.com != f"Com_{len(r.targets)}":
+            raise ValueError(
+                f"Rule from {r.src.name} declares {r.com} but has {len(r.targets)} target(s); "
+                "malformed rule."
+            )
         if len(r.targets) != 1:
             raise ValueError(
                 f"Rule from {r.src.name} uses {r.com} with {len(r.targets)} successors; recursion / "
