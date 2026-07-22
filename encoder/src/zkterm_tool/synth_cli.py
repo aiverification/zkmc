@@ -1,8 +1,9 @@
 """CLI for zksynth: synthesize ranking functions and print them.
 
 Reads a `.gc` file (program + automaton, or an LTL `spec:`) that need not contain any `rank(...)`
-blocks, synthesizes a single linear ranking per automaton state (Tier 1), and prints the resulting
-`rank(q): …` declarations. Use `zkverify --synthesize` to synthesize and verify in one step.
+blocks, synthesizes a (piecewise) linear ranking for each automaton state that lacks one, and
+prints the resulting `rank(q): …` declarations. Use `zkverify --synthesize` to synthesize and
+verify in one step.
 """
 
 import argparse
@@ -14,15 +15,15 @@ from .synth import synthesize_rankings, SynthesisError
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Synthesize a linear ranking function per automaton state (Tier 1) and print "
-                    "the rank(q) declarations.",
+        description="Synthesize a (piecewise) linear ranking function per automaton state and "
+                    "print the rank(q) declarations.",
         epilog="""
 Example:
   zksynth program.gc
   zkverify --synthesize program.gc   # synthesize and verify together
 
-Tier 1 synthesizes one linear function per state over the variables' type-bounded domain;
-programs needing piecewise/lexicographic rankings are not yet supported.
+The search partitions the state space along guard constants (control-flow refinement) and tries
+partitions coarsest-first; programs needing lexicographic/multiphase rankings are not supported.
         """,
     )
     parser.add_argument(
@@ -57,6 +58,13 @@ programs needing piecewise/lexicographic rankings are not yet supported.
         default=None,
         help="Cap on the number of regions a partition may have during auto-search (default: 64).",
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=60.0,
+        help="Wall-clock budget for the whole synthesis search in seconds (default: 60; "
+             "0 disables the limit).",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -76,6 +84,9 @@ programs needing piecewise/lexicographic rankings are not yet supported.
                     return 1
 
         if getattr(args.file, "name", "").endswith(".koat"):
+            if const_overrides:
+                print("Warning: --const has no effect on .koat input (KoAT files have no named "
+                      "constants); ignoring.", file=sys.stderr)
             from .koat import import_koat
             result = import_koat(text)  # KoAT ITS -> guarded commands + termination automaton
         else:
@@ -92,6 +103,8 @@ programs needing piecewise/lexicographic rankings are not yet supported.
             kwargs["mode_vars"] = args.mode
         if args.max_regions is not None:
             kwargs["max_regions"] = args.max_regions
+        if args.timeout > 0:
+            kwargs["time_budget"] = args.timeout
 
         try:
             rankings = synthesize_rankings(result, **kwargs)
@@ -99,6 +112,9 @@ programs needing piecewise/lexicographic rankings are not yet supported.
             print(f"Error: {e}", file=sys.stderr)
             return 1
 
+        if not rankings:
+            print("Nothing to synthesize: every automaton state already has a ranking function.",
+                  file=sys.stderr)
         for state in rankings:
             print(rankings[state])
             print()

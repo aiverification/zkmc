@@ -29,6 +29,7 @@ bug can only cause a failed verification, never an unsound proof.
 
 from __future__ import annotations
 
+import time
 from itertools import combinations, product
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
@@ -51,6 +52,18 @@ DEFAULT_REACH_BUDGET = 200_000  # max |type box| to enumerate reachable states
 
 class SynthesisError(Exception):
     """Raised when no ranking of the requested class can be synthesized."""
+
+
+def _check_deadline(deadline: Optional[float]) -> None:
+    if deadline is not None and time.monotonic() >= deadline:
+        raise SynthesisError("Synthesis time budget exceeded.")
+
+
+def _remaining_ms(deadline: Optional[float]) -> Optional[int]:
+    if deadline is None:
+        return None
+    _check_deadline(deadline)
+    return int((deadline - time.monotonic()) * 1000) + 1
 
 
 # A region fixes each chosen mode variable to an integer interval [a, b].
@@ -128,16 +141,21 @@ def _add_farkas_implication(
     solver.add((z3.Sum(q_terms) if q_terms else z3.IntVal(0)) <= b_rhs)
 
 
-def _feasible(P: NDArray[np.int64], q: NDArray[np.int64]) -> bool:
-    """Is {y : P y ≤ q} non-empty? Used to prune vacuous cross-region transitions."""
+def _feasible(P: NDArray[np.int64], q: NDArray[np.int64], deadline: Optional[float] = None) -> bool:
+    """Is {y : P y ≤ q} non-empty? Used to prune vacuous cross-region transitions.
+
+    Returns True (don't prune — always safe) when Z3 gives up within the deadline."""
     if P.shape[0] == 0:
         return True
     s = z3.Solver()
+    ms = _remaining_ms(deadline)
+    if ms is not None:
+        s.set("timeout", ms)
     y = [z3.Int(f"y{i}") for i in range(P.shape[1])]
     for i in range(P.shape[0]):
         terms = [int(P[i, c]) * y[c] for c in range(P.shape[1]) if int(P[i, c]) != 0]
         s.add((z3.Sum(terms) if terms else z3.IntVal(0)) <= int(q[i]))
-    return s.check() == z3.sat
+    return s.check() != z3.unsat
 
 
 # --------------------------------------------------------------------------------------
@@ -405,12 +423,21 @@ def _box_ladder(
 # Per-partition LP
 # --------------------------------------------------------------------------------------
 
+# Pre-existing rankings, encoded per state: (finite cases as (M, v, w, u), inf cases as (M, v)).
+FixedRankings = Dict[str, Tuple[List[Tuple[NDArray, NDArray, List[int], int]],
+                                List[Tuple[NDArray, NDArray]]]]
+
+
 def _solve_partition(
-    result: ParseResult, variables: List[str], states: List[str], prog_encs: list,
-    regions: List[Region], boxes: List[Box], region_guards: List[Optional[List[Comparison]]],
-    coeff_bound: int, multiplier_bound: int,
+    result: ParseResult, variables: List[str], states: List[str], fixed: FixedRankings,
+    prog_encs: list, regions: List[Region], boxes: List[Box],
+    region_guards: List[Optional[List[Comparison]]],
+    coeff_bound: int, multiplier_bound: int, deadline: Optional[float] = None,
 ) -> Optional[Dict[Tuple[str, int], Tuple[List[int], int]]]:
     """Solve the affine-Farkas LP for a fixed partition. Empty regions (box None) get no piece.
+
+    `states` are the states to synthesize for; `fixed` carries pre-existing rankings, whose cases
+    enter the decrease obligations as constants so the synthesized pieces compose with them.
     Returns {(state, region_idx): (w, u)} for non-empty regions, or None if infeasible."""
     n = len(variables)
     live = [ri for ri in range(len(regions)) if boxes[ri] is not None]
@@ -439,30 +466,57 @@ def _solve_partition(
             _add_farkas_implication(solver, region_M[ri], region_v[ri], a, u[(q, ri)],
                                     lam_prefix=f"nn_{q}_{ri}", multiplier_bound=multiplier_bound)
 
-    # Decrease: premise ⟹ V(qf,rs)(x) − V(qt,rt)(x') ≥ ζ
+    # A "side option" is one candidate case of a state's ranking: (premise rows, rhs, w, u), where
+    # w/u are Z3 unknowns for synthesized states and plain ints for fixed ones.
+    def src_options(q):
+        if q in fixed:
+            return [(_embed_x(M, n), v, wv, uc) for (M, v, wv, uc) in fixed[q][0]]
+        return [(region_x[ri], region_v[ri], w[(q, ri)], u[(q, ri)]) for ri in live]
+
+    def tgt_options(q):
+        if q in fixed:
+            return [(_embed_xprime(M, n), v, wv, uc) for (M, v, wv, uc) in fixed[q][0]]
+        return [(region_xp[ri], region_v[ri], w[(q, ri)], u[(q, ri)]) for ri in live]
+
+    def tgt_inf_options(q):
+        if q in fixed:
+            return [(_embed_xprime(M, n), v) for (M, v) in fixed[q][1]]
+        return []
+
+    # Decrease: premise ⟹ V(qf,src case)(x) − V(qt,tgt case)(x') ≥ ζ
     aut = result.automaton_transitions
     for p_idx, prog in enumerate(prog_encs):
         A, b = prog.A, prog.b
-        for rs in live:
-            for rt in live:
-                P0, q0 = _stack([A, region_x[rs], region_xp[rt]], [b, region_v[rs], region_v[rt]], 2 * n)
-                if not _feasible(P0, q0):
-                    continue
-                for a_idx, edge in enumerate(aut):
-                    qf, qt = edge.from_state, edge.to_state
-                    zeta = 1 if edge.is_fair else 0
-                    P_aut, r_aut = _guard_to_matrix(edge.guards, variables)
-                    P, qv = _stack(
-                        [A, _embed_x(P_aut, n), region_x[rs], region_xp[rt]],
-                        [b, r_aut, region_v[rs], region_v[rt]], 2 * n,
-                    )
-                    a_coeffs = [-w[(qf, rs)][c] for c in range(n)] + [w[(qt, rt)][c] for c in range(n)]
-                    b_rhs = u[(qf, rs)] - u[(qt, rt)] - zeta
+        for a_idx, edge in enumerate(aut):
+            qf, qt = edge.from_state, edge.to_state
+            if qf in fixed and qt in fixed:
+                continue  # nothing to synthesize on this edge; the verifier judges fixed pairs
+            _check_deadline(deadline)
+            zeta = 1 if edge.is_fair else 0
+            P_aut, r_aut = _guard_to_matrix(edge.guards, variables)
+            aut_x = _embed_x(P_aut, n)
+            for si, (S_M, S_v, w_s, u_s) in enumerate(src_options(qf)):
+                for ti, (T_M, T_v, w_t, u_t) in enumerate(tgt_options(qt)):
+                    P, qv = _stack([A, aut_x, S_M, T_M], [b, r_aut, S_v, T_v], 2 * n)
+                    if not _feasible(P, qv, deadline):
+                        continue
+                    a_coeffs = [-w_s[c] for c in range(n)] + [w_t[c] for c in range(n)]
+                    b_rhs = u_s - u_t - zeta
                     _add_farkas_implication(solver, P, qv, a_coeffs, b_rhs,
-                                            lam_prefix=f"dec_{p_idx}_{a_idx}_{rs}_{rt}",
+                                            lam_prefix=f"dec_{p_idx}_{a_idx}_{si}_{ti}",
                                             multiplier_bound=multiplier_bound)
+                # A finite source case that can reach an inf case of a fixed target ranking would
+                # fail the transition_non_infinity obligation no matter what we synthesize.
+                for T_M, T_v in tgt_inf_options(qt):
+                    P, qv = _stack([A, aut_x, S_M, T_M], [b, r_aut, S_v, T_v], 2 * n)
+                    if _feasible(P, qv, deadline):
+                        return None
 
+    ms = _remaining_ms(deadline)
+    if ms is not None:
+        solver.set("timeout", ms)
     if solver.check() != z3.sat:
+        _check_deadline(deadline)
         return None
     model = solver.model()
     pieces: Dict[Tuple[str, int], Tuple[List[int], int]] = {}
@@ -542,21 +596,43 @@ def synthesize_rankings(
     coeff_bound: int = DEFAULT_COEFF_BOUND,
     multiplier_bound: int = DEFAULT_MULTIPLIER_BOUND,
     reach_budget: int = DEFAULT_REACH_BUDGET,
+    time_budget: Optional[float] = None,
 ) -> Dict[str, RankingFunction]:
-    """Synthesize a (piecewise) linear ranking per automaton state, coarsest-first (fewest cases).
+    """Synthesize a (piecewise) linear ranking for each automaton state that lacks one,
+    coarsest-first (fewest cases). Pre-existing rankings are treated as fixed constraints so the
+    new pieces compose with them; only the newly synthesized states are returned.
 
-    `mode_vars`, if given, forces the partition variables (skipping auto-detection). Raises
-    SynthesisError if nothing in the search space works.
+    `mode_vars`, if given, forces the partition variables (skipping auto-detection). `time_budget`
+    (seconds) bounds the whole search wall-clock (Z3 has no internal limits otherwise). Raises
+    SynthesisError if nothing in the search space works or the budget runs out.
     """
     if not result.automaton_transitions:
         raise SynthesisError(
             "No automaton transitions: provide `trans(...)` or an LTL `spec:` before synthesizing."
         )
+    deadline = time.monotonic() + time_budget if time_budget is not None else None
     variables = _collect_variables(result)
     if not variables:
         raise SynthesisError("No program variables found.")
     states = _automaton_states(result)
     types = result.types
+
+    # Encode pre-existing rankings as fixed constants; synthesize only for the remaining states.
+    fixed: FixedRankings = {}
+    for q, rf in (result.ranking_functions or {}).items():
+        fin: List[Tuple[NDArray, NDArray, List[int], int]] = []
+        inf: List[Tuple[NDArray, NDArray]] = []
+        for case in rf.cases:
+            M, v = _guard_to_matrix(case.guards, variables)
+            if case.is_infinity:
+                inf.append((M, v))
+            else:
+                le = expr_to_linear(case.expression)
+                fin.append((M, v, [int(le.coeffs.get(x, 0)) for x in variables], int(le.const)))
+        fixed[q] = (fin, inf)
+    unknown_states = [q for q in states if q not in fixed]
+    if not unknown_states:
+        return {}
 
     prog_encs = [
         encode_transition(cmd, variables, nonstrict_only=True, types=types)
@@ -589,11 +665,20 @@ def synthesize_rankings(
                 "--mode variables must be type-declared or compared to constants in guards: "
                 + ", ".join(missing)
             )
+        n_regions = 1
+        for v in mode_vars:
+            n_regions *= len(var_intervals[v])
+        if n_regions > max_regions:
+            raise SynthesisError(
+                f"Forced mode variables induce {n_regions} regions, exceeding max_regions="
+                f"{max_regions}; raise --max-regions to allow this partition."
+            )
         candidate_subsets = [mode_vars]
     else:
         candidate_subsets = _mode_partitions(variables, var_intervals, max_regions, max_mode_vars)
 
     for subset in candidate_subsets:
+        _check_deadline(deadline)
         regions = _regions_of(subset, var_intervals)
         boxes = [_region_box(r, subset, variables, types, reachable) for r in regions]
         if all(b is None for b in boxes):
@@ -602,10 +687,10 @@ def synthesize_rankings(
             _finite_guard(regions[ri], boxes[ri], variables) if boxes[ri] is not None else None
             for ri in range(len(regions))
         ]
-        pieces = _solve_partition(result, variables, states, prog_encs, regions, boxes,
-                                  region_guards, coeff_bound, multiplier_bound)
+        pieces = _solve_partition(result, variables, unknown_states, fixed, prog_encs, regions,
+                                  boxes, region_guards, coeff_bound, multiplier_bound, deadline)
         if pieces is not None:
-            return _assemble(subset, regions, boxes, pieces, states, variables, types)
+            return _assemble(subset, regions, boxes, pieces, unknown_states, variables, types)
 
     raise SynthesisError(
         "No piecewise linear ranking found in the search space (max_mode_vars="
@@ -615,7 +700,10 @@ def synthesize_rankings(
 
 
 def synthesize_into(result: ParseResult, **kwargs) -> ParseResult:
-    """Synthesize rankings for states that don't already have one; fill them into `result`."""
+    """Synthesize rankings for states that don't already have one; fill them into `result`.
+
+    Pre-existing rankings are kept as-is and enter the synthesis constraints as constants, so the
+    filled-in pieces are guaranteed to compose with them."""
     synthesized = synthesize_rankings(result, **kwargs)
     for state, rf in synthesized.items():
         result.ranking_functions.setdefault(state, rf)

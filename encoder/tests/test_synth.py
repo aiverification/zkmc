@@ -179,6 +179,58 @@ class TestTier2Piecewise:
             synthesize_rankings(r, mode_vars=["nonexistent"])
 
 
+TWO_STATE_MANUAL_Q1 = """
+type x: 0..10
+init: x = 0
+[] x < 10 -> x = x + 1
+rank(q1):
+  [] x >= 0 && x <= 10 -> 20 - 2 * x
+  [] x < 0 -> inf
+  [] x > 10 -> inf
+automaton_init: q0
+trans!(q0, q1): x < 10
+trans!(q1, q0): x < 10
+"""
+
+
+class TestComposeWithExisting:
+    def test_fills_around_existing_manual_ranking(self):
+        # The synthesized q0 piece must satisfy the cross-state decrease obligations against the
+        # manual q1 ranking (which enters the LP as constants), not against a discarded solution.
+        r = parse_with_constants(TWO_STATE_MANUAL_Q1)
+        manual_q1 = r.ranking_functions["q1"]
+        synthesize_into(r)
+        assert set(r.ranking_functions) == {"q0", "q1"}
+        assert r.ranking_functions["q1"] is manual_q1  # untouched
+        v = verify_termination(r)
+        assert v.passed is True
+
+    def test_all_states_present_synthesizes_nothing(self):
+        r = parse_with_constants(FAIR_COUNTER)
+        r.ranking_functions.update(synthesize_rankings(r))
+        assert synthesize_rankings(r) == {}
+
+
+class TestBudgetAndCaps:
+    def test_time_budget_exceeded_raises(self):
+        r = parse_with_constants(FAIR_COUNTER)
+        with pytest.raises(SynthesisError, match="budget"):
+            synthesize_rankings(r, time_budget=0.0)
+
+    def test_forced_mode_respects_max_regions(self):
+        src = """
+type x: 0..10
+type y: 0..255
+init: x = 0 && y = 0
+[] x < 10 && y >= 0 -> x = x + 1
+automaton_init: q0
+trans!(q0, q0): x < 10
+"""
+        r = parse_with_constants(src)
+        with pytest.raises(SynthesisError, match="max_regions"):
+            synthesize_rankings(r, mode_vars=["y"], max_regions=1)
+
+
 @pytest.mark.skipif(not shutil.which("ltl2tgba"), reason="Spot's ltl2tgba not installed")
 def test_synthesis_from_ltl_spec():
     """End-to-end: derive the automaton from LTL, then synthesize and verify (Part A + Part C)."""

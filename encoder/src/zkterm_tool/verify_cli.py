@@ -43,7 +43,7 @@ Example:
         "--synthesize",
         action="store_true",
         help="Automatically synthesize a (piecewise) linear ranking function for any automaton "
-             "state that lacks one. Requires type-bounded variables."
+             "state that lacks one."
     )
     parser.add_argument(
         "--mode",
@@ -56,6 +56,13 @@ Example:
         type=int,
         default=None,
         help="With --synthesize: cap on regions per partition during auto-search (default: 64)."
+    )
+    parser.add_argument(
+        "--synth-timeout",
+        type=float,
+        default=60.0,
+        help="With --synthesize: wall-clock budget for the synthesis search in seconds "
+             "(default: 60; 0 disables the limit)."
     )
     parser.add_argument(
         "--const",
@@ -86,6 +93,9 @@ Example:
 
         text = file_path.read_text()
         if str(file_path).endswith(".koat"):
+            if const_overrides:
+                print("Warning: --const has no effect on .koat input (KoAT files have no named "
+                      "constants); ignoring.", file=sys.stderr)
             from .koat import import_koat
             result = import_koat(text)  # KoAT ITS -> guarded commands + termination automaton
         else:
@@ -99,6 +109,8 @@ Example:
                 synth_kwargs["mode_vars"] = args.mode
             if args.max_regions is not None:
                 synth_kwargs["max_regions"] = args.max_regions
+            if args.synth_timeout > 0:
+                synth_kwargs["time_budget"] = args.synth_timeout
             try:
                 before = set(result.ranking_functions)
                 synthesize_into(result, **synth_kwargs)
