@@ -28,6 +28,7 @@ class ParseResult:
     automaton_initial_states: list[str] | None       # Q_0 (None = use all states with ranking functions)
     aps: dict[str, list[Comparison]]                 # LTL atomic propositions: name -> conjunction of comparisons
     ltl_formula: str | None                          # LTL property (Spot syntax); automaton derived from !(formula)
+    ltl_resolved: bool = False                       # True once resolve_automaton() derived the automaton
 
 
 class ASTTransformer(Transformer):
@@ -70,6 +71,9 @@ class ASTTransformer(Transformer):
         """Parse atomic proposition binding: ap NAME := guard"""
         name = str(items[0])
         guard_comparisons = items[1]  # list of comparisons from guard
+        if name in ("true", "false"):
+            # Spot constant-folds these LTL constants, silently vacuizing the property.
+            raise ValueError(f"'{name}' is a reserved LTL constant and cannot name an atomic proposition")
         if not guard_comparisons:
             raise ValueError(f"Atomic proposition '{name}' must be a comparison, not 'true'")
         if name in self.aps:

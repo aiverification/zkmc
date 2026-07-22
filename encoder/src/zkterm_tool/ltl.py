@@ -71,14 +71,26 @@ def find_ltl2tgba(ltl2tgba_path: str | None = None) -> str:
     raise RuntimeError(_INSTALL_HINT)
 
 
-def run_ltl2tgba(formula: str, ltl2tgba_path: str | None = None) -> str:
+def run_ltl2tgba(formula: str, ltl2tgba_path: str | None = None, timeout: float = 60.0) -> str:
     """Translate ``!(formula)`` to a state-based single-set Büchi automaton, returned as HOA text."""
     exe = find_ltl2tgba(ltl2tgba_path)
     # -B: Büchi automaton (single acceptance set, state-based). We negate the property so that
     # accepting runs of the automaton correspond to program runs that violate the property.
     cmd = [exe, "-B", "-f", f"!({formula})"]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"ltl2tgba did not finish within {timeout:.0f}s on {formula!r}; LTL-to-Büchi "
+            "translation is worst-case exponential — try simplifying the formula."
+        ) from e
     except OSError as e:  # pragma: no cover - defensive
         raise RuntimeError(f"Failed to run ltl2tgba: {e}\n{_INSTALL_HINT}") from e
     if proc.returncode != 0:
@@ -96,6 +108,20 @@ def run_ltl2tgba(formula: str, ltl2tgba_path: str | None = None) -> str:
 Cube = dict
 DNF = list
 
+# DNF conversion is worst-case exponential (negation of a disjunction of conjunctions). Every cube
+# becomes at least one AutomatonTransition and the verifier enumerates program × automaton × case
+# products, so cap the expansion instead of silently blowing up.
+_MAX_CUBES = 4096
+
+
+def _check_cube_count(dnf: DNF) -> DNF:
+    if len(dnf) > _MAX_CUBES:
+        raise ValueError(
+            f"HOA edge label expands to more than {_MAX_CUBES} DNF cubes; "
+            "the automaton label is too complex to lower."
+        )
+    return dnf
+
 
 def _dnf_and(a: DNF, b: DNF) -> DNF:
     out: DNF = []
@@ -110,11 +136,11 @@ def _dnf_and(a: DNF, b: DNF) -> DNF:
                 merged[k] = v
             if ok:
                 out.append(merged)
-    return out
+    return _check_cube_count(out)
 
 
 def _dnf_or(a: DNF, b: DNF) -> DNF:
-    return a + b
+    return _check_cube_count(a + b)
 
 
 def _dnf_not(a: DNF) -> DNF:
@@ -265,6 +291,13 @@ def parse_hoa(text: str) -> HOAAutomaton:
             f"Expected a single-acceptance-set Büchi automaton, got Acceptance: {n_acc_sets} {acc_expr}. "
             "This should not happen with `ltl2tgba -B`; please report the offending formula."
         )
+    elif n_acc_sets == 1 and re.sub(r"\s", "", acc_expr) != "Inf(0)":
+        # E.g. co-Büchi `1 Fin(0)`: treating its marked states as Büchi-fair would silently
+        # verify the wrong property.
+        raise ValueError(
+            f"Expected Büchi acceptance 'Inf(0)', got Acceptance: 1 {acc_expr}. "
+            "Only Büchi automata (as emitted by `ltl2tgba -B`) are supported."
+        )
 
     # --- Body ---
     current_state: int | None = None
@@ -360,6 +393,11 @@ def lower_to_transitions(
             # comparisons (branch), combined across APs by Cartesian product (AND of ORs).
             guard_options: list[list[Comparison]] = [[]]
             for idx, polarity in cube.items():
+                if idx not in ap_preds:
+                    raise ValueError(
+                        f"HOA edge label references AP index {idx}, but the automaton declares "
+                        f"only {len(aut.ap_names)} atomic proposition(s)."
+                    )
                 preds = ap_preds[idx]
                 if polarity:
                     guard_options = [g + list(preds) for g in guard_options]
@@ -399,7 +437,7 @@ def resolve_automaton(result, ltl2tgba_path: str | None = None):
     Idempotent and a no-op when no `spec:` is present. Raises if both a `spec:` and explicit
     `trans(...)` transitions are given.
     """
-    if result.ltl_formula is None:
+    if result.ltl_formula is None or result.ltl_resolved:
         return result
     if result.automaton_transitions:
         raise ValueError(
@@ -407,6 +445,13 @@ def resolve_automaton(result, ltl2tgba_path: str | None = None):
             "Use one or the other."
         )
     transitions, init_states = derive_automaton(result.ltl_formula, result.aps, ltl2tgba_path)
+    if not transitions:
+        raise ValueError(
+            f"The negation of the LTL property {result.ltl_formula!r} is unsatisfiable, i.e. the "
+            "property holds trivially for every program — there is nothing to verify. Remove the "
+            "'spec:' (or fix the formula if this is unintended)."
+        )
     result.automaton_transitions = transitions
     result.automaton_initial_states = init_states
+    result.ltl_resolved = True
     return result

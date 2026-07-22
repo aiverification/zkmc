@@ -15,7 +15,7 @@ from zkterm_tool import (
     parse_label_to_dnf, negate_comparison, parse_hoa, lower_to_transitions,
     derive_automaton, resolve_automaton,
 )
-from zkterm_tool.ltl import find_ltl2tgba
+from zkterm_tool.ltl import find_ltl2tgba, run_ltl2tgba
 
 
 def _spot_available() -> bool:
@@ -61,6 +61,13 @@ class TestParseApSpec:
     def test_true_ap_rejected(self):
         with pytest.raises(Exception):
             parse_with_constants('ap p := true\n')
+
+    def test_reserved_ap_names_rejected(self):
+        # Spot constant-folds `true`/`false`, silently vacuizing the property.
+        with pytest.raises(Exception, match="reserved"):
+            parse_with_constants('ap true := x == 1\n')
+        with pytest.raises(Exception, match="reserved"):
+            parse_with_constants('ap false := x == 1\n')
 
     def test_duplicate_spec_rejected(self):
         with pytest.raises(Exception):
@@ -208,6 +215,103 @@ State: 1 {0}
         assert guards == {("x < 1",), ("x > 1",)}
 
 
+class TestHoaRobustness:
+    def test_nonzero_start_state(self):
+        # Spot's state numbering is not guaranteed to start the run at 0.
+        hoa = """HOA: v1
+States: 2
+Start: 1
+AP: 1 "a"
+Acceptance: 1 Inf(0)
+--BODY--
+State: 0 {0}
+[t] 0
+State: 1
+[0] 0
+--END--
+"""
+        aut = parse_hoa(hoa)
+        aps = {"a": [Comparison(Var("x"), Num(1), CompOp.EQ)]}
+        _, init = lower_to_transitions(aut, aps)
+        assert init == ["q1"]
+
+    def test_cobuchi_acceptance_rejected(self):
+        hoa = """HOA: v1
+States: 1
+Start: 0
+AP: 0
+Acceptance: 1 Fin(0)
+--BODY--
+State: 0 {0}
+[t] 0
+--END--
+"""
+        with pytest.raises(ValueError, match="Inf"):
+            parse_hoa(hoa)
+
+    def test_out_of_range_ap_index(self):
+        hoa = """HOA: v1
+States: 1
+Start: 0
+AP: 1 "a"
+Acceptance: 1 Inf(0)
+--BODY--
+State: 0 {0}
+[1] 0
+--END--
+"""
+        aut = parse_hoa(hoa)
+        aps = {"a": [Comparison(Var("x"), Num(1), CompOp.EQ)]}
+        with pytest.raises(ValueError, match="AP index"):
+            lower_to_transitions(aut, aps)
+
+    def test_conjunctive_ap_negation_branches(self):
+        # !p with p := x >= 0 && x <= 5 must branch into x < 0 OR x > 5.
+        hoa = """HOA: v1
+States: 1
+Start: 0
+AP: 1 "p"
+Acceptance: 1 Inf(0)
+--BODY--
+State: 0 {0}
+[!0] 0
+--END--
+"""
+        aut = parse_hoa(hoa)
+        aps = {"p": [Comparison(Var("x"), Num(0), CompOp.GE),
+                     Comparison(Var("x"), Num(5), CompOp.LE)]}
+        transitions, _ = lower_to_transitions(aut, aps)
+        guards = {tuple(str(g) for g in t.guards) for t in transitions}
+        assert guards == {("x < 0",), ("x > 5",)}
+
+    def test_dnf_cube_cap(self):
+        # Negating a 13-clause sum-of-products explodes to 2^13 cubes — must be refused, not built.
+        label = "!(" + "|".join(f"({2 * i}&{2 * i + 1})" for i in range(13)) + ")"
+        with pytest.raises(ValueError, match="cubes"):
+            parse_label_to_dnf(label)
+
+
+class TestMissingRankingGuard:
+    def test_missing_rank_for_automaton_state_errors(self):
+        # A state on an automaton transition without a rank(...) used to be skipped silently,
+        # yielding a vacuous PASS. It must be a loud error.
+        src = """
+type x: 0..5
+init: x = 0
+[] x < 5 -> x = x + 1
+rank(q0):
+  [] x >= 0 && x <= 5 -> 5 - x
+  [] x < 0 -> inf
+  [] x > 5 -> inf
+automaton_init: q0
+trans!(q0, q1): x < 5
+trans!(q1, q0): x < 5
+"""
+        result = parse_with_constants(src)
+        with pytest.raises(ValueError, match="No ranking function for automaton state"):
+            verify_termination(result)
+
+
 # --------------------------------------------------------------------------------------
 # Spot integration (skipped without ltl2tgba)
 # --------------------------------------------------------------------------------------
@@ -234,6 +338,23 @@ class TestSpotIntegration:
         )
         with pytest.raises(ValueError, match="both"):
             resolve_automaton(result)
+
+    def test_resolve_automaton_is_idempotent(self):
+        result = parse_with_constants('ap a := x == 1\nspec: "G F a"\n', resolve_ltl=True)
+        transitions = list(result.automaton_transitions)
+        resolve_automaton(result)  # second call: no-op, not an error
+        assert result.automaton_transitions == transitions
+
+    def test_trivially_true_spec_rejected_with_hint(self):
+        # !(G(a | !a)) is unsatisfiable -> empty automaton; the error must say the property
+        # trivially holds instead of complaining about missing trans(...) declarations.
+        result = parse_with_constants('ap a := x == 1\nspec: "G (a | !a)"\n')
+        with pytest.raises(ValueError, match="trivially"):
+            resolve_automaton(result)
+
+    def test_invalid_formula_reports_stderr(self):
+        with pytest.raises(ValueError, match="rejected"):
+            run_ltl2tgba("G F (")
 
     def test_end_to_end_verify_matches_handwritten(self):
         """The LTL example must verify identically to the hand-written automaton example."""
