@@ -68,7 +68,7 @@ For the full `.gc` language — constants, types, initial conditions, guarded co
 
 ## Command-line tools
 
-The package installs eight commands. All accept `.gc` input (and `zkverify`/`zksynth`/`zkits` also accept KoAT `.koat` integer transition systems) and share the `--const NAME=VALUE` flag for overriding constants.
+The package installs eight commands. All accept `.gc` input (and `zkverify`/`zksynth`/`zkits` also accept KoAT `.koat` integer transition systems). All except `zkits` share the `--const NAME=VALUE` flag for overriding constants (KoAT files have no named constants, so `zkits` and `.koat` inputs ignore it).
 
 | Tool | Purpose | Input | Output |
 |------|---------|-------|--------|
@@ -78,7 +78,7 @@ The package installs eight commands. All accept `.gc` input (and `zkverify`/`zks
 | `zkfarkas` | Export Farkas dual obligations as JSON for external solvers / ZK pipelines | `.gc` file | JSON: `A_s`, `b_s`, `G_p`, `h_p`, multipliers |
 | `zkexplicit` | Explicit-state verification by enumeration, plus BN254 field embeddings | `.gc` file + bounds | JSON: violation/valid sets, embeddings |
 | `zkltl` | Derive the Büchi automaton from an LTL `spec:` via Spot and print it | `.gc` file with `spec:` (needs Spot) | `automaton_init` + `trans`/`trans!` declarations |
-| `zksynth` | Synthesize a linear ranking function per automaton state (Tier 1) and print it | `.gc` file (no `rank(...)` needed) | `rank(q)` declarations |
+| `zksynth` | Synthesize a (piecewise) linear ranking function per automaton state and print it | `.gc` file (no `rank(...)` needed) | `rank(q)` declarations |
 | `zkits` | Import a KoAT `.koat` integer transition system and print the derived guarded commands | `.koat` file | guarded commands + termination automaton |
 
 Each tool has complete flag documentation via `--help`; what follows are one-line intros and minimal invocations.
@@ -178,7 +178,7 @@ The synthesizer is **untrusted**: its output is re-checked by `zkverify` (and th
 
 ### `zkits` — import KoAT integer transition systems
 
-Termination benchmarks in the KoAT / termCOMP `.koat` format can be imported directly: locations become a `pc` variable, rules become guarded commands, fresh variables become nondeterministic (havoc'd) inputs, and an all-fair *termination* automaton (`trans!(q0,q0): true`) is attached so "every transition strictly decreases" is the property. Data variables stay **unbounded** — the synthesizer runs on the symbolic path (no `type` bounds needed), partitioning on guard boundaries. `Com_n` (n>1, recursion) and non-linear updates are rejected. C/SV-COMP benchmarks reach `.koat` via the external `llvm2kittel` translator.
+Termination benchmarks in the KoAT / termCOMP `.koat` format can be imported directly: locations become a `pc` variable, rules become guarded commands, fresh variables become nondeterministic (havoc'd) inputs, and an all-fair *termination* automaton (`trans!(q0,q0): true`) is attached so "every transition strictly decreases" is the property. Data variables stay **unbounded** — the synthesizer runs on the symbolic path (no `type` bounds needed), partitioning on guard boundaries. `Com_n` (n>1, recursion), non-linear arithmetic (variable products, `^`), and `!=` guards are rejected. C/SV-COMP benchmarks reach `.koat` via the external `llvm2kittel` translator.
 
 ```bash
 uv run zkits program.koat               # inspect the derived guarded commands + termination automaton

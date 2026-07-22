@@ -231,6 +231,10 @@ Use `zkltl program.gc` to print the derived automaton (see [`examples/exp_backof
 
 Unicode variants (`≤`, `≥`, `∧`) are interchangeable with their ASCII forms.
 
+The statement-introducing keywords — `init`, `const`, `type`, `rank`, `trans`, `automaton_init`,
+`ap`, `spec` — plus `true` and `inf` are **reserved**: they cannot be used as variable names
+(the lexer prefers them over identifiers wherever a new statement may start).
+
 ## A realistic example
 
 The [`examples/dhcp.gc`](examples/dhcp.gc) file models a DHCP client as a guarded-command program with:
