@@ -76,6 +76,110 @@ class TestImporter:
         with pytest.raises(ValueError, match="recursion|Com_n|successors"):
             import_koat(src)
 
+    def test_exponentiation_rejected_as_nonlinear(self):
+        # `A^2` must fail loudly: with `^` in identifiers it would silently become an opaque
+        # rigid variable and the imported system would be the wrong one.
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0))
+(VAR A)
+(RULES
+  l0(A) -> Com_1(l0(A + 1)) :|: A^2 >= A
+)
+"""
+        with pytest.raises(ValueError, match="on-linear"):
+            import_koat(src)
+
+    def test_undeclared_temp_is_havoced(self):
+        # B is neither a formal nor declared in VAR: KoAT chooses it fresh per application, so it
+        # must be havoc'd — treating it as rigid would prove termination of the wrong system.
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0))
+(VAR A)
+(RULES
+  l0(A) -> Com_1(l0(B)) :|: B > A
+)
+"""
+        r = import_koat(src)
+        assert "B" in r.commands[0].havoc
+
+    def test_bare_rhs_without_com(self):
+        # Undirected Lommen-style rules `l -> l'` (no Com_1 wrapper).
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0))
+(VAR A)
+(RULES
+  l0(A) -> l0(A - 1) :|: A >= 1
+)
+"""
+        r = import_koat(src)
+        assert len(r.commands) == 1
+
+    def test_com_arity_mismatch_rejected(self):
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0))
+(VAR A)
+(RULES
+  l0(A) -> Com_2(l1(A)) :|: A >= 0
+)
+"""
+        with pytest.raises(ValueError, match="malformed"):
+            import_koat(src)
+
+    def test_duplicate_formals_rejected(self):
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS f))
+(VAR A)
+(RULES
+  f(A,A) -> Com_1(f(A - 1, A + 2)) :|: A >= 1
+)
+"""
+        with pytest.raises(ValueError, match="Duplicate"):
+            import_koat(src)
+
+    def test_multiple_start_symbols_rejected(self):
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0 l9))
+(VAR A)
+(RULES
+  l0(A) -> Com_1(l9(A - 1)) :|: A >= 1
+)
+"""
+        with pytest.raises(ValueError, match="start symbols"):
+            import_koat(src)
+
+    def test_var_decl_optional(self):
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0))
+(RULES
+  l0(A) -> Com_1(l0(A - 1)) :|: A >= 1
+)
+"""
+        r = import_koat(src)
+        assert len(r.commands) == 1
+
+    def test_pc_collision_renamed(self):
+        # A program variable named `pc` forces the injected counter onto `_pc`.
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0))
+(VAR A pc)
+(RULES
+  l0(A) -> Com_1(l0(A - 1)) :|: A >= 1
+)
+"""
+        r = import_koat(src)
+        assert list(r.types) == ["_pc"]
+
+    def test_negative_literals_and_alt_conjunction(self):
+        src = """(GOAL COMPLEXITY)
+(STARTTERM (FUNCTIONSYMBOLS l0))
+(VAR A B)
+(RULES
+  l0(A,B) -> Com_1(l0(A - 1, -1)) :|: A >= -5 /\\ B = 0
+)
+"""
+        r = import_koat(src)
+        assert len(r.commands[0].guards) == 3  # pc == 0, A >= -5, B = 0
+
 
 class TestEndToEnd:
     def test_sect5_len_synthesizes_and_verifies(self):
@@ -87,7 +191,9 @@ class TestEndToEnd:
 
     def test_real_example_files_import(self):
         examples = pathlib.Path(__file__).resolve().parents[1] / "examples" / "its"
-        for f in examples.glob("*.koat"):
+        files = sorted(examples.glob("*.koat"))
+        assert files, "no example .koat files found — glob would make this test vacuous"
+        for f in files:
             r = import_koat(f.read_text())
             assert "pc" in r.types
             assert r.commands
@@ -135,3 +241,25 @@ class TestHarnessCategorizer:
         src = ("(GOAL COMPLEXITY)\n(STARTTERM (FUNCTIONSYMBOLS l0))\n(VAR A B)\n"
                "(RULES\n  l0(A,B) -> Com_1(l0(A * B, B)) :|: A >= 1\n)\n")
         assert self._classify(tmp_path, "nonlin.koat", src) == "unsupported-nonlinear"
+
+    def test_exponent_bucket(self, tmp_path):
+        # `^` is rejected at import; it must land in the nonlinear bucket, not "pass" mangled.
+        src = ("(GOAL COMPLEXITY)\n(STARTTERM (FUNCTIONSYMBOLS l0))\n(VAR A)\n"
+               "(RULES\n  l0(A) -> Com_1(l0(A + 1)) :|: A^2 >= A\n)\n")
+        assert self._classify(tmp_path, "exp.koat", src) == "unsupported-nonlinear"
+
+    def test_pc_var_still_runs(self, tmp_path):
+        # A file declaring `pc` must run (counter renamed to _pc), not land in "error".
+        src = ("(GOAL COMPLEXITY)\n(STARTTERM (FUNCTIONSYMBOLS l0))\n(VAR A pc)\n"
+               "(RULES\n  l0(A) -> Com_1(l0(A - 1)) :|: A >= 1\n)\n")
+        assert self._classify(tmp_path, "pcvar.koat", src) == "pass"
+
+    def test_progress_milestones(self):
+        run_its = _load_run_its()
+        reported, printed = 0, []
+        for done in [10, 25, 25, 25, 26, 49, 51, 75, 75, 100]:
+            if run_its._crossed_milestone(done, reported):
+                printed.append(done)
+                reported = done
+        # Once per 25-bucket: no repeats while stalled at 25/75, no misses when 49->51 skips 50.
+        assert printed == [25, 51, 75, 100]

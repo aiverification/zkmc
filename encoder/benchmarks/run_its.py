@@ -4,8 +4,8 @@ For each `.koat` file: import -> synthesize a ranking (symbolic, no bounds) -> v
 runs in a child process with a wall-clock timeout (synthesis can be slow / hang on hard cases), and
 its outcome is classified with a *reason*:
 
-  pass                 ranking synthesized and verified
-  verify-fail          synthesized, but the verifier rejected it (should not happen)
+  pass                 ranking synthesized, validated (disjoint/covering/non-negative) and verified
+  verify-fail          synthesized, but validation or the verifier rejected it
   no-ranking           search exhausted (single-scalar limit: needs multiphase / invariants)
   unsupported-comn     Com_n (n>1) recursion
   unsupported-nonlinear   non-linear update/guard
@@ -48,9 +48,12 @@ def _classify(path, max_mode_vars, max_regions, emit_dir):
         msg = str(e)
         if "recursion" in msg or "Com_n" in msg or "successors" in msg:
             return "unsupported-comn", msg.splitlines()[0][:70], meta
+        if "on-linear" in msg:  # "Non-linear exponentiation ..."
+            return "unsupported-nonlinear", msg.splitlines()[0][:70], meta
         return "unsupported-parse", msg.splitlines()[0][:70], meta
 
-    meta["locations"] = result.types["pc"].max_value + 1
+    pc = next(iter(result.types))  # the koat importer renames pc to _pc on collision
+    meta["locations"] = result.types[pc].max_value + 1
     meta["transitions"] = len(result.commands)
 
     # --- synthesize ---
@@ -66,6 +69,17 @@ def _classify(path, max_mode_vars, max_regions, emit_dir):
         return "error", f"{type(e).__name__}: {str(e).splitlines()[0][:60]}", meta
     meta["synth_s"] = round(time.time() - t0, 2)
 
+    # --- validate (well-formedness: disjointness, coverage, non-negativity) ---
+    from zkterm_tool import validate_ranking_function
+    from zkterm_tool.ranking_encoder import encode_ranking_functions
+    try:
+        for state, enc in encode_ranking_functions(result.ranking_functions).items():
+            ok, errors = validate_ranking_function(enc.finite_cases, enc.infinity_cases, enc.variables)
+            if not ok:
+                return "verify-fail", f"invalid ranking ({state}): {errors[0][:45]}", meta
+    except Exception as e:
+        return "error", f"validate {type(e).__name__}: {str(e).splitlines()[0][:50]}", meta
+
     # --- verify ---
     try:
         v = verify_termination(result)
@@ -79,14 +93,15 @@ def _classify(path, max_mode_vars, max_regions, emit_dir):
     if emit_dir:
         try:
             import json
-            from zkterm_tool.farkas_cli import extract_farkas_obligations
+            from zkterm_tool.farkas_cli import extract_farkas_obligations_from_result
             os.makedirs(emit_dir, exist_ok=True)
-            obls = extract_farkas_obligations(path)  # note: re-imports; fine for staging
+            obls = extract_farkas_obligations_from_result(result)  # keeps the synthesized ranking
             out = os.path.join(emit_dir, os.path.splitext(os.path.basename(path))[0] + ".json")
             with open(out, "w") as fh:
                 json.dump({"obligations": obls, "count": len(obls)}, fh)
-        except Exception:
-            pass  # emission is best-effort; don't fail the benchmark on it
+        except Exception as e:
+            # Emission is best-effort, but never silent: a broken pipeline should be visible.
+            print(f"  warning: --emit-farkas failed for {os.path.basename(path)}: {e}", file=sys.stderr)
 
     return "pass", f"{meta['cases']} cases, {meta['obligations']} obl", meta
 
@@ -96,6 +111,12 @@ def _worker(path, q, max_mode_vars, max_regions, emit_dir):
         q.put(_classify(path, max_mode_vars, max_regions, emit_dir))
     except Exception as e:  # pragma: no cover - defensive
         q.put(("error", f"{type(e).__name__}: {str(e)[:60]}", {}))
+
+
+def _crossed_milestone(done: int, reported: int, step: int = 25) -> bool:
+    """True when `done` entered a new `step` bucket since the last report (print each bucket once,
+    even when several results land in one poll iteration or the count stalls on a multiple)."""
+    return done // step > reported // step
 
 
 def _suite_of(path, corpus):
@@ -131,10 +152,12 @@ def main(argv=None) -> int:
 
     def launch(path):
         q: Queue = Queue()
-        p = Process(target=_worker, args=(path, q, args.max_mode_vars, args.max_regions, args.emit_farkas))
+        p = Process(target=_worker, args=(path, q, args.max_mode_vars, args.max_regions, args.emit_farkas),
+                    daemon=True)  # don't block interpreter exit (Ctrl-C) on a stuck synthesis
         p.start()
         active.append((p, q, path, time.time()))
 
+    reported = 0
     while idx < len(files) or active:
         while len(active) < args.jobs and idx < len(files):
             launch(files[idx]); idx += 1
@@ -143,10 +166,18 @@ def main(argv=None) -> int:
         for p, q, path, t0 in active:
             if not p.is_alive():
                 p.join()
-                status, detail, meta = q.get() if not q.empty() else ("error", "no result (crash?)", {})
+                try:
+                    status, detail, meta = q.get(timeout=1.0)
+                except Exception:
+                    status, detail, meta = "error", f"no result (exit code {p.exitcode})", {}
             elif time.time() - t0 > args.timeout:
                 p.terminate(); p.join()
-                status, detail, meta = "timeout", f">{args.timeout:.0f}s", {}
+                # The child may have finished between the aliveness check and the kill; prefer its
+                # real result over a timeout misclassification.
+                try:
+                    status, detail, meta = q.get(timeout=0.5)
+                except Exception:
+                    status, detail, meta = "timeout", f">{args.timeout:.0f}s", {}
             else:
                 still.append((p, q, path, t0)); continue
             suite = _suite_of(path, args.corpus)
@@ -154,7 +185,8 @@ def main(argv=None) -> int:
             if args.verbose:
                 print(f"  {os.path.basename(path):34} {status:20} {detail}")
         active = still
-        if not args.verbose and len(results) % 25 == 0 and results:
+        if not args.verbose and _crossed_milestone(len(results), reported):
+            reported = len(results)
             print(f"  ... {len(results)}/{len(files)} done", flush=True)
 
     # --- summary ---
