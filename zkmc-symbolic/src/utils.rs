@@ -1,5 +1,6 @@
 use bls12_381 as bls12;
 use blstrs;
+use std::hash::{Hash, Hasher};
 use zkmatrix::mat::Mat;
 use zkmatrix::utils::curve as bls;
 
@@ -131,3 +132,25 @@ pub fn i64_to_zp(v: i64) -> bls::ZpElement {
         -bls::ZpElement::from(v.unsigned_abs() as u64)
     }
 }
+
+// ============================================== HASHABLE WRAPPERS ==============================================
+
+#[repr(C, packed)]
+struct GtBytes(bls12::Gt);
+
+#[derive(Clone, Copy)]
+pub struct HashableGtElement(pub bls::GtElement);
+
+impl Hash for HashableGtElement {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let bytes: [u8; 576] = unsafe { std::mem::transmute_copy(&GtBytes(self.0.value)) };
+        state.write(&bytes);
+    }
+}
+
+impl PartialEq for HashableGtElement {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl Eq for HashableGtElement {}

@@ -5,7 +5,8 @@ use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
 use serde::Deserialize;
 use serde_json::Value;
-use std::{collections::HashMap, fs, fs::File, io::Write, path::Path, sync::Mutex, time::Instant};
+use std::{collections::HashMap, fs, fs::File, io::Write, path::Path, time::Instant};
+use dashmap::DashMap;
 use zkmatrix::commit_mat::CommitMat;
 use zkmatrix::utils::curve as bls;
 use zkmc_symbolic::zkrp;
@@ -83,21 +84,6 @@ struct prover_neg_b_s_T_cache_entry {
     q: usize,
 }
 
-#[derive(Debug, Clone)]
-struct verifier_A_s_T_cache_entry {
-    q: usize,
-    comm_A: bls::GtElement,
-    A_plus_M_proof: ZKRPProof,
-}
-
-#[derive(Debug, Clone)]
-struct verifier_neg_b_s_T_cache_entry {
-    q: usize,
-    comm_b: bls::GtElement,
-    neg_b_plus_M_proof: ZKRPProof,
-}
-
-
 fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {    
     let chunk_size = 200;
     let sample_size: usize = 1;
@@ -167,8 +153,8 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
                 HashMap::new();
             let mut prover_b_cache: HashMap<MatrixCacheKey, prover_neg_b_s_T_cache_entry> =
                 HashMap::new();
-            let verifier_A_cache: Mutex<Vec<verifier_A_s_T_cache_entry>> = Mutex::new(Vec::new());
-            let verifier_b_cache: Mutex<Vec<verifier_neg_b_s_T_cache_entry>> = Mutex::new(Vec::new());
+            let verifier_A_cache: DashMap<(usize, HashableGtElement), ZKRPProof> = DashMap::new();
+            let verifier_b_cache: DashMap<(usize, HashableGtElement), ZKRPProof> = DashMap::new();
             let big_M = 2u32.pow(31) - 1;
 
             let mut max_q: usize = 0;
@@ -512,17 +498,17 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
                             let mut zkp_verified = false;
 
                             let (is_a_cached, a_mismatch) = {
-                                let cache = verifier_A_cache.lock().unwrap();
-                                match cache.iter().find(|e| e.q == local_zkp_pp.q && e.comm_A == zkp_proof.c_A) {
-                                    Some(entry) if entry.A_plus_M_proof == zkp_proof.A_plus_M_zkrp_proof => (true, false),
+                                let key = (local_zkp_pp.q, HashableGtElement(zkp_proof.c_A));
+                                match verifier_A_cache.get(&key) {
+                                    Some(cached) if *cached == zkp_proof.A_plus_M_zkrp_proof => (true, false),
                                     Some(_) => (false, true),
                                     None => (false, false),
                                 }
                             };
                             let (is_b_cached, b_mismatch) = {
-                                let cache = verifier_b_cache.lock().unwrap();
-                                match cache.iter().find(|e| e.q == local_zkp_pp.q && e.comm_b == zkp_proof.c_b) {
-                                    Some(entry) if entry.neg_b_plus_M_proof == zkp_proof.neg_b_plus_M_zkrp_proof => (true, false),
+                                let key = (local_zkp_pp.q, HashableGtElement(zkp_proof.c_b));
+                                match verifier_b_cache.get(&key) {
+                                    Some(cached) if *cached == zkp_proof.neg_b_plus_M_zkrp_proof => (true, false),
                                     Some(_) => (false, true),
                                     None => (false, false),
                                 }
@@ -531,25 +517,20 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
                             if a_mismatch || b_mismatch {
                                 zkp_verified = false;
                             } else {
+                                // println!("Verifying obl {idx:?}: a cache: {is_a_cached:?}, b cache: {is_b_cached:?}"); // FOR DEBUG 
                                 zkp_verified =
                                     zkp_proof.verify(local_zkp_pp, G_p_T, h_p_T, is_a_cached, is_b_cached);
                                 if zkp_verified {
                                     if !is_a_cached {
-                                        verifier_A_cache.lock().unwrap().push(
-                                            verifier_A_s_T_cache_entry {
-                                                q: local_zkp_pp.q,
-                                                comm_A: zkp_proof.c_A,
-                                                A_plus_M_proof: zkp_proof.A_plus_M_zkrp_proof.clone(),
-                                            },
+                                        verifier_A_cache.insert(
+                                            (local_zkp_pp.q, HashableGtElement(zkp_proof.c_A)),
+                                            zkp_proof.A_plus_M_zkrp_proof.clone(),
                                         );
                                     }
                                     if !is_b_cached {
-                                        verifier_b_cache.lock().unwrap().push(
-                                            verifier_neg_b_s_T_cache_entry {
-                                                q: local_zkp_pp.q,
-                                                comm_b: zkp_proof.c_b,
-                                                neg_b_plus_M_proof: zkp_proof.neg_b_plus_M_zkrp_proof.clone(),
-                                            },
+                                        verifier_b_cache.insert(
+                                            (local_zkp_pp.q, HashableGtElement(zkp_proof.c_b)),
+                                            zkp_proof.neg_b_plus_M_zkrp_proof.clone(),
                                         );
                                     }
                                 }
