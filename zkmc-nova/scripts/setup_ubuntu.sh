@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Install Rust and Phase Two dependencies.
+# Install Rust, Python, and pinned dependencies.
 set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
 sudo apt update
 sudo apt install -y build-essential pkg-config libssl-dev clang cmake git curl python3-venv
 if ! command -v rustup >/dev/null 2>&1; then
@@ -11,5 +15,7 @@ rustup update
 python3 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
+./scripts/setup_sonobe_offchain.sh
+cargo generate-lockfile
 rustc --version
 cargo --version

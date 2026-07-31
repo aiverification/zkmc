@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Adapt official zkfarkas output for Nova."""
+"""Normalize and independently check official ZKMC Farkas obligations."""
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import secrets
 from pathlib import Path
 from typing import Any
 
-EXPECTED_COUNT = 217
 MAX_U64_BITS = 63
 
 
@@ -44,7 +43,7 @@ def classify(item: dict[str, Any]) -> str:
 
 def label(index: int, item: dict[str, Any]) -> str:
     """Build a stable human-readable obligation label."""
-    parts = [f"official-{index:03}", item["obligation_type"]]
+    parts = [f"official-{index:05}", item["obligation_type"]]
     if "program_transition" in item:
         parts.append(f"program={item['program_transition']}")
     automaton = item.get("automaton_transition")
@@ -108,7 +107,6 @@ def adapt_item(index: int, item: dict[str, Any]) -> tuple[dict[str, Any], int]:
         *mu_s,
         delta,
     ]
-    maximum = max(magnitudes, default=1)
     adapted = {
         "kind": classify(item),
         "label": label(index, item),
@@ -119,32 +117,41 @@ def adapt_item(index: int, item: dict[str, Any]) -> tuple[dict[str, Any], int]:
         "lambda": lambda_s,
         "mu": mu_s,
     }
-    return adapted, maximum
+    return adapted, max(magnitudes, default=1)
 
 
-def stable_tag(payload: Any, domain: str) -> int:
-    """Derive a deterministic non-cryptographic state tag."""
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    digest = hashlib.sha256(domain.encode() + b"\0" + encoded).digest()
-    return int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
-
-
-def write_config(path: Path, secret_rows: int, public_rows: int, columns: int, bound: int) -> None:
+def write_config(
+    path: Path,
+    secret_rows: int,
+    public_rows: int,
+    columns: int,
+    bound: int,
+    count: int,
+) -> None:
     """Write exact fixed dimensions for this benchmark."""
     range_bits = max(1, bound.bit_length())
-    count_bits = max(1, EXPECTED_COUNT.bit_length())
+    count_bits = max(1, count.bit_length())
     if range_bits > MAX_U64_BITS:
         raise ValueError(f"required range width {range_bits} exceeds {MAX_U64_BITS} bits")
-    text = f'''// Stores generated benchmark circuit dimensions.\n\npub const MAX_SECRET_ROWS: usize = {secret_rows};\npub const MAX_PUBLIC_ROWS: usize = {public_rows};\npub const MAX_COLUMNS: usize = {columns};\npub const RANGE_BITS: usize = {range_bits};\npub const COUNT_BITS: usize = {count_bits};\n'''
+    text = (
+        "// Stores generated benchmark circuit dimensions.\n\n"
+        f"pub const MAX_SECRET_ROWS: usize = {secret_rows};\n"
+        f"pub const MAX_PUBLIC_ROWS: usize = {public_rows};\n"
+        f"pub const MAX_COLUMNS: usize = {columns};\n"
+        f"pub const RANGE_BITS: usize = {range_bits};\n"
+        f"pub const COUNT_BITS: usize = {count_bits};\n"
+    )
     path.write_text(text)
 
 
 def main() -> None:
-    """Convert, verify, and size the official benchmark."""
+    """Convert, verify, and size one official benchmark."""
     parser = argparse.ArgumentParser()
     parser.add_argument("official_json", type=Path)
     parser.add_argument("batch_json", type=Path)
     parser.add_argument("config_rs", type=Path)
+    parser.add_argument("--benchmark", required=True)
+    parser.add_argument("--expected-count", type=int)
     args = parser.parse_args()
 
     official = json.loads(args.official_json.read_text())
@@ -152,11 +159,13 @@ def main() -> None:
     declared_count = int(official.get("count", -1))
     if declared_count != len(obligations):
         raise ValueError("official count does not match obligation list")
-    if declared_count != EXPECTED_COUNT:
-        raise ValueError(f"expected {EXPECTED_COUNT} obligations, received {declared_count}")
+    if args.expected_count is not None and declared_count != args.expected_count:
+        raise ValueError(
+            f"expected {args.expected_count} obligations, received {declared_count}"
+        )
 
     adapted: list[dict[str, Any]] = []
-    bound = EXPECTED_COUNT
+    bound = declared_count
     max_secret_rows = 0
     max_public_rows = 0
     max_columns = 0
@@ -168,17 +177,28 @@ def main() -> None:
         max_public_rows = max(max_public_rows, len(converted["g_p"]))
         max_columns = max(max_columns, len(converted["a_s"][0]))
 
+    blinding_low = secrets.randbits(64)
+    blinding_high = secrets.randbits(64)
+    if blinding_low == 0 and blinding_high == 0:
+        blinding_high = 1
+
     batch = {
-        "schema_version": 1,
-        "benchmark": "exb_i1a2_official",
-        "model_tag": stable_tag(official.get("constants", {}), "zkmc-model"),
-        "certificate_tag": stable_tag(official, "zkmc-certificate"),
+        "schema_version": 3,
+        "benchmark": args.benchmark,
         "bound": bound,
+        "model_blinding": {"low": blinding_low, "high": blinding_high},
         "obligations": adapted,
     }
     args.batch_json.parent.mkdir(parents=True, exist_ok=True)
     args.batch_json.write_text(json.dumps(batch, indent=2) + "\n")
-    write_config(args.config_rs, max_secret_rows, max_public_rows, max_columns, bound)
+    write_config(
+        args.config_rs,
+        max_secret_rows,
+        max_public_rows,
+        max_columns,
+        bound,
+        declared_count,
+    )
 
     kinds = {kind: sum(item["kind"] == kind for item in adapted) for kind in ("init", "step", "fair")}
     print(f"official obligations: {declared_count}")
@@ -186,6 +206,8 @@ def main() -> None:
     print(f"fixed shape: ({max_secret_rows},{max_public_rows},{max_columns})")
     print(f"inclusive bound: {bound}")
     print(f"range bits: {max(1, bound.bit_length())}")
+    print(f"count bits: {max(1, declared_count.bit_length())}")
+    print("model blinding: generated 128 secret bits")
 
 
 if __name__ == "__main__":

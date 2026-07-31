@@ -72,8 +72,8 @@ def main() -> None:
     """Solve every obligation and write JSON."""
     args = parse_args()
     data = json.loads(args.input.read_text())
-    if data.get("schema_version") != 1:
-        raise ValueError("schema_version must equal 1")
+    if data.get("schema_version") != 3:
+        raise ValueError("schema_version must equal 3")
     bound = int(data["bound"])
     if bound <= 0:
         raise ValueError("bound must be positive")

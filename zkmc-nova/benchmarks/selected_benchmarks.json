@@ -1,0 +1,92 @@
+[
+  {
+    "name": "exb_i1a2",
+    "family": "exb",
+    "program_file": "exp_backoff_guard_opt.gc",
+    "constants": {
+      "initialDelay": 1,
+      "maxAttempts": 2
+    },
+    "expected_obligations": 217,
+    "paper_state_space_log2": 5.0
+  },
+  {
+    "name": "exb_i2a2",
+    "family": "exb",
+    "program_file": "exp_backoff_guard_opt.gc",
+    "constants": {
+      "initialDelay": 2,
+      "maxAttempts": 2
+    },
+    "expected_obligations": 217,
+    "paper_state_space_log2": 6.0
+  },
+  {
+    "name": "exb_i4a2",
+    "family": "exb",
+    "program_file": "exp_backoff_guard_opt.gc",
+    "constants": {
+      "initialDelay": 4,
+      "maxAttempts": 2
+    },
+    "expected_obligations": 217,
+    "paper_state_space_log2": 7.0
+  },
+  {
+    "name": "exb_i2a3",
+    "family": "exb",
+    "program_file": "exp_backoff_guard_opt.gc",
+    "constants": {
+      "initialDelay": 2,
+      "maxAttempts": 3
+    },
+    "expected_obligations": 260,
+    "paper_state_space_log2": 7.6
+  },
+  {
+    "name": "exb_i8a2",
+    "family": "exb",
+    "program_file": "exp_backoff_guard_opt.gc",
+    "constants": {
+      "initialDelay": 8,
+      "maxAttempts": 2
+    },
+    "expected_obligations": 217,
+    "paper_state_space_log2": 8.0
+  },
+  {
+    "name": "exb_i4a3",
+    "family": "exb",
+    "program_file": "exp_backoff_guard_opt.gc",
+    "constants": {
+      "initialDelay": 4,
+      "maxAttempts": 3
+    },
+    "expected_obligations": 260,
+    "paper_state_space_log2": 8.6
+  },
+  {
+    "name": "dhcp_noOFF_7_2_7",
+    "family": "dhcp",
+    "dhcp": {
+      "w1": 7,
+      "attempts": 2,
+      "w2": 7,
+      "no_offered_state": true
+    },
+    "expected_obligations": 1649,
+    "paper_state_space_log2": 10.1
+  },
+  {
+    "name": "dhcp_7_2_7",
+    "family": "dhcp",
+    "dhcp": {
+      "w1": 7,
+      "attempts": 2,
+      "w2": 7,
+      "no_offered_state": false
+    },
+    "expected_obligations": 2139,
+    "paper_state_space_log2": 10.3
+  }
+]
