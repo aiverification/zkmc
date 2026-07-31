@@ -1,6 +1,7 @@
 //! Checks Farkas obligations outside circuits.
 
 use crate::{
+    commitment::{validate_batch_commitments, BatchCommitments},
     config::{MAX_COLUMNS, MAX_PUBLIC_ROWS, MAX_SECRET_ROWS},
     model::{Batch, Obligation},
     AppResult,
@@ -40,8 +41,19 @@ pub fn check_plain(batch: &Batch, obligation: &Obligation) -> Result<i128, Strin
     Ok(delta)
 }
 
-/// Checks every obligation using integer arithmetic.
+/// Checks every obligation and batch commitment.
 pub fn run_plain(batch: &Batch) -> AppResult<()> {
+    validate_batch_commitments(
+        &batch.obligations,
+        batch.bound,
+        batch.model_blinding,
+        BatchCommitments {
+            blinding: batch.model_blinding_commitment,
+            model: batch.model_commitment,
+            certificate: batch.certificate_commitment,
+        },
+    )?;
+
     for obligation in &batch.obligations {
         let delta = check_plain(batch, obligation).map_err(|error| {
             io::Error::new(
@@ -58,5 +70,6 @@ pub fn run_plain(batch: &Batch) -> AppResult<()> {
         "plain checks passed: {} obligations",
         batch.obligations.len()
     );
+    println!("batch Poseidon commitments verified");
     Ok(())
 }

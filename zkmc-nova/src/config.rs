@@ -3,6 +3,7 @@
 include!("generated_config.rs");
 
 pub const DEFAULT_INPUT: &str = "examples/obligations.json";
+pub const MODEL_BLINDING_BITS: usize = 64;
 
 /// Returns the representable inclusive integer bound.
 pub fn max_bound() -> u64 {

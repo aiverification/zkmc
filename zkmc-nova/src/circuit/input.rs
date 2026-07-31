@@ -4,8 +4,8 @@ use crate::{
     config::{MAX_COLUMNS, MAX_PUBLIC_ROWS, MAX_SECRET_ROWS},
     model::{Batch, Obligation},
 };
-use ark_bn254::Fr;
 use ark_ff::PrimeField;
+use ark_mnt4_298::Fr;
 use ark_r1cs_std::{
     alloc::{AllocVar, AllocationMode},
     boolean::Boolean,
@@ -30,9 +30,10 @@ pub struct SignedVar<F: PrimeField> {
 pub struct StepInput<F: PrimeField> {
     pub index: F,
     pub total: F,
-    pub model_tag: F,
-    pub certificate_tag: F,
+    pub kind: F,
     pub bound: F,
+    pub model_blinding_low: F,
+    pub model_blinding_high: F,
     pub a_s: Vec<SignedInput<F>>,
     pub b_s: Vec<SignedInput<F>>,
     pub g_p: Vec<SignedInput<F>>,
@@ -45,9 +46,10 @@ pub struct StepInput<F: PrimeField> {
 pub struct StepInputVar<F: PrimeField> {
     pub index: FpVar<F>,
     pub total: FpVar<F>,
-    pub model_tag: FpVar<F>,
-    pub certificate_tag: FpVar<F>,
+    pub kind: FpVar<F>,
     pub bound: FpVar<F>,
+    pub model_blinding_low: FpVar<F>,
+    pub model_blinding_high: FpVar<F>,
     pub a_s: Vec<SignedVar<F>>,
     pub b_s: Vec<SignedVar<F>>,
     pub g_p: Vec<SignedVar<F>>,
@@ -61,9 +63,10 @@ pub fn as_input(batch: &Batch, index: usize, obligation: &Obligation) -> StepInp
     StepInput {
         index: Fr::from(index as u64),
         total: Fr::from(batch.obligations.len() as u64),
-        model_tag: Fr::from(batch.model_tag),
-        certificate_tag: Fr::from(batch.certificate_tag),
+        kind: Fr::from(obligation.kind.code()),
         bound: Fr::from(batch.bound),
+        model_blinding_low: Fr::from(batch.model_blinding.low),
+        model_blinding_high: Fr::from(batch.model_blinding.high),
         a_s: obligation.a_s.iter().copied().map(signed_input).collect(),
         b_s: obligation.b_s.iter().copied().map(signed_input).collect(),
         g_p: obligation.g_p.iter().copied().map(signed_input).collect(),
@@ -95,9 +98,10 @@ impl<F: PrimeField> Default for StepInput<F> {
         Self {
             index: F::zero(),
             total: F::one(),
-            model_tag: F::zero(),
-            certificate_tag: F::zero(),
+            kind: F::zero(),
             bound: F::one(),
+            model_blinding_low: F::one(),
+            model_blinding_high: F::zero(),
             a_s: zero_signed(MAX_SECRET_ROWS * MAX_COLUMNS),
             b_s: zero_signed(MAX_SECRET_ROWS),
             g_p: zero_signed(MAX_PUBLIC_ROWS * MAX_COLUMNS),
@@ -122,9 +126,10 @@ impl<F: PrimeField> Default for StepInputVar<F> {
         Self {
             index: zero.clone(),
             total: FpVar::Constant(F::one()),
-            model_tag: zero.clone(),
-            certificate_tag: zero.clone(),
+            kind: zero.clone(),
             bound: FpVar::Constant(F::one()),
+            model_blinding_low: FpVar::Constant(F::one()),
+            model_blinding_high: zero.clone(),
             a_s: signed(MAX_SECRET_ROWS * MAX_COLUMNS),
             b_s: signed(MAX_SECRET_ROWS),
             g_p: signed(MAX_PUBLIC_ROWS * MAX_COLUMNS),
@@ -148,9 +153,18 @@ impl<F: PrimeField> AllocVar<StepInput<F>, F> for StepInputVar<F> {
         Ok(Self {
             index: FpVar::new_variable(cs.clone(), || Ok(input.index), mode)?,
             total: FpVar::new_variable(cs.clone(), || Ok(input.total), mode)?,
-            model_tag: FpVar::new_variable(cs.clone(), || Ok(input.model_tag), mode)?,
-            certificate_tag: FpVar::new_variable(cs.clone(), || Ok(input.certificate_tag), mode)?,
+            kind: FpVar::new_variable(cs.clone(), || Ok(input.kind), mode)?,
             bound: FpVar::new_variable(cs.clone(), || Ok(input.bound), mode)?,
+            model_blinding_low: FpVar::new_variable(
+                cs.clone(),
+                || Ok(input.model_blinding_low),
+                mode,
+            )?,
+            model_blinding_high: FpVar::new_variable(
+                cs.clone(),
+                || Ok(input.model_blinding_high),
+                mode,
+            )?,
             a_s: alloc_signed(cs.clone(), &input.a_s, mode)?,
             b_s: alloc_signed(cs.clone(), &input.b_s, mode)?,
             g_p: alloc_signed(cs.clone(), &input.g_p, mode)?,
