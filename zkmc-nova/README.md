@@ -1,135 +1,109 @@
 # ZKMC–Sonobe backend
 
-This repository connects the official **Zero-Knowledge Model Checking (ZKMC)** obligation generator to a Nova folding backend built with Sonobe. It reproduces the paper’s `exb_i1a2` benchmark and proves all 217 symbolic obligations in one incrementally verifiable computation.
+This repository converts symbolic ZKMC obligations into one fixed R1CS step circuit, folds the ordered steps with Nova, and compresses the completed IVC computation with Sonobe's **offchain Nova decider**.
 
-## What is implemented
-
-- The official ZKMC encoder is pinned and run on the exponential-backoff model with `initialDelay=1` and `maxAttempts=2`.
-- `zkfarkas` generates the complete symbolic obligation set and integer Farkas witnesses.
-- `scripts/adapt_official.py` validates the upstream JSON, converts it into the local fixed-shape format, and derives the required circuit dimensions and bound.
-- A plain Rust checker verifies every obligation before circuit execution.
-- An Arkworks R1CS circuit proves one padded Farkas obligation per step.
-- Nova folds all obligations sequentially, and Sonobe’s IVC verifier checks the final folded proof.
-
-## End-to-end flow
+## Implemented flow
 
 ```text
-Guarded-command model + Büchi automaton + ranking function
-                         │
-                         ▼
-              Official ZKMC `zkfarkas`
-                         │
-                         ▼
-          217 symbolic obligations and witnesses
-                         │
-                         ▼
-     Validate, normalize, pad, and generate dimensions
-                         │
-                         ▼
-       Plain check → R1CS check → Nova folding
-                         │
-                         ▼
-                 Sonobe IVC verification
+guarded-command benchmark
+        ↓
+official ZKMC encoder and Farkas witnesses
+        ↓
+normalized, zero-padded obligations
+        ↓
+plain integer verification
+        ↓
+fixed R1CS Farkas circuit
+        ↓
+ordered Poseidon model/certificate commitments
+        ↓
+Nova folding and IVC verification
+        ↓
+offchain Groth16/KZG decider proof
+        ↓
+canonical serialization, reload, and verification
 ```
 
-## Proved relation
-
-For every obligation, the circuit enforces:
+Each step enforces:
 
 ```text
-A_s^T λ = -G_p^T μ
-δ = -b_s^T λ - h_p^T μ - 1
-λ, μ, δ ∈ [0, M]
-A_s, b_s, G_p, h_p ∈ [-M, M]
+A_s^T lambda = -G_p^T mu
+delta = -b_s^T lambda - h_p^T mu - 1
+delta, lambda, mu in [0, M]
+coefficients in [-M, M]
 ```
 
-Here, `λ` and `μ` are Farkas multipliers: compact certificates that the corresponding system of inequalities has no violating state.
+The recursive state binds the processed count, total count, model commitment, certificate commitment, running ordered digests, bound, and model-blinding commitment.
 
-Signed values use sign-and-magnitude encoding. Zero padding gives every obligation the same R1CS shape, while range checks prevent values from exceeding the generated benchmark bound.
+## Why the offchain decider
 
-## Nova state
+This is a local research prover, not an Ethereum verifier. The previous BN254/Grumpkin `decider_eth` path produced a valid Nova IVC instance but an unsatisfied Ethereum-specific decider circuit. The replacement follows Sonobe's dedicated offchain design: an MNT4-298/MNT6-298 curve cycle, KZG commitments on both curves, and one Groth16 proof per decider circuit.
 
-The recursive state is:
+The setup script pins Sonobe at `9b7dd34` and applies one narrow source change: it derives canonical serialization for Sonobe's offchain proof container. The cryptographic computation and verification logic are unchanged.
 
-```text
-[processed_count, total_count, model_tag, certificate_tag, bound]
-```
-
-Each fold checks the expected obligation index, preserves the batch metadata, proves one Farkas relation, and increments `processed_count`.
-
-For the official benchmark, verification completed with:
-
-```text
-217 obligations: 2 initial, 170 transition, 45 fair
-fixed shape:      28 secret rows, 11 public rows, 10 columns
-bound:            217
-range bits:       8
-final state:      [217, 217, 4157934096332607709,
-                   2495031230553792324, 217]
-```
-
-## Run the official benchmark
+## Setup
 
 ```bash
 cd ~/Code/zkmc
+chmod +x scripts/*.sh scripts/*.py
+./scripts/setup_ubuntu.sh
 source "$HOME/.cargo/env"
-chmod +x scripts/run_exb_i1a2.sh
+```
+
+For an existing environment:
+
+```bash
+./scripts/setup_sonobe_offchain.sh
+cargo generate-lockfile
+```
+
+## Small complete run
+
+```bash
+./scripts/smoke.sh
+```
+
+A successful run prints:
+
+```text
+ivc verification passed
+in-memory offchain decider verification passed
+serialized offchain decider verification passed
+decider proof verification passed
+```
+
+## Official `exb_i1a2` run
+
+```bash
 ./scripts/run_exb_i1a2.sh
 ```
 
-A successful run confirms:
+The script requires exactly 217 official obligations and stores:
 
 ```text
-217 obligations folded
-ivc verification passed
-final state begins with [217, 217, ...]
+artifacts/exb_i1a2_phase3/
+├── statement.json
+├── decider_proof.bin
+├── decider_verifier.bin
+├── decider_public.bin
+└── manifest.json
 ```
-
-The complete run log is written to:
-
-```text
-artifacts/exb_i1a2_phase2.log
-```
-
-## Development commands
-
-```bash
-cargo test
-cargo run --release -- inspect path/to/obligations.json
-cargo run --release -- plain path/to/obligations.json
-cargo run --release -- circuit path/to/obligations.json
-cargo run --release -- nova path/to/obligations.json
-cargo run --release -- all path/to/obligations.json
-```
-
-`plain` checks the integer relation directly. `circuit` tests the same relation inside Arkworks without Nova. `nova` performs the recursive folding and final IVC verification.
 
 ## Source layout
 
 ```text
 src/main.rs                 CLI dispatch
-src/lib.rs                  crate exports and shared result type
-src/config.rs               fixed configuration interface
-src/generated_config.rs     benchmark-generated dimensions and bounds
-src/model.rs                batch and obligation data structures
-src/input.rs                JSON parsing, validation, and padding
-src/checker.rs              plain integer Farkas checks
-src/circuit/input.rs        circuit inputs and witness allocation
-src/circuit/constraints.rs  fixed-shape R1CS relation
-src/runner.rs               inspection, circuit, and Nova execution
-src/tests.rs                positive and negative tests
-
-scripts/adapt_official.py   upstream JSON adapter and dimension scan
-scripts/run_exb_i1a2.sh     complete reproducible benchmark pipeline
-scripts/solve_farkas.py     normalized standalone witness generator
-scripts/check_structure.sh  source-layout and line-count checks
+src/model.rs                obligation and batch types
+src/input.rs                JSON parsing and padding
+src/checker.rs              plain Farkas verification
+src/commitment.rs           ordered Poseidon commitments
+src/circuit/input.rs        circuit witness allocation
+src/circuit/hash.rs         in-circuit digest updates
+src/circuit/constraints.rs  fixed R1CS step relation
+src/runner.rs               plain, circuit, and Nova flow
+src/decider.rs              offchain decider and artifacts
+src/statement.rs            public statement matching
+src/artifact.rs             canonical file encoding
 ```
 
-All hand-written source files remain below 500 lines. `Cargo.lock` is generated and preserved to keep the Sonobe and Arkworks dependency graph reproducible.
-
-## Current limitations
-
-- `model_tag` and `certificate_tag` enforce continuity across folds but are not yet cryptographic commitments to the secret model and full certificate set.
-- Changing the generated dimensions or bound changes the circuit shape and requires fresh Nova preprocessing.
-
-Do not change the pinned Sonobe revision, upstream ZKMC commit, or `Cargo.lock` without retesting the complete 217-obligation run.
+All hand-written files remain below 500 lines. The MNT4-298/MNT6-298 cycle is appropriate for functional research replication; it is not presented as a production deployment parameter set.
