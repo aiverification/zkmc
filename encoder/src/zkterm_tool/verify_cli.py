@@ -40,6 +40,31 @@ Example:
         help="Skip ranking function validation checks (disjointness, coverage, non-negativity)"
     )
     parser.add_argument(
+        "--synthesize",
+        action="store_true",
+        help="Automatically synthesize a (piecewise) linear ranking function for any automaton "
+             "state that lacks one."
+    )
+    parser.add_argument(
+        "--mode",
+        action="append",
+        metavar="VAR",
+        help="With --synthesize: force a variable to be a partition ('mode') variable (repeatable)."
+    )
+    parser.add_argument(
+        "--max-regions",
+        type=int,
+        default=None,
+        help="With --synthesize: cap on regions per partition during auto-search (default: 64)."
+    )
+    parser.add_argument(
+        "--synth-timeout",
+        type=float,
+        default=60.0,
+        help="With --synthesize: wall-clock budget for the synthesis search in seconds "
+             "(default: 60; 0 disables the limit)."
+    )
+    parser.add_argument(
         "--const",
         action="append",
         metavar="NAME=VALUE",
@@ -67,7 +92,34 @@ Example:
                     return 1
 
         text = file_path.read_text()
-        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
+        if str(file_path).endswith(".koat"):
+            if const_overrides:
+                print("Warning: --const has no effect on .koat input (KoAT files have no named "
+                      "constants); ignoring.", file=sys.stderr)
+            from .koat import import_koat
+            result = import_koat(text)  # KoAT ITS -> guarded commands + termination automaton
+        else:
+            result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
+
+        # Synthesize missing ranking functions if requested
+        if args.synthesize:
+            from .synth import synthesize_into, SynthesisError
+            synth_kwargs = {}
+            if args.mode:
+                synth_kwargs["mode_vars"] = args.mode
+            if args.max_regions is not None:
+                synth_kwargs["max_regions"] = args.max_regions
+            if args.synth_timeout > 0:
+                synth_kwargs["time_budget"] = args.synth_timeout
+            try:
+                before = set(result.ranking_functions)
+                synthesize_into(result, **synth_kwargs)
+                added = sorted(set(result.ranking_functions) - before)
+                if added:
+                    print(f"Synthesized ranking functions for: {', '.join(added)}")
+            except SynthesisError as e:
+                print(f"Error: ranking synthesis failed: {e}", file=sys.stderr)
+                return 1
 
         # Validate ranking functions (unless skipped)
         if not args.skip_validation and result.ranking_functions:

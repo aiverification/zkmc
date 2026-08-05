@@ -35,6 +35,13 @@ from .violation_checker import (
     verify_disjointness
 )
 from .explicit_cli import violations_to_json
+from .ltl import (
+    resolve_automaton, derive_automaton, lower_to_transitions,
+    parse_hoa, parse_label_to_dnf, negate_comparison, find_ltl2tgba,
+    HOAAutomaton, HOAEdge,
+)
+from .synth import synthesize_rankings, synthesize_into, SynthesisError
+from .koat import import_koat, import_koat_file
 
 
 def verify_termination(result: ParseResult) -> VerificationResult:
@@ -91,4 +98,12 @@ __all__ = [
     "ViolationSets", "FieldEmbeddings", "VerificationChecks",
     "compute_violation_sets", "compute_embeddings", "verify_disjointness",
     "violations_to_json",
+    # LTL -> automaton (via Spot)
+    "resolve_automaton", "derive_automaton", "lower_to_transitions",
+    "parse_hoa", "parse_label_to_dnf", "negate_comparison", "find_ltl2tgba",
+    "HOAAutomaton", "HOAEdge",
+    # Ranking synthesis (Tier 1)
+    "synthesize_rankings", "synthesize_into", "SynthesisError",
+    # KoAT ITS import
+    "import_koat", "import_koat_file",
 ]

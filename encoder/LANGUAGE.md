@@ -1,6 +1,6 @@
 # The `.gc` language
 
-This document describes the input language accepted by `zkterm`, `zkrank`, `zkverify`, `zkfarkas`, and `zkexplicit`. A single `.gc` file combines a program (as guarded commands), its Büchi automaton, a ranking function, initial conditions, and any supporting constants or type declarations.
+This document describes the input language accepted by `zkterm`, `zkrank`, `zkverify`, `zkfarkas`, `zkexplicit`, and `zkltl`. A single `.gc` file combines a program (as guarded commands), a property (a Büchi automaton written directly, **or** an LTL formula from which the automaton is derived), a ranking function, initial conditions, and any supporting constants or type declarations.
 
 The grammar is defined in [`src/zkterm_tool/grammar.lark`](src/zkterm_tool/grammar.lark) — that file is the authoritative reference.
 
@@ -17,6 +17,8 @@ A `.gc` file is a sequence of top-level declarations. Order is free and most com
 | Ranking function | `rank(state): cases…` | Piecewise linear termination measure per automaton state. |
 | Automaton transition | `trans(q, q'): guard` / `trans!(q, q'): guard` | Büchi automaton edge; `!` marks it as fair/accepting. |
 | Automaton init | `automaton_init: q0, q1, …` | Starting automaton states (required by `zkexplicit`). |
+| Atomic proposition | `ap NAME := comparison` | Named predicate over program variables, referenced from an LTL `spec`. |
+| LTL property | `spec: "<LTL formula>"` | Property to verify; its Büchi automaton is derived from `!(spec)` via Spot. |
 
 A minimal but complete example (see [`examples/example.gc`](examples/example.gc)):
 
@@ -145,6 +147,8 @@ rank(q0):
 
 Infinity cases are how you document which parts of the state space the ranking does not need to decrease on.
 
+**Synthesis.** Ranking functions can also be synthesized automatically instead of written by hand: `zksynth program.gc` prints a synthesized ranking, and `zkverify --synthesize program.gc` fills in any missing `rank(q)` before verifying. The synthesizer (Farkas/Z3 LP, Podelski–Rybalchenko) finds a **piecewise** linear ranking: it partitions the state space on the constants the program's guards compare variables against (control-flow refinement), searching coarsest-first so the result has as few cases as possible, and — for bounded programs — guards each piece by the *reachable* sub-box of its region (so conditional invariants like "state1 ≤ 1 when turn == 0" are captured automatically). Force partition variables with `--mode VAR`. Programs needing lexicographic rankings, or invariants beyond a per-region bounding box, are not yet covered.
+
 ## Büchi automaton transitions
 
 ```
@@ -174,6 +178,44 @@ automaton_init: q0
 trans(q0, q0): true
 ```
 
+## LTL properties (`ap` / `spec`)
+
+Instead of writing the Büchi automaton by hand, you can state the property in LTL and let the tool derive the automaton. This requires **Spot** — its `ltl2tgba` binary must be on `PATH` (`brew install spot`, `apt install spot`, or `conda install -c conda-forge spot`), or point `ZKTERM_LTL2TGBA` at it. Spot is an external system tool, not a Python dependency.
+
+Declare atomic propositions, then the property:
+
+```
+ap NAME := comparison        // a named predicate over program variables
+spec: "<LTL formula>"        // the property to verify (Spot's LTL syntax)
+```
+
+- Each `ap` binds a name to a **conjunction of comparisons** over current-state variables (constants are folded, e.g. `ap waiting := status == wait`).
+- `spec` is a quoted LTL formula over the declared proposition names, in [Spot's LTL syntax](https://spot.lre.epita.fr/): `G` (globally), `F` (eventually), `X` (next), `U`, `R`, `W`, `M`, plus `!`, `&`, `|`, `->`, `<->` and parentheses.
+- The tool translates **`!(spec)`** — the property's negation, i.e. the "bad" behaviours — to a Büchi automaton and proves the product with the program has no accepting run. So `spec` is the property you want to *hold*.
+- Derived automaton states are named `q0`, `q1`, … (`q0` = Spot's initial state). Edges out of an accepting state become **fair** (`trans!`); all others are regular. You still supply a `rank(qi)` for each derived state (or inspect the states first with `zkltl`).
+- A file may use **either** an LTL `spec` **or** explicit `trans` declarations, not both.
+
+Example — "always eventually leave the wait state" (`G F !waiting`):
+
+```
+const wait = 0
+type status: 0..3
+
+ap waiting := status == wait
+spec: "G F !waiting"
+```
+
+`ltl2tgba` translates `!(G F !waiting)` = `F G waiting` into the two-state automaton
+
+```
+automaton_init: q0
+trans(q0, q0): true
+trans(q0, q1): status == wait
+trans!(q1, q1): status == wait
+```
+
+Use `zkltl program.gc` to print the derived automaton (see [`examples/exp_backoff_ltl.gc`](examples/exp_backoff_ltl.gc) for a complete model).
+
 ## Keywords and operators
 
 | Token | Meaning |
@@ -188,6 +230,10 @@ trans(q0, q0): true
 | `//` | Single-line comment. |
 
 Unicode variants (`≤`, `≥`, `∧`) are interchangeable with their ASCII forms.
+
+The statement-introducing keywords — `init`, `const`, `type`, `rank`, `trans`, `automaton_init`,
+`ap`, `spec` — plus `true` and `inf` are **reserved**: they cannot be used as variable names
+(the lexer prefers them over identifiers wherever a new statement may start).
 
 ## A realistic example
 
@@ -207,7 +253,8 @@ The full grammar lives in [`src/zkterm_tool/grammar.lark`](src/zkterm_tool/gramm
 ```
 start              : (const_def | type_def | init_condition
                     | guarded_command | ranking_function
-                    | automaton_trans | automaton_init)*
+                    | automaton_trans | automaton_init
+                    | ap_def | ltl_spec)*
 
 const_def          : "const" NAME "=" const_expr
 type_def           : "type" VAR ":" const_expr ".." const_expr
@@ -217,6 +264,8 @@ ranking_function   : "rank" "(" STATE ")" ":" ranking_case+
 ranking_case       : "[]" guard "->" (expr | "inf")
 automaton_trans    : "trans" "!"? "(" STATE "," STATE ")" ":" guard
 automaton_init     : "automaton_init" ":" STATE ("," STATE)*
+ap_def             : "ap" NAME ":=" guard
+ltl_spec           : "spec" ":" ESCAPED_STRING
 
 guard              : "true" | comparison (("&&" | "∧") comparison)*
 comparison         : expr COMP_OP expr

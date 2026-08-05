@@ -197,6 +197,22 @@ class Verifier:
         Returns:
             VerificationResult with all obligations checked
         """
+        # A state on an automaton transition (or in Q_0) without a ranking function would produce
+        # no obligations at all — a vacuous "pass". Refuse loudly instead: with LTL-derived
+        # automata the qN numbering comes from Spot and is not stable across versions, so a
+        # missing/mis-bound rank(qN) is a real hazard.
+        referenced = set(self.automaton_initial_states)
+        for aut_trans in self.aut_encs:
+            referenced.add(aut_trans.from_state)
+            referenced.add(aut_trans.to_state)
+        missing = sorted(referenced - set(self.rank_encs))
+        if missing:
+            raise ValueError(
+                f"No ranking function for automaton state(s): {', '.join(missing)}. "
+                "Every automaton state needs a rank(...) declaration (or use --synthesize / "
+                "synthesize_into to fill missing ones)."
+            )
+
         obligations = []
 
         # Type 1: Initial non-infinity obligations (one per state × infinity case)

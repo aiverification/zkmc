@@ -26,6 +26,9 @@ class ParseResult:
     ranking_functions: dict[str, RankingFunction]    # state -> RankingFunction
     automaton_transitions: list[AutomatonTransition] # Büchi automaton transitions
     automaton_initial_states: list[str] | None       # Q_0 (None = use all states with ranking functions)
+    aps: dict[str, list[Comparison]]                 # LTL atomic propositions: name -> conjunction of comparisons
+    ltl_formula: str | None                          # LTL property (Spot syntax); automaton derived from !(formula)
+    ltl_resolved: bool = False                       # True once resolve_automaton() derived the automaton
 
 
 class ASTTransformer(Transformer):
@@ -43,6 +46,8 @@ class ASTTransformer(Transformer):
         self.ranking_functions: dict[str, RankingFunction] = {}
         self.automaton_transitions: list[AutomatonTransition] = []
         self.automaton_initial_states: list[str] | None = None
+        self.aps: dict[str, list[Comparison]] = {}
+        self.ltl_formula: str | None = None
 
     def start(self, items: list) -> ParseResult:
         # Items are a mix of None (from const_def, type_def, ranking_function, automaton_trans, automaton_init, init_condition)
@@ -57,8 +62,36 @@ class ASTTransformer(Transformer):
             commands=commands,
             ranking_functions=self.ranking_functions,
             automaton_transitions=self.automaton_transitions,
-            automaton_initial_states=self.automaton_initial_states
+            automaton_initial_states=self.automaton_initial_states,
+            aps=self.aps,
+            ltl_formula=self.ltl_formula
         )
+
+    def ap_def(self, items: list) -> None:
+        """Parse atomic proposition binding: ap NAME := guard"""
+        name = str(items[0])
+        guard_comparisons = items[1]  # list of comparisons from guard
+        if name in ("true", "false"):
+            # Spot constant-folds these LTL constants, silently vacuizing the property.
+            raise ValueError(f"'{name}' is a reserved LTL constant and cannot name an atomic proposition")
+        if not guard_comparisons:
+            raise ValueError(f"Atomic proposition '{name}' must be a comparison, not 'true'")
+        if name in self.aps:
+            raise ValueError(f"Atomic proposition '{name}' already defined")
+        self.aps[name] = guard_comparisons
+        return None  # stored in self.aps
+
+    def ltl_spec(self, items: list) -> None:
+        """Parse LTL property: spec: "<formula>" (quoted, Spot LTL syntax)."""
+        raw = str(items[0])
+        # Strip surrounding quotes and unescape \" and \\
+        formula = raw[1:-1].replace('\\"', '"').replace('\\\\', '\\').strip()
+        if self.ltl_formula is not None:
+            raise ValueError("Multiple 'spec:' declarations are not allowed")
+        if not formula:
+            raise ValueError("Empty 'spec:' formula")
+        self.ltl_formula = formula
+        return None  # stored in self.ltl_formula
 
     def init_condition(self, items: list) -> None:
         """Parse initial condition: init: guard"""
@@ -295,7 +328,9 @@ def parse(text: str) -> list[GuardedCommand]:
 
 def parse_with_constants(
     text: str,
-    const_overrides: dict[str, int] | None = None
+    const_overrides: dict[str, int] | None = None,
+    resolve_ltl: bool = False,
+    ltl2tgba_path: str | None = None,
 ) -> ParseResult:
     """Parse text into AST, returning all components.
 
@@ -304,6 +339,11 @@ def parse_with_constants(
         const_overrides: Optional dict of constant name -> value to override
                          constants defined in the file. Command-line overrides
                          take precedence over file definitions.
+        resolve_ltl: If True and the file contains an LTL `spec:`, derive the Büchi
+                     automaton via Spot's ltl2tgba and populate automaton_transitions /
+                     automaton_initial_states. Defaults to False so that plain parsing
+                     never shells out to an external tool.
+        ltl2tgba_path: Optional explicit path to the ltl2tgba binary.
 
     Returns ParseResult with:
     - constants: Named constants (merged from file and overrides)
@@ -311,6 +351,7 @@ def parse_with_constants(
     - commands: Guarded commands (program transitions)
     - ranking_functions: Ranking functions by state
     - automaton_transitions: Büchi automaton transitions
+    - aps / ltl_formula: LTL atomic propositions and property (if any)
     """
     parser = create_parser()
     tree = parser.parse(text)
@@ -322,5 +363,9 @@ def parse_with_constants(
         transformer.constants.update(const_overrides)
 
     result = transformer.transform(tree)
+
+    if resolve_ltl:
+        from .ltl import resolve_automaton
+        result = resolve_automaton(result, ltl2tgba_path=ltl2tgba_path)
 
     return result

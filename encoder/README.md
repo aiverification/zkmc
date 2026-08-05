@@ -19,6 +19,21 @@ cd zkterm-tool
 uv sync
 ```
 
+### Optional: Spot (for LTL properties)
+
+To specify properties in LTL (the `spec:` construct) instead of writing the Büchi automaton by hand, install **Spot** so its `ltl2tgba` binary is on `PATH`:
+
+```bash
+brew install spot                     # macOS
+apt install spot                      # Debian/Ubuntu
+dnf install spot                      # Fedora
+conda install -c conda-forge spot     # conda
+```
+
+Spot is a C++ tool, not a Python package, so it is not installed by `uv sync`. If `ltl2tgba` is not on `PATH`, set `ZKTERM_LTL2TGBA` to its location. Everything else works without Spot.
+
+For Debian/Ubuntu and Fedora installations, you may need to add an external repository before installation. Alternatively, you may wish to compile `Spot` locally. For both of these cases and others, see the [Spot installation guide](https://spot.lre.epita.fr/install.html).
+
 ## Quick start
 
 Save a small program as `counter.gc`:
@@ -53,15 +68,18 @@ For the full `.gc` language — constants, types, initial conditions, guarded co
 
 ## Command-line tools
 
-The package installs five commands. All accept `.gc` input and share the `--const NAME=VALUE` flag for overriding constants.
+The package installs eight commands. All accept `.gc` input (and `zkverify`/`zksynth`/`zkits` also accept KoAT `.koat` integer transition systems). All except `zkits` share the `--const NAME=VALUE` flag for overriding constants (KoAT files have no named constants, so `zkits` and `.koat` inputs ignore it).
 
 | Tool | Purpose | Input | Output |
 |------|---------|-------|--------|
 | `zkterm` | Encode guarded commands, init, and automaton transitions as matrix inequalities `A x ≤ b` | `.gc` file or stdin | Matrices (optionally symbolic with `-s`) |
 | `zkrank` | Encode ranking functions as `(W_j, u_j, C_j, d_j)` per case | `.gc` file or stdin | Ranking-function encodings |
-| `zkverify` | Verify termination obligations via Farkas' lemma + Z3 | `.gc` file | Pass/fail summary with witnesses (`-v`) |
+| `zkverify` | Verify termination obligations via Farkas' lemma + Z3 (optionally `--synthesize`) | `.gc` file | Pass/fail summary with witnesses (`-v`) |
 | `zkfarkas` | Export Farkas dual obligations as JSON for external solvers / ZK pipelines | `.gc` file | JSON: `A_s`, `b_s`, `G_p`, `h_p`, multipliers |
 | `zkexplicit` | Explicit-state verification by enumeration, plus BN254 field embeddings | `.gc` file + bounds | JSON: violation/valid sets, embeddings |
+| `zkltl` | Derive the Büchi automaton from an LTL `spec:` via Spot and print it | `.gc` file with `spec:` (needs Spot) | `automaton_init` + `trans`/`trans!` declarations |
+| `zksynth` | Synthesize a (piecewise) linear ranking function per automaton state and print it | `.gc` file (no `rank(...)` needed) | `rank(q)` declarations |
+| `zkits` | Import a KoAT `.koat` integer transition system and print the derived guarded commands | `.koat` file | guarded commands + termination automaton |
 
 Each tool has complete flag documentation via `--help`; what follows are one-line intros and minimal invocations.
 
@@ -126,6 +144,49 @@ uv run zkexplicit program.gc --pretty       # uses type-declared bounds
 ```
 
 Run `uv run zkexplicit --help` for all flags.
+
+### `zkltl` — derive the automaton from an LTL property
+
+Instead of hand-writing the Büchi automaton (`trans`/`trans!`), declare atomic propositions and an LTL property, and let Spot derive the automaton:
+
+```
+ap waiting := status == wait
+spec: "G F !waiting"
+```
+
+`zkverify`, `zkfarkas`, and `zkexplicit` all resolve `spec:` automatically; `zkltl` prints the derived automaton so you can inspect (or materialise) it. Requires Spot's `ltl2tgba` on `PATH` (see Installation).
+
+```bash
+uv run zkltl examples/exp_backoff_ltl.gc
+```
+
+Run `uv run zkltl --help` for all flags. See [LANGUAGE.md](LANGUAGE.md#ltl-properties-ap--spec) for the full LTL syntax.
+
+### `zksynth` — synthesize the ranking function
+
+Instead of hand-writing `rank(q): …`, let the tool synthesize a (piecewise) linear ranking function per automaton state, via a Farkas-based LP (Podelski–Rybalchenko) solved with Z3 — no extra dependency.
+
+```bash
+uv run zksynth examples/counter_synth.gc                 # print the synthesized ranking
+uv run zkverify --synthesize examples/counter_synth.gc   # synthesize missing rank(q) then verify
+uv run zksynth examples/round-robin.gc --mode turn       # force a partition variable
+```
+
+How it works: the state space is partitioned on the constants the program's guards compare variables against (control-flow refinement), searching **coarsest-first** so the ranking has as few finite cases as possible (fewer cases → fewer obligations → smaller proofs). For bounded programs, each piece is guarded by the *reachable* sub-box of its region, so conditional invariants (e.g. "`state1 ≤ 1` when `turn == 0`") are captured automatically — this is what lets `round-robin` and `dhcp` synthesize. Use `--mode VAR` to force partition variables and `--max-regions N` to cap the search.
+
+The synthesizer is **untrusted**: its output is re-checked by `zkverify` (and that check is what gets ZK-proven), so a synthesis bug can only cause a failed verification, never an unsound proof. Programs needing lexicographic rankings, or invariants beyond a per-region bounding box, are not yet supported. Run `uv run zksynth --help` for all flags.
+
+### `zkits` — import KoAT integer transition systems
+
+Termination benchmarks in the KoAT / termCOMP `.koat` format can be imported directly: locations become a `pc` variable, rules become guarded commands, fresh variables become nondeterministic (havoc'd) inputs, and an all-fair *termination* automaton (`trans!(q0,q0): true`) is attached so "every transition strictly decreases" is the property. Data variables stay **unbounded** — the synthesizer runs on the symbolic path (no `type` bounds needed), partitioning on guard boundaries. `Com_n` (n>1, recursion), non-linear arithmetic (variable products, `^`), and `!=` guards are rejected. C/SV-COMP benchmarks reach `.koat` via the external `llvm2kittel` translator.
+
+```bash
+uv run zkits program.koat               # inspect the derived guarded commands + termination automaton
+uv run zkverify --synthesize program.koat   # import, synthesize a ranking, and verify termination
+uv run python benchmarks/run_its.py --corpus DIR   # batch-run a directory of .koat files
+```
+
+Programs whose termination needs a multiphase/lexicographic measure (e.g. nested loops) are not yet handled — those are the target of the future MΦRF upgrade to the synthesizer.
 
 ## Examples and benchmarks
 

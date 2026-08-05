@@ -2,24 +2,38 @@
 
 pytest-benchmark harnesses for `zkverify`, `zkfarkas`, and `zkexplicit`. Benchmark programs live in [`../examples/`](../examples/); this directory contains only the measurement code and its configuration.
 
+## ITS termination-benchmark suite (KoAT `.koat`)
+
+`run_its.py` runs KoAT's `.koat` integer-transition-system benchmarks through import → synthesize → verify (symbolic path, no bounds) and reports coverage statistics with a categorized reason per file. The corpus (KoAT's Complexity_ITS, 838 `.koat` from TermComp's TPDB) is fetched by `fetch_corpus.sh` into a gitignored `corpus/` (not committed).
+
+```bash
+bash fetch_corpus.sh                    # one-time download of 838 .koat into corpus/
+uv run python run_its.py \
+    --corpus corpus/Complexity_ITS --jobs 8 --timeout 20 --out stats.csv
+```
+
+Each file is classified: `pass` / `no-ranking` (search exhausted — needs multiphase/invariants) / `unsupported-comn` (recursion) / `unsupported-nonlinear` / `unsupported-parse` / `timeout` / `error`. `--emit-farkas DIR` dumps the Farkas-dual JSON for passing files (input for the `zkmc-symbolic` prover). See [`REPORT.md`](REPORT.md) for the current coverage snapshot.
+
+Use the argument `--max-mode-vars` to control whether the ranking function search strategy uses pair partitions (set to `2`) or not (set to `1`). Default is `2`.
+
 ## Running
 
 ```bash
 # All benchmarks
-uv run pytest benchmarks/ --benchmark-only
+uv run pytest . --benchmark-only
 
 # Filter by benchmark name / tag
-uv run pytest benchmarks/ --benchmark-only -k "counter_small"
-uv run pytest benchmarks/ --benchmark-only -k "small"
-uv run pytest benchmarks/ --benchmark-only -k "paper"
+uv run pytest . --benchmark-only -k "counter_small"
+uv run pytest . --benchmark-only -k "small"
+uv run pytest . --benchmark-only -k "paper"
 
 # Save / compare
-uv run pytest benchmarks/ --benchmark-only --benchmark-save=before
+uv run pytest . --benchmark-only --benchmark-save=before
 # …make a change…
-uv run pytest benchmarks/ --benchmark-only --benchmark-compare=before
+uv run pytest . --benchmark-only --benchmark-compare=before
 
 # Export JSON for further analysis
-uv run pytest benchmarks/ --benchmark-only --benchmark-json=results.json
+uv run pytest . --benchmark-only --benchmark-json=results.json
 ```
 
 ## Adding a benchmark

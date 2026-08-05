@@ -1,0 +1,77 @@
+// Exponential Backoff Protocol — property specified in LTL (Spot derives the automaton)
+// Property: We always eventually leave wait (can't stay in wait forever).
+//
+// This is the same model as exp_backoff_state_opt_small.gc, but instead of hand-writing the
+// Büchi automaton we declare an atomic proposition and an LTL property. `zkverify`/`zkfarkas`/
+// `zkexplicit`/`zkltl` translate !(spec) to a Büchi automaton via Spot's ltl2tgba. For this
+// property the derived automaton is exactly the hand-written one in the sibling example
+// (states q0, q1), so the ranking functions below carry over unchanged.
+//
+// Requires Spot's ltl2tgba on PATH (brew install spot / apt install spot).
+
+// Constants for ACK status
+const notReceived = 0
+const received = 1
+
+// Constants for protocol state
+const wait = 0
+const closed = 1
+const established = 2
+const exhausted = 3
+
+// Initial delay values for each retry attempt
+const initialDelay = 2**6
+
+// Maximum number of retry attempts
+const maxAttempts = 2
+
+// Variables:
+type status: 0..3
+type attemptsDone: 0..maxAttempts - 1
+type delay: 0..2**(maxAttempts - 1) * initialDelay - 1
+type ack: 0..1
+
+// Initially: closed
+init: status == closed && ack == notReceived
+
+// ----- Transitions -----
+
+// Init: send syn and wait for initialDelay
+[] status == closed -> status = wait; delay = initialDelay - 1; attemptsDone = 0
+
+// Waiting: decrement delay counter while waiting for ACK
+[] ack == notReceived && status == wait && delay > 0 -> delay = delay - 1
+
+// Retry: increment attempts, set delay
+[] ack == notReceived && status == wait && attemptsDone == 0 && delay == 0 -> attemptsDone = 1; delay = 2**1 * initialDelay - 1
+
+// Exhausted: all attempts done, delay expired -> give up
+[] ack == notReceived && status == wait && attemptsDone == 1 && delay == 0 -> status = exhausted
+
+// Non-deterministically receive ACK
+// Success: ACK received while waiting -> transition to established state
+[] ack == notReceived && status == wait && delay > 0 -> ack = received; status = established
+
+// ----- Property (LTL) -----
+// waiting holds exactly when the protocol is in the wait state.
+ap waiting := status == wait
+// "always eventually not waiting" — the negation !(G F !waiting) = F G waiting is the
+// "stuck in wait forever" behaviour that the Büchi automaton (and ranking) must rule out.
+spec: "G F !waiting"
+
+// ----- Ranking Functions (for the derived automaton states q0, q1) -----
+rank(q0):
+    [] status > wait -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
+    [] status == wait && attemptsDone < maxAttempts -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
+    [] status < wait -> inf
+    [] status == wait && attemptsDone >= maxAttempts -> inf
+
+rank(q1):
+    [] status == closed -> maxAttempts * 2**(maxAttempts - 1) * initialDelay
+    [] status == wait && attemptsDone < maxAttempts && delay >= 0 -> 2**(maxAttempts - 1) * initialDelay * (maxAttempts - 1) + 1 - 2**(maxAttempts - 1) * initialDelay * attemptsDone + delay
+    // status == established || exhausted
+    [] status >= established && status <= exhausted -> 0
+    [] status < wait -> inf
+    [] status > exhausted -> inf
+    [] status == wait && attemptsDone >= maxAttempts -> inf
+    [] status == wait && attemptsDone < maxAttempts && delay < 0 -> inf

@@ -1,0 +1,17 @@
+// Counter whose ranking function is synthesized automatically.
+// There is deliberately NO rank(...) block: run
+//   zksynth examples/counter_synth.gc              # print the synthesized ranking
+//   zkverify --synthesize examples/counter_synth.gc  # synthesize and verify together
+//
+// Property (fair self-loop): x < maxVal cannot hold forever, i.e. the counter
+// eventually reaches maxVal. Tier-1 synthesis finds V(q0) = maxVal - x.
+
+const maxVal = 10
+type x: 0..maxVal
+
+init: x = 0
+
+[] x < maxVal -> x = x + 1
+
+automaton_init: q0
+trans!(q0, q0): x < maxVal

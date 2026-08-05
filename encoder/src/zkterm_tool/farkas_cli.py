@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from .parser import parse_with_constants
+from .parser import ParseResult, parse_with_constants
 from .verifier import Verifier
 
 
@@ -321,6 +321,17 @@ def obligation_to_json(verifier: Verifier, obl_result) -> dict[str, Any]:
     return obj
 
 
+def extract_farkas_obligations_from_result(result: ParseResult) -> list[dict[str, Any]]:
+    """Extract all Farkas dual formulations from an already-parsed program.
+
+    Takes the ParseResult as-is — including any rankings synthesized into it in memory — so
+    callers that synthesize first (e.g. the ITS benchmark harness) keep their rankings.
+    """
+    verifier = Verifier(result)
+    verification = verifier.verify_all()
+    return [obligation_to_json(verifier, obl) for obl in verification.obligations]
+
+
 def extract_farkas_obligations(
     file_path: str,
     const_overrides: dict[str, int] | None = None
@@ -335,19 +346,8 @@ def extract_farkas_obligations(
         List of obligation dictionaries with Farkas components
     """
     text = Path(file_path).read_text()
-    result = parse_with_constants(text, const_overrides=const_overrides)
-
-    # Use Verifier to compute all obligations
-    verifier = Verifier(result)
-    verification = verifier.verify_all()
-
-    # Convert to JSON format
-    obligations = [
-        obligation_to_json(verifier, obl)
-        for obl in verification.obligations
-    ]
-
-    return obligations
+    result = parse_with_constants(text, const_overrides=const_overrides, resolve_ltl=True)
+    return extract_farkas_obligations_from_result(result)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -394,7 +394,7 @@ Example:
 
         # Parse the file to get constants
         text = Path(args.file).read_text()
-        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None)
+        result = parse_with_constants(text, const_overrides=const_overrides if const_overrides else None, resolve_ltl=True)
 
         # Use Verifier to compute all obligations
         verifier = Verifier(result)

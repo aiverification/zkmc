@@ -10,3 +10,8 @@ wheels/
 .venv
 
 .DS_Store
+
+# Downloaded benchmark corpus (fetched via benchmarks/fetch_corpus.sh, not committed)
+benchmarks/corpus/
+# Harness output
+benchmarks/*.csv
