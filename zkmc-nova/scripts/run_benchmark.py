@@ -169,7 +169,7 @@ def machine_metadata() -> dict[str, Any]:
         "cargo_version": command_output(["cargo", "--version"]),
         "project_commit": command_output(["git", "rev-parse", "HEAD"]),
         "sonobe_commit": command_output(
-            ["git", "-C", str(ROOT / ".vendor" / "sonobe"), "rev-parse", "HEAD"]
+            ["git", "-C", str(ROOT / ".vendor" / "sonobe-259"), "rev-parse", "HEAD"]
         ),
         "zkmc_upstream_commit": command_output(
             ["git", "-C", str(UPSTREAM), "rev-parse", "HEAD"]

@@ -11,11 +11,11 @@ if ! command -v rustup >/dev/null 2>&1; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 fi
 source "$HOME/.cargo/env"
-rustup update
+rustup toolchain install 1.97.0 --profile minimal --component rustfmt
 python3 -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -r requirements.txt
-./scripts/setup_sonobe_offchain.sh
-cargo generate-lockfile
+./scripts/setup_sonobe_pr259.sh
+cargo fetch --locked
 rustc --version
 cargo --version

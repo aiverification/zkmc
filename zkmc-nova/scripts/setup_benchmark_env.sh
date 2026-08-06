@@ -13,7 +13,7 @@ command -v /usr/bin/time >/dev/null 2>&1 || {
   exit 1
 }
 
-./scripts/setup_sonobe_offchain.sh
+./scripts/setup_sonobe_pr259.sh
 mkdir -p "$ROOT/.vendor" "$ROOT/artifacts/benchmarks"
 
 if [[ ! -d "$UPSTREAM/.git" ]]; then

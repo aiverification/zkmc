@@ -116,6 +116,14 @@ def main() -> None:
             ),
         ),
         (
+            "protocol version",
+            lambda artifacts, _statement, _verifier: mutate_json(
+                artifacts / "manifest.json",
+                "protocol_version",
+                lambda value: str(value) + "-modified",
+            ),
+        ),
+        (
             "trailing proof bytes",
             lambda artifacts, _statement, _verifier: (
                 artifacts / "decider_proof.bin"

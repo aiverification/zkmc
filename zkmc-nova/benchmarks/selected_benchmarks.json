@@ -40,7 +40,7 @@
       "initialDelay": 2,
       "maxAttempts": 3
     },
-    "expected_obligations": 260,
+    "expected_obligations": 217,
     "paper_state_space_log2": 7.6
   },
   {
@@ -62,7 +62,7 @@
       "initialDelay": 4,
       "maxAttempts": 3
     },
-    "expected_obligations": 260,
+    "expected_obligations": 217,
     "paper_state_space_log2": 8.6
   },
   {
