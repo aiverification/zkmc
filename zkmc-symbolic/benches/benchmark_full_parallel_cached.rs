@@ -84,7 +84,8 @@ struct prover_neg_b_s_T_cache_entry {
     q: usize,
 }
 
-fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {    
+fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
+    let timeout_ms: u128 = 2 * 60 * 60 * 1000; // 2 hours
     let chunk_size = 200;
     let sample_size: usize = 1;
     let path_to_file_g = "input/".to_string();
@@ -111,43 +112,9 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
             let file = File::open(input_str.clone()).expect("Error opening file ");
             let input: InputParams = serde_json::from_reader(file).expect("Failed to parse JSON ");
             println!("No. obligations: {:?}", input.obligations.len());
-            let all_successful;
             let total_setup_time: u128;
             let mut total_prove_time: u128 = 0;
             let mut total_verify_time: u128 = 0;
-
-            // One time fake setup
-            let prev_zkp_pp: ZkpSRS;
-            let q = 2usize;
-            let pc_gens = PedersenGens::default();
-            let bp_gens = BulletproofGens::new(64, (q * 2) as usize);
-            let g_blstrs: blstrs::G1Affine = pc_gens.B.into();
-            let g_bls = blstrs_affine_to_bls_g1(&g_blstrs);
-
-            let (throwaway_srs, alpha) =
-                zkmatrix::setup::SRS::new_with_chosen_g_return_s_hat(32, g_bls); //Used for g_prime
-            let g_prime = throwaway_srs.h_hat.clone();
-
-            let A_lambda_e1_dims =
-                ZkMatMulDims::new(&vec![vec![2]], &vec![vec![2]], &vec![vec![2]]);
-            let b_lambda_e2_dims =
-                ZkMatMulDims::new(&vec![vec![2]], &vec![vec![2]], &vec![vec![2]]);
-
-            prev_zkp_pp = construct_zkp_srs(
-                2,
-                1usize,
-                1usize,
-                1usize,
-                g_blstrs,
-                g_bls,
-                g_prime,
-                alpha,
-                A_lambda_e1_dims,
-                b_lambda_e2_dims,
-                pc_gens,
-                bp_gens,
-                2u32.pow(31) - 1,
-            );
 
             let mut prover_A_cache: HashMap<MatrixCacheKey, prover_A_s_T_cache_entry> =
                 HashMap::new();
@@ -161,15 +128,11 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
             for obligation in input.obligations.iter() {
                 let pad_A = pad_matrix(&obligation.matrices.A_s);
                 let pad_G = pad_matrix(&obligation.matrices.G_p);
-                if pad_A.len() > max_q {
-                    max_q = pad_A.len();
-                } else if pad_A[0].len() > max_q {
-                    max_q = pad_A[0].len();
-                } else if pad_G.len() > max_q {
-                    max_q = pad_G.len();
-                } else if pad_G[0].len() > max_q {
-                    max_q = pad_G[0].len();
-                }
+                max_q = max_q
+                    .max(pad_A.len())
+                    .max(pad_A[0].len())
+                    .max(pad_G.len())
+                    .max(pad_G[0].len());
             }
 
             // ========== PHASE 1: SRS Setup Only ==========
@@ -243,6 +206,15 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
 
             total_setup_time = setup_timer.elapsed().as_millis();
             println!("Phase 1 complete. Setup time: {}ms", total_setup_time);
+
+            if total_setup_time > timeout_ms {
+                writeln!(
+                    log_file,
+                    "Sample {} - setup: {}ms - TIMED_OUT",
+                    sample, total_setup_time
+                ).unwrap();
+                break;
+            }
 
             // ========== PHASE 2: Prover (Cache Population + Proof Generation) ==========
             println!("================ Phase 2: Prover ================");
@@ -412,158 +384,168 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
             total_prove_time += prove_timer.elapsed().as_millis();
 
             println!("========== Chunk proofs + verification in one ==========");
-            let verification_results: Vec<bool> = input
-                .obligations
-                .chunks(chunk_size)
-                .enumerate()
-                .flat_map(|(chunk_idx, chunk)| {
-                    let prove_timer = Instant::now();
-                    let proof_results: Vec<(zkp::ZkpProof, ZkpSRS, Vec<Vec<i64>>, Vec<Vec<i64>>)> =
-                        chunk
-                            .par_iter()
-                            .enumerate()
-                            .map(|(inner_idx, obligation)| {
-                                let idx = chunk_idx * chunk_size + inner_idx;
-                                let A_s_T = pad_matrix(&transpose_matrix(&obligation.matrices.A_s));
-                                let neg_b_s_T = pad_matrix(&transpose_matrix(&negate_matrix(
-                                    &obligation.matrices.b_s,
-                                )));
-                                let G_p_T = pad_matrix(&transpose_matrix(&obligation.matrices.G_p));
-                                let h_p_T = pad_matrix(&transpose_matrix(&obligation.matrices.h_p));
-                                let lambda_s = pad_matrix(&obligation.witness.lambda_s);
-                                let mu_s = pad_matrix(&obligation.witness.mu_s);
-                                let e_1 = pad_matrix(&obligation.computed_values.A_s_T_lambda_s);
-                                let e_2 = vec![vec![obligation.computed_values.neg_b_s_T_lambda_s]];
-                                let e_3 = vec![vec![obligation.computed_values.neg_h_p_T_mu_s]];
+            let mut timed_out = false;
+            let mut all_successful = true;
 
-                                let m = A_s_T.len();
-                                let n = A_s_T[0].len();
-                                let n_prime = G_p_T[0].len();
-                                let max_n = if n >= n_prime { n } else { n_prime };
-                                let q = max_n + 1;
+            for (chunk_idx, chunk) in input.obligations.chunks(chunk_size).enumerate() {
+                if total_prove_time > timeout_ms {
+                    timed_out = true;
+                    break;
+                }
 
-                                // O(1) cache lookups
-                                let A_cached = prover_A_cache.get(&(A_s_T.clone(), q)).unwrap();
-                                let b_cached = prover_b_cache.get(&(neg_b_s_T.clone(), q)).unwrap();
-
-                                // Clone and update SRS dimensions for this obligation
-                                let A_lambda_e1_dims = ZkMatMulDims::new(&A_s_T, &lambda_s, &e_1);
-                                let b_lambda_e2_dims =
-                                    ZkMatMulDims::new(&neg_b_s_T, &lambda_s, &e_2);
-                                let mut local_zkp_pp = zkp_pp.clone();
-                                local_zkp_pp.A_lambda_e1_dims = A_lambda_e1_dims;
-                                local_zkp_pp.b_lambda_e2_dims = b_lambda_e2_dims;
-                                local_zkp_pp.m = m;
-                                local_zkp_pp.n = n;
-                                local_zkp_pp.n_prime = n_prime;
-
-                                // Generate proof using cached values
-                                let zkp_proof = zkp::prove(
-                                    &local_zkp_pp,
-                                    &A_s_T,
-                                    &neg_b_s_T,
-                                    &lambda_s,
-                                    &mu_s,
-                                    &G_p_T,
-                                    &h_p_T,
-                                    &e_1,
-                                    &e_2,
-                                    &e_3,
-                                    A_cached.A_comm,
-                                    A_cached.A_cache.clone(),
-                                    A_cached.A_r,
-                                    A_cached.A_blind,
-                                    b_cached.b_comm,
-                                    b_cached.b_cache.clone(),
-                                    b_cached.b_r,
-                                    b_cached.b_blind,
-                                    A_cached.A_plus_M_proof.clone(),
-                                    b_cached.neg_b_plus_M_proof.clone(),
-                                    alpha,
-                                );
-
-                                println!("Obligation {} proof generated", idx + 1);
-
-                                // Return proof + context needed for verification
-                                (zkp_proof, local_zkp_pp, G_p_T, h_p_T)
-                            })
-                            .collect::<Vec<_>>();
-                    total_prove_time += prove_timer.elapsed().as_millis();
-                    let verify_timer = Instant::now();
-                    let verify_results = proof_results
+                // --- prove ---
+                let prove_timer = Instant::now();
+                let proof_results: Vec<(zkp::ZkpProof, ZkpSRS, Vec<Vec<i64>>, Vec<Vec<i64>>)> =
+                    chunk
                         .par_iter()
                         .enumerate()
-                        .map(|(inner_idx, (zkp_proof, local_zkp_pp, G_p_T, h_p_T))| {
+                        .map(|(inner_idx, obligation)| {
                             let idx = chunk_idx * chunk_size + inner_idx;
-                            let mut zkp_verified = false;
+                            let A_s_T = pad_matrix(&transpose_matrix(&obligation.matrices.A_s));
+                            let neg_b_s_T = pad_matrix(&transpose_matrix(&negate_matrix(
+                                &obligation.matrices.b_s,
+                            )));
+                            let G_p_T = pad_matrix(&transpose_matrix(&obligation.matrices.G_p));
+                            let h_p_T = pad_matrix(&transpose_matrix(&obligation.matrices.h_p));
+                            let lambda_s = pad_matrix(&obligation.witness.lambda_s);
+                            let mu_s = pad_matrix(&obligation.witness.mu_s);
+                            let e_1 = pad_matrix(&obligation.computed_values.A_s_T_lambda_s);
+                            let e_2 = vec![vec![obligation.computed_values.neg_b_s_T_lambda_s]];
+                            let e_3 = vec![vec![obligation.computed_values.neg_h_p_T_mu_s]];
 
-                            let (is_a_cached, a_mismatch) = {
-                                let key = (local_zkp_pp.q, HashableGtElement(zkp_proof.c_A));
-                                match verifier_A_cache.get(&key) {
-                                    Some(cached) if *cached == zkp_proof.A_plus_M_zkrp_proof => (true, false),
-                                    Some(_) => (false, true),
-                                    None => (false, false),
-                                }
-                            };
-                            let (is_b_cached, b_mismatch) = {
-                                let key = (local_zkp_pp.q, HashableGtElement(zkp_proof.c_b));
-                                match verifier_b_cache.get(&key) {
-                                    Some(cached) if *cached == zkp_proof.neg_b_plus_M_zkrp_proof => (true, false),
-                                    Some(_) => (false, true),
-                                    None => (false, false),
-                                }
-                            };
+                            let m = A_s_T.len();
+                            let n = A_s_T[0].len();
+                            let n_prime = G_p_T[0].len();
+                            let max_n = if n >= n_prime { n } else { n_prime };
+                            let q = max_n + 1;
 
-                            if a_mismatch || b_mismatch {
-                                zkp_verified = false;
-                            } else {
-                                // println!("Verifying obl {idx:?}: a cache: {is_a_cached:?}, b cache: {is_b_cached:?}"); // FOR DEBUG 
-                                zkp_verified =
-                                    zkp_proof.verify(local_zkp_pp, G_p_T, h_p_T, is_a_cached, is_b_cached);
-                                if zkp_verified {
-                                    if !is_a_cached {
-                                        verifier_A_cache.insert(
-                                            (local_zkp_pp.q, HashableGtElement(zkp_proof.c_A)),
-                                            zkp_proof.A_plus_M_zkrp_proof.clone(),
-                                        );
-                                    }
-                                    if !is_b_cached {
-                                        verifier_b_cache.insert(
-                                            (local_zkp_pp.q, HashableGtElement(zkp_proof.c_b)),
-                                            zkp_proof.neg_b_plus_M_zkrp_proof.clone(),
-                                        );
-                                    }
-                                }
-                            }
+                            let A_cached = prover_A_cache.get(&(A_s_T.clone(), q)).unwrap();
+                            let b_cached = prover_b_cache.get(&(neg_b_s_T.clone(), q)).unwrap();
 
-                            println!("Obligation {} verified: {}", idx + 1, zkp_verified);
-                            zkp_verified
+                            let A_lambda_e1_dims = ZkMatMulDims::new(&A_s_T, &lambda_s, &e_1);
+                            let b_lambda_e2_dims =
+                                ZkMatMulDims::new(&neg_b_s_T, &lambda_s, &e_2);
+                            let mut local_zkp_pp = zkp_pp.clone();
+                            local_zkp_pp.A_lambda_e1_dims = A_lambda_e1_dims;
+                            local_zkp_pp.b_lambda_e2_dims = b_lambda_e2_dims;
+                            local_zkp_pp.m = m;
+                            local_zkp_pp.n = n;
+                            local_zkp_pp.n_prime = n_prime;
+
+                            let zkp_proof = zkp::prove(
+                                &local_zkp_pp,
+                                &A_s_T, &neg_b_s_T,
+                                &lambda_s, &mu_s,
+                                &G_p_T, &h_p_T,
+                                &e_1, &e_2, &e_3,
+                                A_cached.A_comm,
+                                A_cached.A_cache.clone(),
+                                A_cached.A_r,
+                                A_cached.A_blind,
+                                b_cached.b_comm,
+                                b_cached.b_cache.clone(),
+                                b_cached.b_r,
+                                b_cached.b_blind,
+                                A_cached.A_plus_M_proof.clone(),
+                                b_cached.neg_b_plus_M_proof.clone(),
+                                alpha,
+                            );
+
+                            println!("Obligation {} proof generated", idx + 1);
+
+                            (zkp_proof, local_zkp_pp, G_p_T, h_p_T)
                         })
                         .collect::<Vec<_>>();
-                    total_verify_time += verify_timer.elapsed().as_millis();
-                    println!("====== Chunk {} done ======", chunk_idx + 1);
-                    verify_results
-                })
-                .collect::<Vec<_>>();
+                total_prove_time += prove_timer.elapsed().as_millis();
+
+                if total_prove_time > timeout_ms {
+                    timed_out = true;
+                    break;
+                }
+
+                // --- verify ---
+                let verify_timer = Instant::now();
+                let verify_results: Vec<bool> = proof_results
+                    .par_iter()
+                    .enumerate()
+                    .map(|(inner_idx, (zkp_proof, local_zkp_pp, G_p_T, h_p_T))| {
+                        let idx = chunk_idx * chunk_size + inner_idx;
+                        let mut zkp_verified = false;
+
+                        let (is_a_cached, a_mismatch) = {
+                            let key = (local_zkp_pp.q, HashableGtElement(zkp_proof.c_A));
+                            match verifier_A_cache.get(&key) {
+                                Some(cached) if *cached == zkp_proof.A_plus_M_zkrp_proof => (true, false),
+                                Some(_) => (false, true),
+                                None => (false, false),
+                            }
+                        };
+                        let (is_b_cached, b_mismatch) = {
+                            let key = (local_zkp_pp.q, HashableGtElement(zkp_proof.c_b));
+                            match verifier_b_cache.get(&key) {
+                                Some(cached) if *cached == zkp_proof.neg_b_plus_M_zkrp_proof => (true, false),
+                                Some(_) => (false, true),
+                                None => (false, false),
+                            }
+                        };
+
+                        if a_mismatch || b_mismatch {
+                            zkp_verified = false;
+                        } else {
+                            zkp_verified =
+                                zkp_proof.verify(local_zkp_pp, G_p_T, h_p_T, is_a_cached, is_b_cached);
+                            if zkp_verified {
+                                if !is_a_cached {
+                                    verifier_A_cache.insert(
+                                        (local_zkp_pp.q, HashableGtElement(zkp_proof.c_A)),
+                                        zkp_proof.A_plus_M_zkrp_proof.clone(),
+                                    );
+                                }
+                                if !is_b_cached {
+                                    verifier_b_cache.insert(
+                                        (local_zkp_pp.q, HashableGtElement(zkp_proof.c_b)),
+                                        zkp_proof.neg_b_plus_M_zkrp_proof.clone(),
+                                    );
+                                }
+                            }
+                        }
+
+                        println!("Obligation {} verified: {}", idx + 1, zkp_verified);
+                        zkp_verified
+                    })
+                    .collect::<Vec<_>>();
+                total_verify_time += verify_timer.elapsed().as_millis();
+
+                if !verify_results.iter().all(|&v| v) {
+                    all_successful = false;
+                }
+
+                println!("====== Chunk {} done ======", chunk_idx + 1);
+            }
 
             println!("Phase 2 complete. Prove time: {}ms", total_prove_time);
             println!("Phase 3 complete. Verify time: {}ms", total_verify_time);
-
-            // Check results
-            all_successful = verification_results.iter().all(|&verified| verified);
-
             println!("All verified: {}", all_successful);
 
-            if all_successful {
-                writeln!(log_file, "Sample number: {:?} -- setup time (ms): {:?} -- prove time (ms): {:?} -- verify time (ms): {:?}", sample, total_setup_time, total_prove_time, total_verify_time).unwrap();
+            if timed_out {
+                writeln!(
+                    log_file,
+                    "Sample {} - setup: {}ms, prove: {}ms, verify: {}ms - TIMED_OUT",
+                    sample, total_setup_time, total_prove_time, total_verify_time
+                ).unwrap();
                 break;
+            } else if all_successful {
+                writeln!(
+                    log_file,
+                    "Sample {} - setup: {}ms, prove: {}ms, verify: {}ms - SUCCESS",
+                    sample, total_setup_time, total_prove_time, total_verify_time
+                ).unwrap();
             } else {
                 writeln!(
                     log_file,
-                    "Sample number: {:?} -- Did not all verify correctly.",
-                    sample
-                )
-                .unwrap();
+                    "Sample {} - setup: {}ms, prove: {}ms, verify: {}ms - VERIFICATION_FAILED",
+                    sample, total_setup_time, total_prove_time, total_verify_time
+                ).unwrap();
             }
         }
     }
