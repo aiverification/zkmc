@@ -4,8 +4,8 @@ use crate::{
     config::{MAX_COLUMNS, MAX_PUBLIC_ROWS, MAX_SECRET_ROWS},
     model::{Batch, Obligation},
 };
+use ark_bn254::Fr;
 use ark_ff::PrimeField;
-use ark_mnt4_298::Fr;
 use ark_r1cs_std::{
     alloc::{AllocVar, AllocationMode},
     boolean::Boolean,

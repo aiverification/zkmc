@@ -1,10 +1,10 @@
 //! Loads, validates, and commits obligation batches.
 
 use crate::{
-    commitment::compute_batch_commitments,
-    config::{max_bound, MAX_COLUMNS, MAX_PUBLIC_ROWS, MAX_SECRET_ROWS},
-    model::{Batch, ModelBlinding, Obligation, ObligationKind},
     AppResult,
+    commitment::compute_batch_commitments,
+    config::{MAX_COLUMNS, MAX_PUBLIC_ROWS, MAX_SECRET_ROWS, max_bound},
+    model::{Batch, ModelBlinding, Obligation, ObligationKind},
 };
 use serde::Deserialize;
 use std::{fs, io, path::Path};

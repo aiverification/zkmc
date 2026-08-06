@@ -1,20 +1,20 @@
 //! Runs inspection, Nova folding, and decider modes with stable timings.
 
 use crate::{
-    circuit::{as_input, expected_final_state, initial_state, ZkmcCircuit},
+    AppResult,
+    circuit::{ZkmcCircuit, as_input, expected_final_state, initial_state},
     config::{MAX_COLUMNS, MAX_PUBLIC_ROWS, MAX_SECRET_ROWS},
-    decider::{finalize_decider, NovaParams, NovaScheme},
+    decider::{NovaParams, NovaProof, NovaRun, NovaScheme, finalize_decider},
     metrics::{print_duration, print_f64},
     model::Batch,
     statement::validate_statement,
-    AppResult,
 };
-use ark_mnt4_298::Fr;
-use folding_schemes::{
-    folding::nova::PreprocessorParam, frontend::FCircuit,
-    transcript::poseidon::poseidon_canonical_config, FoldingScheme,
-};
+use sonobe_ivc::{IVCKeyGenerator, IVCPreprocessor, IVCProver, IVCVerifier};
+use sonobe_primitives::{transcripts::poseidon::poseidon_circom_config, utils::dummy::Dummy};
 use std::{io, path::Path, time::Instant};
+
+const PRIMARY_KEY_LENGTH: usize = 1_048_576;
+const SECONDARY_KEY_LENGTH: usize = 2_048;
 
 /// Prints batch metadata and commitments.
 pub fn inspect(batch: &Batch) {
@@ -76,21 +76,63 @@ pub fn run_all(
     finalize_decider(batch, &statement, nova_params, circuit, nova, output_dir)
 }
 
-fn fold_and_verify(batch: &Batch) -> AppResult<(NovaParams, ZkmcCircuit<Fr>, NovaScheme)> {
+pub(crate) fn fold_and_verify(batch: &Batch) -> AppResult<(NovaParams, ZkmcCircuit, NovaRun)> {
     let setup_start = Instant::now();
-    let poseidon_config = poseidon_canonical_config::<Fr>();
-    let circuit = ZkmcCircuit::<Fr>::new(poseidon_config.clone())?;
-    let params = PreprocessorParam::new(poseidon_config, circuit.clone());
+    let poseidon_config = poseidon_circom_config();
+    let circuit = ZkmcCircuit::new(poseidon_config.clone());
     let mut rng = ark_std::rand::rngs::OsRng;
-    let nova_params = NovaScheme::preprocess(&mut rng, &params)?;
-    let mut nova = NovaScheme::init(&nova_params, circuit.clone(), initial_state(batch))?;
+    let public_parameters = NovaScheme::preprocess(
+        (PRIMARY_KEY_LENGTH, SECONDARY_KEY_LENGTH, poseidon_config),
+        &mut rng,
+    )?;
+    let (prover_key, verifier_key) = NovaScheme::generate_keys(public_parameters, &circuit)?;
+    let nova_params = NovaParams {
+        prover_key,
+        verifier_key,
+    };
     print_duration("nova_setup_seconds", setup_start.elapsed());
+
+    let nova = prove_and_verify(batch, &nova_params, &circuit)?;
+    Ok((nova_params, circuit, nova))
+}
+
+/// Repeats folding with reusable Nova keys.
+#[cfg(test)]
+pub(crate) fn refold_and_verify(
+    batch: &Batch,
+    nova_params: &NovaParams,
+    circuit: &ZkmcCircuit,
+) -> AppResult<NovaRun> {
+    prove_and_verify(batch, nova_params, circuit)
+}
+
+/// Proves every step with reusable keys.
+fn prove_and_verify(
+    batch: &Batch,
+    nova_params: &NovaParams,
+    circuit: &ZkmcCircuit,
+) -> AppResult<NovaRun> {
+    let mut rng = ark_std::rand::rngs::OsRng;
+    let z_0 = initial_state(batch);
+    let mut z_i = z_0;
+    let mut proof = NovaProof::dummy(&nova_params.prover_key);
 
     let fold_start = Instant::now();
     let mut step_seconds = Vec::with_capacity(batch.obligations.len());
     for (index, obligation) in batch.obligations.iter().enumerate() {
         let start = Instant::now();
-        nova.prove_step(&mut rng, as_input(batch, index, obligation), None)?;
+        let (next_state, (), next_proof) = NovaScheme::prove(
+            &nova_params.prover_key,
+            circuit,
+            index,
+            &z_0,
+            &z_i,
+            as_input(batch, index, obligation),
+            &proof,
+            &mut rng,
+        )?;
+        z_i = next_state;
+        proof = next_proof;
         let elapsed = start.elapsed();
         step_seconds.push(elapsed.as_secs_f64());
         println!("nova step {index} folded in {elapsed:?}");
@@ -99,9 +141,15 @@ fn fold_and_verify(batch: &Batch) -> AppResult<(NovaParams, ZkmcCircuit<Fr>, Nov
     print_step_statistics(&step_seconds);
 
     let verify_start = Instant::now();
-    NovaScheme::verify(nova_params.1.clone(), nova.ivc_proof())?;
+    NovaScheme::verify::<ZkmcCircuit>(
+        &nova_params.verifier_key,
+        batch.obligations.len(),
+        &z_0,
+        &z_i,
+        &proof,
+    )?;
     print_duration("nova_verify_seconds", verify_start.elapsed());
-    if nova.z_i != expected_final_state(batch) {
+    if z_i != expected_final_state(batch) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "unexpected final committed recursive state",
@@ -109,8 +157,13 @@ fn fold_and_verify(batch: &Batch) -> AppResult<(NovaParams, ZkmcCircuit<Fr>, Nov
         .into());
     }
     println!("ivc verification passed");
-    println!("final committed state: {:?}", nova.z_i);
-    Ok((nova_params, circuit, nova))
+    println!("final committed state: {z_i:?}");
+    Ok(NovaRun {
+        i: batch.obligations.len(),
+        z_0,
+        z_i,
+        proof,
+    })
 }
 
 fn print_step_statistics(values: &[f64]) {

@@ -1,6 +1,6 @@
 //! Stores normalized ZKMC obligation data.
 
-use ark_mnt4_298::Fr;
+use ark_bn254::Fr;
 use serde::Deserialize;
 
 #[derive(Clone, Copy, Debug, Deserialize)]

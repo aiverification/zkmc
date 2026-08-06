@@ -2,7 +2,7 @@
 
 use super::{
     hash::{model_blinding_digest, update_certificate_digest, update_model_digest},
-    input::{as_input, SignedVar, StepInput, StepInputVar},
+    input::{SignedVar, StepInput, StepInputVar, as_input},
 };
 use crate::{
     commitment::{
@@ -14,35 +14,36 @@ use crate::{
     },
     model::{Batch, Obligation},
 };
+use ark_bn254::Fr;
 use ark_crypto_primitives::sponge::poseidon::PoseidonConfig;
 use ark_ff::{One, PrimeField, Zero};
-use ark_mnt4_298::Fr;
-use ark_r1cs_std::{alloc::AllocVar, boolean::Boolean, eq::EqGadget, fields::fp::FpVar};
-use ark_relations::gr1cs::{ConstraintSystem, ConstraintSystemRef, SynthesisError};
-use folding_schemes::{
-    frontend::FCircuit, transcript::poseidon::poseidon_canonical_config, Error as NovaError,
-};
-use std::{cmp::Ordering, marker::PhantomData};
+use ark_r1cs_std::{GR1CSVar, alloc::AllocVar, boolean::Boolean, eq::EqGadget, fields::fp::FpVar};
+use ark_relations::gr1cs::{ConstraintSystem, SynthesisError};
+use sonobe_primitives::circuits::FCircuit;
+use std::cmp::Ordering;
 
 #[derive(Clone, Debug)]
-pub struct ZkmcCircuit<F: PrimeField> {
-    poseidon_config: PoseidonConfig<F>,
-    _field: PhantomData<F>,
+pub struct ZkmcCircuit {
+    poseidon_config: PoseidonConfig<Fr>,
 }
 
-impl<F: PrimeField> Default for ZkmcCircuit<F> {
+impl ZkmcCircuit {
+    /// Creates the fixed committed circuit.
+    pub fn new(poseidon_config: PoseidonConfig<Fr>) -> Self {
+        Self { poseidon_config }
+    }
+}
+
+impl Default for ZkmcCircuit {
     fn default() -> Self {
-        Self {
-            poseidon_config: poseidon_canonical_config::<F>(),
-            _field: PhantomData,
-        }
+        Self::new(commitment_config())
     }
 }
 
 /// Builds the initial committed recursive state.
-pub fn initial_state(batch: &Batch) -> Vec<Fr> {
+pub fn initial_state(batch: &Batch) -> [Fr; 8] {
     let config = commitment_config();
-    vec![
+    [
         Fr::zero(),
         Fr::from(batch.obligations.len() as u64),
         batch.model_commitment,
@@ -55,7 +56,7 @@ pub fn initial_state(batch: &Batch) -> Vec<Fr> {
 }
 
 /// Builds every native state in execution order.
-pub fn state_trace(batch: &Batch) -> Vec<Vec<Fr>> {
+pub fn state_trace(batch: &Batch) -> Vec<[Fr; 8]> {
     let config = commitment_config();
     let mut current = initial_state(batch);
     let mut states = vec![current.clone()];
@@ -71,8 +72,8 @@ pub fn state_trace(batch: &Batch) -> Vec<Vec<Fr>> {
 }
 
 /// Returns the verifier-expected terminal state.
-pub fn expected_final_state(batch: &Batch) -> Vec<Fr> {
-    vec![
+pub fn expected_final_state(batch: &Batch) -> [Fr; 8] {
+    [
         Fr::from(batch.obligations.len() as u64),
         Fr::from(batch.obligations.len() as u64),
         batch.model_commitment,
@@ -99,50 +100,34 @@ pub fn circuit_satisfied_with_state(
     batch: &Batch,
     index: usize,
     obligation: &Obligation,
-    state: &[Fr],
+    state: &[Fr; 8],
 ) -> Result<bool, SynthesisError> {
     let cs = ConstraintSystem::<Fr>::new_ref();
-    let state_vars = state
+    let i = FpVar::new_witness(cs.clone(), || Ok(Fr::from(index as u64)))?;
+    let state_vars: [FpVar<Fr>; 8] = state
         .iter()
         .map(|value| FpVar::new_witness(cs.clone(), || Ok(*value)))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+        .try_into()
+        .map_err(|_| SynthesisError::Unsatisfiable)?;
     let input = StepInputVar::new_witness(cs.clone(), || Ok(as_input(batch, index, obligation)))?;
-    let circuit = ZkmcCircuit::<Fr>::default();
-    circuit.generate_step_constraints(cs.clone(), index, state_vars, input)?;
+    let circuit = ZkmcCircuit::default();
+    let _ = circuit.generate_step_constraints(i, state_vars, input)?;
     cs.is_satisfied()
 }
 
-impl<F: PrimeField> FCircuit<F> for ZkmcCircuit<F> {
-    type Params = PoseidonConfig<F>;
-    type ExternalInputs = StepInput<F>;
-    type ExternalInputsVar = StepInputVar<F>;
-
-    /// Creates the fixed committed step circuit.
-    fn new(params: Self::Params) -> Result<Self, NovaError> {
-        Ok(Self {
-            poseidon_config: params,
-            _field: PhantomData,
-        })
-    }
-
-    /// Returns recursive state field element count.
-    fn state_len(&self) -> usize {
-        8
-    }
-
+impl ZkmcCircuit {
     /// Enforces one committed Farkas transition.
     fn generate_step_constraints(
         &self,
-        cs: ConstraintSystemRef<F>,
-        _i: usize,
-        state: Vec<FpVar<F>>,
-        input: Self::ExternalInputsVar,
-    ) -> Result<Vec<FpVar<F>>, SynthesisError> {
-        if state.len() != self.state_len() {
-            return Err(SynthesisError::Unsatisfiable);
-        }
+        i: FpVar<Fr>,
+        state: [FpVar<Fr>; 8],
+        input: StepInputVar<Fr>,
+    ) -> Result<[FpVar<Fr>; 8], SynthesisError> {
+        input.index.enforce_equal(&i)?;
         enforce_state_binding(&state, &input)?;
         enforce_input_ranges(&input)?;
+        let cs = i.cs();
         model_blinding_digest(cs.clone(), &self.poseidon_config, &input)?
             .enforce_equal(&state[7])?;
         enforce_vector_equality(&input)?;
@@ -153,8 +138,8 @@ impl<F: PrimeField> FCircuit<F> for ZkmcCircuit<F> {
         let certificate_digest =
             update_certificate_digest(cs, &self.poseidon_config, &state[5], &input)?;
 
-        Ok(vec![
-            state[0].clone() + F::one(),
+        Ok([
+            state[0].clone() + Fr::one(),
             state[1].clone(),
             state[2].clone(),
             state[3].clone(),
@@ -167,7 +152,7 @@ impl<F: PrimeField> FCircuit<F> for ZkmcCircuit<F> {
 }
 
 fn enforce_state_binding<F: PrimeField>(
-    state: &[FpVar<F>],
+    state: &[FpVar<F>; 8],
     input: &StepInputVar<F>,
 ) -> Result<(), SynthesisError> {
     input.index.enforce_equal(&state[0])?;
@@ -275,4 +260,40 @@ fn enforce_bounded<F: PrimeField>(
 fn signed_value<F: PrimeField>(value: &SignedVar<F>) -> FpVar<F> {
     let sign: FpVar<F> = value.negative.clone().into();
     &value.magnitude - (&sign * &value.magnitude * F::from(2_u64))
+}
+
+impl FCircuit for ZkmcCircuit {
+    type Field = Fr;
+    type State = [Fr; 8];
+    type StateVar = [FpVar<Fr>; 8];
+    type ExternalInputs = StepInput<Fr>;
+    type ExternalOutputs = ();
+
+    /// Checks recursive state shape equality.
+    fn same_state_shape(_a: &Self::State, _b: &Self::State) -> bool {
+        true
+    }
+
+    /// Creates the fixed dummy state.
+    fn dummy_state(&self) -> Self::State {
+        [Fr::zero(); 8]
+    }
+
+    /// Creates padded dummy external inputs.
+    fn dummy_external_inputs(&self) -> Self::ExternalInputs {
+        StepInput::default()
+    }
+
+    /// Synthesizes one committed Farkas transition.
+    fn synthesize_step(
+        &self,
+        i: FpVar<Self::Field>,
+        state: Self::StateVar,
+        external_inputs: Self::ExternalInputs,
+    ) -> Result<(Self::StateVar, Self::ExternalOutputs), SynthesisError> {
+        let cs = i.cs();
+        let input = StepInputVar::new_witness(cs, || Ok(external_inputs))?;
+        let next_state = self.generate_step_constraints(i, state, input)?;
+        Ok((next_state, ()))
+    }
 }

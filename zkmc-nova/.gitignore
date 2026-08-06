@@ -1,5 +1,6 @@
 # Rust build output
 /target/
+/.vendor/
 
 # Generated benchmark output
 /artifacts/

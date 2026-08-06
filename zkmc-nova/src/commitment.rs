@@ -1,15 +1,15 @@
 //! Computes binding commitments for obligation batches.
 
 use crate::{
-    model::{ModelBlinding, Obligation},
     AppResult,
+    model::{ModelBlinding, Obligation},
 };
+use ark_bn254::Fr;
 use ark_crypto_primitives::sponge::{
-    poseidon::{PoseidonConfig, PoseidonSponge},
     CryptographicSponge,
+    poseidon::{PoseidonConfig, PoseidonSponge},
 };
-use ark_mnt4_298::Fr;
-use folding_schemes::transcript::poseidon::poseidon_canonical_config;
+use sonobe_primitives::transcripts::poseidon::poseidon_circom_config;
 use std::io;
 
 const MODEL_BLINDING_DOMAIN: u64 = 0x5a4b_4d00;
@@ -28,7 +28,7 @@ pub struct BatchCommitments {
 
 /// Returns the canonical Poseidon configuration.
 pub fn commitment_config() -> PoseidonConfig<Fr> {
-    poseidon_canonical_config::<Fr>()
+    poseidon_circom_config()
 }
 
 /// Computes ordered model and certificate commitments.
