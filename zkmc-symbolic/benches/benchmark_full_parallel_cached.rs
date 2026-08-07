@@ -124,22 +124,12 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
             let verifier_b_cache: DashMap<(usize, HashableGtElement), ZKRPProof> = DashMap::new();
             let big_M = 2u32.pow(31) - 1;
 
-            let mut max_q: usize = 0;
-            for obligation in input.obligations.iter() {
-                let pad_A = pad_matrix(&obligation.matrices.A_s);
-                let pad_G = pad_matrix(&obligation.matrices.G_p);
-                max_q = max_q
-                    .max(pad_A.len())
-                    .max(pad_A[0].len())
-                    .max(pad_G.len())
-                    .max(pad_G[0].len());
-            }
-
             // ========== PHASE 1: SRS Setup Only ==========
             println!("================ Phase 1: SRS Setup ================");
             let setup_timer = Instant::now();
 
             // Collect unique matrices for dimension calculation
+            let mut max_q: usize = 0;
             let mut unique_A_matrices: HashMap<MatrixCacheKey, Vec<Vec<i64>>> = HashMap::new();
             let mut unique_b_matrices: HashMap<MatrixCacheKey, Vec<Vec<i64>>> = HashMap::new();
 
@@ -148,6 +138,12 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
                 let neg_b_s_T =
                     pad_matrix(&transpose_matrix(&negate_matrix(&obligation.matrices.b_s)));
                 let G_p_T = pad_matrix(&transpose_matrix(&obligation.matrices.G_p));
+
+                max_q = max_q
+                    .max(A_s_T.len())
+                    .max(A_s_T[0].len())
+                    .max(G_p_T.len())
+                    .max(G_p_T[0].len());
 
                 // let m = A_s_T.len();
                 let n = A_s_T[0].len();
