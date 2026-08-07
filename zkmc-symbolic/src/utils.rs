@@ -115,6 +115,11 @@ pub fn blstrs_affine_to_bls_g1(g: &blstrs::G1Affine) -> bls::G1Element {
     };
 }
 
+pub fn bls_g1_to_blstrs_affine(g: &bls::G1Element) -> blstrs::G1Affine {
+    let affine: bls12::G1Affine = g.value.into();
+    blstrs::G1Affine::from_compressed(&affine.to_compressed()).unwrap()
+}
+
 pub fn get_bls_g1_zero() -> bls::G1Element {
     let P = bls::G1Element::generator();
     return P - P;

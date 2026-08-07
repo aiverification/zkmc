@@ -210,33 +210,28 @@ impl ZKRPProof {
         //Check range proof on v
         let v_range_verified: bool;
         let mut verif_transcript = Transcript::new(b"v_range_proof");
+        let g_pow_b_blstrs = pp.pc_gens.B * blstrs::Scalar::from(b as u64);
+        let g_pow_b_bls = blstrs_proj_to_bls_g1(&g_pow_b_blstrs);
+        let mut lower_comms: Vec<blstrs::G1Affine> = Vec::with_capacity(pp.l);
+        let mut upper_comms: Vec<blstrs::G1Affine> = Vec::with_capacity(pp.l);
+        for i in 0..pp.l {
+            lower_comms.push(bls_g1_to_blstrs_affine(&self.c_i[i]));
+            let upper_bls = g_pow_b_bls - self.c_i[i];
+            upper_comms.push(bls_g1_to_blstrs_affine(&upper_bls));
+        }
         if pp.l == 1 {
             v_range_verified = self
                 .v_range_proof
-                .verify_single(&pp.pc_gens, &pp.bp_gens, &mut verif_transcript, 32)
+                .verify_single(&pp.pc_gens, &pp.bp_gens, &mut verif_transcript, &lower_comms[0], &upper_comms[0], 32)
                 .expect("Error verifying range of v ");
         } else {
             v_range_verified = self
                 .v_range_proof
-                .verify_multiple(&pp.pc_gens, &pp.bp_gens, &mut verif_transcript, 32)
+                .verify_multiple(&pp.pc_gens, &pp.bp_gens, &mut verif_transcript, &lower_comms, &upper_comms, 32)
                 .expect("Error verifying ranges of v ");
         }
         if !v_range_verified {
             println!("Error verifying ranges of v ");
-            return false;
-        }
-
-        //Check equality of commitments with range proofs!
-        let mut equality_comms_verified = true;
-        let g_pow_b = pp.g_bls * ZpElement::from(b as u64);
-        for i in 0..pp.l {
-            equality_comms_verified &=
-                (self.c_i[i] == blstrs_affine_to_bls_g1(&self.v_range_proof.lower_comms[i].into()));
-            equality_comms_verified &= ((g_pow_b - self.c_i[i])
-                == blstrs_affine_to_bls_g1(&self.v_range_proof.upper_comms[i].into()));
-        }
-        if !equality_comms_verified {
-            println!("Error showing equality of commitments with c_i");
             return false;
         }
 
