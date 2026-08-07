@@ -580,8 +580,8 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             let verifier_b_cache: DashMap<(usize, HashableGtElement), ZKRPProof> = DashMap::new();
             let verifier_lambda_cache: DashMap<HashableGtElement, ZKRPProof> = DashMap::new();
             let verifier_mu_cache: DashMap<HashableGtElement, ZKRPProof> = DashMap::new();
-            let verifier_e1_cache: DashMap<HashableGtElement, ()> = DashMap::new();
-            let verifier_e2_cache: DashMap<HashableGtElement, ()> = DashMap::new();
+            let verifier_e1_cache: DashMap<(HashableGtElement, HashableGtElement, HashableGtElement), ()> = DashMap::new();
+            let verifier_e2_cache: DashMap<(HashableGtElement, HashableGtElement, HashableGtElement), ()> = DashMap::new();
 
             for (chunk_idx, chunk) in input.obligations.chunks(chunk_size).enumerate() {
                 if total_prove_time > timeout_ms {
@@ -709,14 +709,22 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                             }
                         };
                         let (is_e1_cached, e1_mismatch) = {
-                            let key = HashableGtElement(zkp_proof.c_e_1);
+                            let key = (
+                                HashableGtElement(zkp_proof.c_A),
+                                HashableGtElement(zkp_proof.c_lambda),
+                                HashableGtElement(zkp_proof.c_e_1),
+                            );
                             match verifier_e1_cache.get(&key) {
                                 Some(_) => (true, false),
                                 None => (false, false),
                             }
                         };
                         let (is_e2_cached, e2_mismatch) = {
-                            let key = HashableGtElement(zkp_proof.c_e_2);
+                            let key = (
+                                HashableGtElement(zkp_proof.c_b),
+                                HashableGtElement(zkp_proof.c_lambda),
+                                HashableGtElement(zkp_proof.c_e_2),
+                            );
                             match verifier_e2_cache.get(&key) {
                                 Some(_) => (true, false),
                                 None => (false, false),
@@ -766,12 +774,20 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                                 }
                                 if !is_e1_cached {
                                     verifier_e1_cache.insert(
-                                        HashableGtElement(zkp_proof.c_e_1), (),
+                                        (
+                                            HashableGtElement(zkp_proof.c_A),
+                                            HashableGtElement(zkp_proof.c_lambda),
+                                            HashableGtElement(zkp_proof.c_e_1),
+                                        ), (),
                                     );
                                 }
                                 if !is_e2_cached {
                                     verifier_e2_cache.insert(
-                                        HashableGtElement(zkp_proof.c_e_2), (),
+                                        (
+                                            HashableGtElement(zkp_proof.c_b),
+                                            HashableGtElement(zkp_proof.c_lambda),
+                                            HashableGtElement(zkp_proof.c_e_2),
+                                        ), (),
                                     );
                                 }
                             }
