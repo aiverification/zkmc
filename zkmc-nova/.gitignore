@@ -1,0 +1,26 @@
+# Rust build output
+/target/
+/.vendor/
+
+# Generated benchmark output
+/artifacts/
+/examples/exb_i1a2.json
+*.log
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

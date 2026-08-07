@@ -1,0 +1,47 @@
+[package]
+name = "zkmc"
+version = "0.4.0"
+edition = "2024"
+
+[dependencies]
+# Prepared by scripts/setup_sonobe_pr259.sh.
+sonobe-fs = { path = ".vendor/sonobe-259/crates/fs", features = ["parallel"] }
+sonobe-ivc = {
+    path = ".vendor/sonobe-259/crates/ivc",
+    default-features = false,
+    features = ["parallel"]
+}
+sonobe-primitives = {
+    path = ".vendor/sonobe-259/crates/primitives",
+    features = ["parallel"]
+}
+sonobe-snarks = {
+    path = ".vendor/sonobe-259/crates/snarks",
+    features = ["parallel"]
+}
+
+ark-crypto-primitives = {
+    version = "=0.6.0",
+    default-features = false,
+    features = ["std", "constraints", "sponge"]
+}
+ark-bn254 = {
+    version = "=0.6.0",
+    default-features = false,
+    features = ["curve", "r1cs"]
+}
+ark-grumpkin = {
+    version = "=0.6.0",
+    default-features = false,
+    features = ["r1cs"]
+}
+
+ark-ec = { version = "=0.6.0", default-features = false }
+ark-ff = { version = "=0.6.0", default-features = false }
+ark-r1cs-std = { version = "=0.6.0", default-features = false }
+ark-relations = { version = "=0.6.0", default-features = false }
+ark-serialize = { version = "=0.6.0", default-features = false }
+ark-std = { version = "=0.6.0", default-features = false }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

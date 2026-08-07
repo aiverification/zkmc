@@ -1,0 +1,107 @@
+{
+  "schema_version": 3,
+  "benchmark": "phase3_smoke",
+  "bound": 255,
+  "model_blinding": {
+    "low": 1311768467463790320,
+    "high": 1147797409030816545
+  },
+  "obligations": [
+    {
+      "kind": "init",
+      "label": "initial finite rank",
+      "a_s": [
+        [
+          -1,
+          0
+        ]
+      ],
+      "b_s": [
+        0
+      ],
+      "g_p": [
+        [
+          1,
+          0
+        ]
+      ],
+      "h_p": [
+        -2
+      ],
+      "lambda": [
+        1
+      ],
+      "mu": [
+        1
+      ]
+    },
+    {
+      "kind": "step",
+      "label": "ordinary nonincrease",
+      "a_s": [
+        [
+          1,
+          1
+        ],
+        [
+          -1,
+          -1
+        ]
+      ],
+      "b_s": [
+        0,
+        -1
+      ],
+      "g_p": [
+        [
+          1,
+          1
+        ]
+      ],
+      "h_p": [
+        0
+      ],
+      "lambda": [
+        1,
+        2
+      ],
+      "mu": [
+        1
+      ]
+    },
+    {
+      "kind": "fair",
+      "label": "fair strict decrease",
+      "a_s": [
+        [
+          -2,
+          0
+        ],
+        [
+          1,
+          -1
+        ]
+      ],
+      "b_s": [
+        -2,
+        0
+      ],
+      "g_p": [
+        [
+          1,
+          1
+        ]
+      ],
+      "h_p": [
+        0
+      ],
+      "lambda": [
+        1,
+        1
+      ],
+      "mu": [
+        1
+      ]
+    }
+  ]
+}
