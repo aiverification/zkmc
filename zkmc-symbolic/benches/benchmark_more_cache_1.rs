@@ -582,6 +582,7 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             let verifier_mu_cache: DashMap<HashableGtElement, ZKRPProof> = DashMap::new();
             let verifier_e1_cache: DashMap<(HashableGtElement, HashableGtElement, HashableGtElement), ()> = DashMap::new();
             let verifier_e2_cache: DashMap<(HashableGtElement, HashableGtElement, HashableGtElement), ()> = DashMap::new();
+            let verifier_fixed_comms: DashMap<(usize, usize), PrecomputedFixedComms> = DashMap::new();
 
             for (chunk_idx, chunk) in input.obligations.chunks(chunk_size).enumerate() {
                 if total_prove_time > timeout_ms {
@@ -744,8 +745,36 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                                 is_e1_cached,
                                 is_e2_cached,
                             };
+                            let fc = verifier_fixed_comms
+                                .entry((local_zkp_pp.m, local_zkp_pp.n))
+                                .or_insert_with(|| {
+                                    let mut M_m_n: Vec<Vec<i64>> =
+                                        vec![vec![big_M as i64; local_zkp_pp.n]; local_zkp_pp.m];
+                                    let mat_M_m_n =
+                                        vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
+                                    let (M_m_n_comm, _) =
+                                        mat_M_m_n.commit_rm(&local_zkp_pp.zk_matrix_srs);
+                                    let M_1_n: Vec<Vec<i64>> =
+                                        vec![vec![big_M as i64; local_zkp_pp.n]];
+                                    let mat_M_1_n =
+                                        vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
+                                    let (M_1_n_comm, _) =
+                                        mat_M_1_n.commit_rm(&local_zkp_pp.zk_matrix_srs);
+                                    let neg_one = vec![vec![-1i64]];
+                                    let mat_neg_one =
+                                        vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
+                                    let (neg_one_comm, _) =
+                                        mat_neg_one.commit_cm(&local_zkp_pp.zk_matrix_srs);
+                                    PrecomputedFixedComms {
+                                        M_m_n_comm,
+                                        M_1_n_comm,
+                                        neg_one_comm,
+                                    }
+                                });
+                            let fc_val = fc.clone();
+                            drop(fc);
                             zkp_verified = zkp_proof.verify(
-                                local_zkp_pp, G_p_T, h_p_T, &flags,
+                                local_zkp_pp, G_p_T, h_p_T, &flags, Some(&fc_val),
                             );
                             if zkp_verified {
                                 if !is_a_cached {
