@@ -116,6 +116,50 @@ pub struct VerifierCacheFlagsCached {
     pub is_e2_cached: bool,
 }
 
+#[derive(Clone)]
+pub struct PrecomputedFixedComms {
+    pub M_m_n_comm: GtElement,
+    pub M_1_n_comm: GtElement,
+    pub neg_one_comm: GtElement,
+}
+
+#[derive(Clone)]
+pub struct AVerifyEntry {
+    pub c_A: GtElement,
+    pub A_plus_M_zkrp: ZKRPProof,
+    pub q: usize,
+    pub m: usize,
+    pub n: usize,
+}
+
+#[derive(Clone)]
+pub struct BVerifyEntry {
+    pub c_b: GtElement,
+    pub neg_b_plus_M_zkrp: ZKRPProof,
+    pub q: usize,
+    pub n: usize,
+}
+
+#[derive(Clone)]
+pub struct ZKRPVerifyEntry {
+    pub commitment: GtElement,
+    pub zkrp_proof: ZKRPProof,
+    pub m: usize,
+    pub n: usize,
+    pub l: usize,
+}
+
+#[derive(Clone)]
+pub struct ZkmmVerifyEntry {
+    pub c_a: GtElement,
+    pub c_e: GtElement,
+    pub c_lambda: GtElement,
+    pub proof: TranSeq,
+    pub m: usize,
+    pub n: usize,
+    pub l: usize,
+}
+
 pub fn prove(
     pp: &ZkpSRSCached,
     A_s_T: &Vec<Vec<i64>>,
@@ -636,6 +680,122 @@ pub fn prove_cached(
     }
 }
 
+pub fn verify_A_plus_M_zkrp(
+    pp: &ZkpSRSCached,
+    c_A: GtElement,
+    M_m_n_comm: GtElement,
+    proof: &ZKRPProof,
+    big_M: u32,
+) -> bool {
+    let A_prime_comm = c_A + M_m_n_comm;
+    let A_plus_M_l = pp.m * pp.n;
+    let mut A_plus_M_g_i = pp.g_i_vec[0..2 * A_plus_M_l].to_vec();
+    A_plus_M_g_i[A_plus_M_l] = get_bls_g1_zero();
+    let A_plus_M_zkrp_pp = zkrp::ZKRPParams {
+        l: A_plus_M_l, m: pp.m, n: pp.n,
+        g_blstrs: pp.g_blstrs, g_bls: pp.g_bls,
+        g_prime: pp.g_prime, g_prime_alpha: pp.g_prime_alpha,
+        g_i: pp.g_i_vec.clone(),
+        h: pp.h, h_prime: pp.h_prime,
+        zk_matrix_srs: pp.zk_matrix_srs.clone(),
+        pc_gens: pp.pc_gens.clone(), bp_gens: pp.bp_gens.clone(),
+    };
+    proof.verify(&A_plus_M_zkrp_pp, A_prime_comm, 2 * big_M)
+}
+
+pub fn verify_neg_b_plus_M_zkrp(
+    pp: &ZkpSRSCached,
+    c_b: GtElement,
+    M_1_n_comm: GtElement,
+    proof: &ZKRPProof,
+    big_M: u32,
+) -> bool {
+    let b_prime_comm = c_b + M_1_n_comm;
+    let neg_b_plus_M_l = pp.n;
+    let mut neg_b_plus_M_g_i = pp.g_i_vec[0..2 * neg_b_plus_M_l].to_vec();
+    neg_b_plus_M_g_i[neg_b_plus_M_l] = get_bls_g1_zero();
+    let neg_b_plus_M_zkrp_pp = zkrp::ZKRPParams {
+        l: neg_b_plus_M_l, m: 1usize, n: pp.n,
+        g_blstrs: pp.g_blstrs, g_bls: pp.g_bls,
+        g_prime: pp.g_prime, g_prime_alpha: pp.g_prime_alpha,
+        g_i: pp.g_i_vec.clone(),
+        h: pp.h, h_prime: pp.h_prime,
+        zk_matrix_srs: pp.zk_matrix_srs.clone(),
+        pc_gens: pp.pc_gens.clone(), bp_gens: pp.bp_gens.clone(),
+    };
+    proof.verify(&neg_b_plus_M_zkrp_pp, b_prime_comm, 2 * big_M)
+}
+
+pub fn verify_lambda_zkrp(
+    pp: &ZkpSRSCached,
+    c_lambda: GtElement,
+    proof: &ZKRPProof,
+    big_M: u32,
+) -> bool {
+    let lambda_l = pp.n;
+    let mut lambda_g_i = pp.g_i_vec[0..2 * lambda_l].to_vec();
+    lambda_g_i[lambda_l] = get_bls_g1_zero();
+    let lambda_zkrp_pp = zkrp::ZKRPParams {
+        l: lambda_l, m: pp.n, n: 1usize,
+        g_blstrs: pp.g_blstrs, g_bls: pp.g_bls,
+        g_prime: pp.g_prime, g_prime_alpha: pp.g_prime_alpha,
+        g_i: pp.g_i_vec.clone(),
+        h: pp.h, h_prime: pp.h_prime,
+        zk_matrix_srs: pp.zk_matrix_srs.clone(),
+        pc_gens: pp.pc_gens.clone(), bp_gens: pp.bp_gens.clone(),
+    };
+    proof.verify(&lambda_zkrp_pp, c_lambda, big_M)
+}
+
+pub fn verify_mu_zkrp(
+    pp: &ZkpSRSCached,
+    c_mu: GtElement,
+    proof: &ZKRPProof,
+    big_M: u32,
+) -> bool {
+    let mu_l = pp.n_prime;
+    let mut mu_g_i = pp.g_i_vec[0..2 * mu_l].to_vec();
+    mu_g_i[mu_l] = get_bls_g1_zero();
+    let mu_zkrp_pp = zkrp::ZKRPParams {
+        l: mu_l, m: pp.n_prime, n: 1usize,
+        g_blstrs: pp.g_blstrs, g_bls: pp.g_bls,
+        g_prime: pp.g_prime, g_prime_alpha: pp.g_prime_alpha,
+        g_i: pp.g_i_vec.clone(),
+        h: pp.h, h_prime: pp.h_prime,
+        zk_matrix_srs: pp.zk_matrix_srs.clone(),
+        pc_gens: pp.pc_gens.clone(), bp_gens: pp.bp_gens.clone(),
+    };
+    proof.verify(&mu_zkrp_pp, c_mu, big_M)
+}
+
+pub fn verify_e1_zkmm(
+    pp: &ZkpSRSCached,
+    c_A: GtElement,
+    c_lambda: GtElement,
+    c_e1: GtElement,
+    proof: &TranSeq,
+) -> bool {
+    let verifier = ZkMatMul::new(
+        c_e1, c_A, c_lambda,
+        pp.A_lambda_e1_dims.m, pp.A_lambda_e1_dims.n, pp.A_lambda_e1_dims.l,
+    );
+    verifier.verify(&pp.zk_matrix_srs, &mut proof.clone())
+}
+
+pub fn verify_e2_zkmm(
+    pp: &ZkpSRSCached,
+    c_b: GtElement,
+    c_lambda: GtElement,
+    c_e2: GtElement,
+    proof: &TranSeq,
+) -> bool {
+    let verifier = ZkMatMul::new(
+        c_e2, c_b, c_lambda,
+        pp.b_lambda_e2_dims.m, pp.b_lambda_e2_dims.n, pp.b_lambda_e2_dims.l,
+    );
+    verifier.verify(&pp.zk_matrix_srs, &mut proof.clone())
+}
+
 impl ZkpProofCached {
     pub fn verify(
         &self,
@@ -643,23 +803,30 @@ impl ZkpProofCached {
         G_p_T: &Vec<Vec<i64>>,
         h_p_T: &Vec<Vec<i64>>,
         flags: &VerifierCacheFlagsCached,
+        fixed_comms: Option<&PrecomputedFixedComms>,
     ) -> bool {
-        let mut M_m_n: Vec<Vec<i64>> = vec![];
-        for _ in 0..pp.m {
-            M_m_n.push(vec![pp.big_M as i64; pp.n]);
-        }
-        let mat_M_m_n = vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
-        let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&pp.zk_matrix_srs);
+        let (M_m_n_comm, M_1_n_comm, neg_one_comm) = if let Some(fc) = fixed_comms {
+            (fc.M_m_n_comm, fc.M_1_n_comm, fc.neg_one_comm)
+        } else {
+            let mut M_m_n: Vec<Vec<i64>> = vec![];
+            for _ in 0..pp.m {
+                M_m_n.push(vec![pp.big_M as i64; pp.n]);
+            }
+            let mat_M_m_n = vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
+            let (M_m_n_comm_fresh, _) = mat_M_m_n.commit_rm(&pp.zk_matrix_srs);
+
+            let mut M_1_n: Vec<Vec<i64>> = vec![vec![pp.big_M as i64; pp.n]];
+            let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
+            let (M_1_n_comm_fresh, _) = mat_M_1_n.commit_rm(&pp.zk_matrix_srs);
+
+            let neg_one = vec![vec![-1i64]];
+            let mat_neg_one = vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
+            let (neg_one_comm_fresh, _) = mat_neg_one.commit_cm(&pp.zk_matrix_srs);
+
+            (M_m_n_comm_fresh, M_1_n_comm_fresh, neg_one_comm_fresh)
+        };
         let A_prime_comm = self.c_A + M_m_n_comm;
-
-        let mut M_1_n: Vec<Vec<i64>> = vec![vec![pp.big_M as i64; pp.n]];
-        let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
-        let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&pp.zk_matrix_srs);
         let b_prime_comm = self.c_b + M_1_n_comm;
-
-        let neg_one = vec![vec![-1i64]];
-        let mat_neg_one = vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
-        let (neg_one_comm, _) = mat_neg_one.commit_cm(&pp.zk_matrix_srs);
         let c_u = self.c_e_2 + self.c_e_3 + neg_one_comm;
 
         //Verify A_s^T . lambda_s = e_1
