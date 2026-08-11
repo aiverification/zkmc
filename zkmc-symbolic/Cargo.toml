@@ -9,7 +9,8 @@ bls12_381 = { git = "https://github.com/y1izwnxt0m4dows6/bls12_381", branch = "p
 ark-ff = "0.4.0"
 ark-std = "0.4.0"
 rand = "0.8"
-bls_bulletproofs = "1.1.1"
+# bls_bulletproofs = "1.1.1"
+bls_bulletproofs = { git = "https://github.com/y1izwnxt0m4dows6/bls_bulletproofs", branch = "msm-patch" }
 blstrs = "0.6.1"
 rand_chacha = "0.3"
 group = "0.12.0"
