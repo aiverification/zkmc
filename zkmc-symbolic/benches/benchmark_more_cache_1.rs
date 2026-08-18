@@ -197,6 +197,7 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                 unique_e2_keys.entry((neg_b_s_T.clone(), lambda_s.clone(), q)).or_insert(e2_scalar);
                 unique_e3_keys.entry((h_p_T, mu_s)).or_insert(e3_scalar);
             }
+            println!("max_q: {max_q}");
 
             println!(
                 "Unique A: {}, b: {}, lambda: {}, mu: {}, e1: {}, e2: {}, e3: {}",
