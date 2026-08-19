@@ -4,3 +4,4 @@ pub mod utils;
 pub mod zkmmeq;
 pub mod zkp;
 pub mod zkrp;
+pub mod zkp_cache;
