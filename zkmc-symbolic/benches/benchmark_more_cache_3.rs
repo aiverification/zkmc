@@ -793,6 +793,7 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             println!("========== Chunk proofs + verification in one ==========");
             let mut timed_out = false;
             let mut all_successful = true;
+            let total_chunks = input.obligations.len().div_ceil(chunk_size);
 
             for (chunk_idx, chunk) in input.obligations.chunks(chunk_size).enumerate() {
                 if total_prove_time > timeout_ms {
@@ -806,8 +807,7 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                     chunk
                         .par_iter()
                         .enumerate()
-                        .map(|(inner_idx, obligation)| {
-                            let idx = chunk_idx * chunk_size + inner_idx;
+                        .map(|(_inner_idx, obligation)| {
                             let A_s_T = pad_matrix(&transpose_matrix(&obligation.matrices.A_s));
                             let neg_b_s_T = pad_matrix(&transpose_matrix(&negate_matrix(
                                 &obligation.matrices.b_s,
@@ -866,12 +866,15 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                                 &local_zkp_pp, &G_p_T, &h_p_T, &pieces, alpha,
                             );
 
-                            println!("Obligation {} proof generated", idx + 1);
-
                             (zkp_proof, local_zkp_pp, G_p_T, h_p_T)
                         })
                         .collect::<Vec<_>>();
                 total_prove_time += prove_timer.elapsed().as_millis();
+
+                println!(
+                    "Chunk {}/{} - proved {} obligations",
+                    chunk_idx + 1, total_chunks, proof_results.len()
+                );
 
                 if total_prove_time > timeout_ms {
                     timed_out = true;
@@ -883,8 +886,7 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                 let verify_results: Vec<bool> = proof_results
                     .par_iter()
                     .enumerate()
-                    .map(|(inner_idx, (zkp_proof, local_zkp_pp, G_p_T, h_p_T))| {
-                        let idx = chunk_idx * chunk_size + inner_idx;
+                    .map(|(_inner_idx, (zkp_proof, local_zkp_pp, G_p_T, h_p_T))| {
                         let mut zkp_verified = false;
 
                         let (is_a_cached, a_mismatch) = {
@@ -1034,7 +1036,6 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                             }
                         }
 
-                        println!("Obligation {} verified: {}", idx + 1, zkp_verified);
                         zkp_verified
                     })
                     .collect::<Vec<_>>();
@@ -1049,7 +1050,14 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                     all_successful = false;
                 }
 
-                println!("====== Chunk {} done ======", chunk_idx + 1);
+                println!(
+                    "Chunk {}/{} - verified {} obligations ({}/{} passed)",
+                    chunk_idx + 1,
+                    total_chunks,
+                    verify_results.len(),
+                    verify_results.iter().filter(|&&v| v).count(),
+                    verify_results.len()
+                );
             }
 
             println!("Phase 2 complete. Prove time: {}ms", total_prove_time);
