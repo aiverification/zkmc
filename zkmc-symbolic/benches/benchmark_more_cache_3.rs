@@ -641,6 +641,15 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
 
             total_prove_time += prove_timer.elapsed().as_millis();
 
+            if total_prove_time > timeout_ms {
+                writeln!(
+                    log_file,
+                    "Sample {} - setup: {}ms, prove: {}ms, verify: {}ms - TIMED_OUT",
+                    sample, total_setup_time, total_prove_time, total_verify_time
+                ).unwrap();
+                break;
+            }
+
             // ========== PHASE 2.5b: Pre-verify unique proofs ==========
             let preverify_timer = Instant::now();
             println!(
@@ -770,6 +779,15 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             });
 
             total_verify_time += preverify_timer.elapsed().as_millis();
+
+            if total_verify_time > timeout_ms {
+                writeln!(
+                    log_file,
+                    "Sample {} - setup: {}ms, prove: {}ms, verify: {}ms - TIMED_OUT",
+                    sample, total_setup_time, total_prove_time, total_verify_time
+                ).unwrap();
+                break;
+            }
 
             // ========== PHASE 3: Chunk proofs + verification ==========
             println!("========== Chunk proofs + verification in one ==========");
@@ -1021,6 +1039,11 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                     })
                     .collect::<Vec<_>>();
                 total_verify_time += verify_timer.elapsed().as_millis();
+
+                if total_verify_time > timeout_ms {
+                    timed_out = true;
+                    break;
+                }
 
                 if !verify_results.iter().all(|&v| v) {
                     all_successful = false;
