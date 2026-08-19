@@ -285,7 +285,7 @@ pub fn prove(
     let c_u_r = e_2_r + e_3_r;
 
     //Prove A_s^T . lambda_s = e_1
-    println!("proving A.lambda=e1");
+    // println!("proving A.lambda=e1");
     let A_lambda_e1_protocol = ZkMatMul::new(
         e_1_blind,
         A_blind,
@@ -311,7 +311,7 @@ pub fn prove(
     let A_lambda_e1_proof = A_lambda_e1_prover.publish_trans();
 
     //Prove -b_s^T . lambda_s = e_2
-    println!("proving -b.lambda=e2");
+    // println!("proving -b.lambda=e2");
     let mut b_lambda_e2_prover = ZkTranSeqProver::new(&pp.zk_matrix_srs);
     let b_lambda_e2_protocol = ZkMatMul::new(
         e_2_blind,
@@ -337,7 +337,7 @@ pub fn prove(
     let b_lambda_e2_proof = b_lambda_e2_prover.publish_trans();
 
     //Equal proof
-    println!("proving equals");
+    // println!("proving equals");
     let mu_T = transpose_matrix(&mu_s);
     let mut mu_g_hat_i: Vec<GtElement> = Vec::with_capacity(mu_T.len() * mu_T[0].len());
     for j in 0..mu_s.len() {
@@ -371,7 +371,7 @@ pub fn prove(
 
     //ZKRPs
     //First, lambda
-    println!("proving lambda ZKRP");
+    // println!("proving lambda ZKRP");
     let mut lambda_g_hat_i: Vec<GtElement> =
         Vec::with_capacity(mat_lambda.shape.0 * mat_lambda.shape.1);
     for j in 0..mat_lambda.shape.0 {
@@ -407,7 +407,7 @@ pub fn prove(
     );
 
     //Second, mu
-    println!("proving mu ZKRP");
+    // println!("proving mu ZKRP");
     let mut mu_g_hat_i: Vec<GtElement> = Vec::with_capacity(mat_mu.shape.0 * mat_mu.shape.1);
     for j in 0..mat_mu.shape.0 {
         for k in 0..mat_mu.shape.1 {
@@ -435,7 +435,7 @@ pub fn prove(
     let mu_zkrp_proof = zkrp::prove(&mu_zkrp_pp, mu_s, mu_blind, mu_r, pp.big_M, alpha);
 
     //Now A_s^T + M^mxn
-    println!("proving A+M ZKRP");
+    // println!("proving A+M ZKRP");
     let mut A_plus_M_zkrp_proof: zkrp::ZKRPProof;
     if A_plus_M_zkrp_proof_cached.is_some() {
         A_plus_M_zkrp_proof = A_plus_M_zkrp_proof_cached.unwrap();
@@ -478,7 +478,7 @@ pub fn prove(
     }
 
     //Now -b_s^T + M^1xn
-    println!("proving -b+M ZKRP");
+    // println!("proving -b+M ZKRP");
     let mut neg_b_plus_M_zkrp_proof: zkrp::ZKRPProof;
     if neg_b_plus_M_zkrp_proof_cached.is_some() {
         neg_b_plus_M_zkrp_proof = neg_b_plus_M_zkrp_proof_cached.unwrap();
@@ -521,7 +521,7 @@ pub fn prove(
     }
 
     //Finally, -b_s^T.lambda_s - h_p_T^T.mu_s - 1
-    println!("proving -b.lambda - h.mu - 1 ZKRP");
+    // println!("proving -b.lambda - h.mu - 1 ZKRP");
     let b_lambda_h_mu_one: Vec<Vec<i64>> = vec![vec![e_2[0][0] + e_3[0][0] - 1]];
     let mat_b_lambda_h_mu_one =
         vec_mat_to_zkmatrix_i64("-b.lambda - h.mu - 1".to_string(), &b_lambda_h_mu_one);
@@ -596,7 +596,7 @@ pub fn prove_cached(
     let c_u_r = cached.e2_r + e_3_r;
 
     // Equals proof
-    println!("proving equals (cached)");
+    // println!("proving equals (cached)");
     let mu_T = transpose_matrix(&cached.mu_s);
     let mut first_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
     let mut second_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
@@ -626,7 +626,7 @@ pub fn prove_cached(
     );
 
     // Delta ZKRP (-b_s^T·lambda_s - h_p^T·mu_s - 1)
-    println!("proving -b.lambda - h.mu - 1 ZKRP (cached)");
+    // println!("proving -b.lambda - h.mu - 1 ZKRP (cached)");
     let b_lambda_h_mu_one: Vec<Vec<i64>> =
         vec![vec![cached.e2_scalar + cached.e3_scalar - 1]];
     let mat_b_lambda_h_mu_one =
@@ -829,7 +829,7 @@ impl ZkpProofCached {
 
         //Verify A_s^T . lambda_s = e_1
         if !flags.is_e1_cached {
-            println!("verifying A . lambda = e1");
+            // println!("verifying A . lambda = e1");
             let A_lambda_e1_verifier = ZkMatMul::new(
                 self.c_e_1,
                 self.c_A,
@@ -848,7 +848,7 @@ impl ZkpProofCached {
 
         //Verify -b_s^T . lambda_s = e_2
         if !flags.is_e2_cached {
-            println!("verifying -b . lambda = e2");
+            // println!("verifying -b . lambda = e2");
             let b_lambda_e2_verifier = ZkMatMul::new(
                 self.c_e_2,
                 self.c_b,
@@ -866,7 +866,7 @@ impl ZkpProofCached {
         }
 
         //Verify EqualProof
-        println!("verifying equal");
+        // println!("verifying equal");
         let mut first_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
         let mut second_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
         let mut third_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
@@ -897,7 +897,7 @@ impl ZkpProofCached {
         if flags.is_lambda_cached {
             lambda_zkrp_verified = true;
         } else {
-            println!("verifying lambda zkrp");
+            // println!("verifying lambda zkrp");
             let mut lambda_g_hat_i: Vec<GtElement> = Vec::with_capacity(pp.n);
             for j in 0..pp.n {
                 for k in 0..1 {
@@ -936,7 +936,7 @@ impl ZkpProofCached {
         if flags.is_mu_cached {
             mu_zkrp_verified = true;
         } else {
-            println!("verifying mu zkrp");
+            // println!("verifying mu zkrp");
             let mut mu_g_hat_i: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
             for j in 0..pp.n_prime {
                 for k in 0..1 {
@@ -969,7 +969,7 @@ impl ZkpProofCached {
         }
 
         //Next, c_prime_A
-        println!("verifying A+M zkrp");
+        // println!("verifying A+M zkrp");
         let A_plus_M_zkrp_verified: bool;
         if flags.is_A_plus_M_cached {
             A_plus_M_zkrp_verified = true;
@@ -1008,7 +1008,7 @@ impl ZkpProofCached {
         }
 
         //Next, c_prime_b
-        println!("verifying -b+M zkrp");
+        // println!("verifying -b+M zkrp");
         let neg_b_plus_M_zkrp_verified: bool;
         if flags.is_neg_b_plus_M_cached {
             neg_b_plus_M_zkrp_verified = true;
@@ -1049,7 +1049,7 @@ impl ZkpProofCached {
         }
 
         //Finally, -b_s^T.lambda_s - h_p^T.mu_s - 1
-        println!("verifying -b_s^T.lambda_s - h_p^T.mu_s - 1 zkrp");
+        // println!("verifying -b_s^T.lambda_s - h_p^T.mu_s - 1 zkrp");
         let b_lambda_h_mu_one_zkrp_pp = zkrp::ZKRPParams {
             l: 1usize,
             m: 1usize,
