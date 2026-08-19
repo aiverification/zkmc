@@ -666,24 +666,23 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             let verifier_fixed_comms: DashMap<(usize, usize), PrecomputedFixedComms> = DashMap::new();
 
             a_verify.par_iter().for_each(|entry| {
-                let mut pp = zkp_pp.clone();
-                pp.m = entry.m; pp.n = entry.n;
+                let dims = ZkpDims { m: entry.m, n: entry.n, ..Default::default() };
                 let fc = verifier_fixed_comms.entry((entry.m, entry.n)).or_insert_with(|| {
                     let M_m_n: Vec<Vec<i64>> =
                         vec![vec![big_M as i64; entry.n]; entry.m];
                     let mat_M_m_n = vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
-                    let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&pp.zk_matrix_srs);
+                    let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&zkp_pp.zk_matrix_srs);
                     let M_1_n: Vec<Vec<i64>> = vec![vec![big_M as i64; entry.n]];
                     let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
-                    let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&pp.zk_matrix_srs);
+                    let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&zkp_pp.zk_matrix_srs);
                     let neg_one = vec![vec![-1i64]];
                     let mat_neg_one = vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
-                    let (neg_one_comm, _) = mat_neg_one.commit_cm(&pp.zk_matrix_srs);
+                    let (neg_one_comm, _) = mat_neg_one.commit_cm(&zkp_pp.zk_matrix_srs);
                     PrecomputedFixedComms { M_m_n_comm, M_1_n_comm, neg_one_comm }
                 });
                 assert!(
                     verify_A_plus_M_zkrp(
-                        &pp, entry.c_A, fc.M_m_n_comm,
+                        &zkp_pp, &dims, entry.c_A, fc.M_m_n_comm,
                         &entry.A_plus_M_zkrp, big_M,
                     )
                 );
@@ -694,23 +693,22 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             });
 
             b_verify.par_iter().for_each(|entry| {
-                let mut pp = zkp_pp.clone();
-                pp.n = entry.n;
+                let dims = ZkpDims { n: entry.n, ..Default::default() };
                 let fc = verifier_fixed_comms.entry((1, entry.n)).or_insert_with(|| {
                     let M_1_n: Vec<Vec<i64>> = vec![vec![big_M as i64; entry.n]];
                     let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
-                    let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&pp.zk_matrix_srs);
+                    let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&zkp_pp.zk_matrix_srs);
                     let neg_one = vec![vec![-1i64]];
                     let mat_neg_one = vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
-                    let (neg_one_comm, _) = mat_neg_one.commit_cm(&pp.zk_matrix_srs);
+                    let (neg_one_comm, _) = mat_neg_one.commit_cm(&zkp_pp.zk_matrix_srs);
                     let M_m_n: Vec<Vec<i64>> = vec![vec![big_M as i64; entry.n]; 1];
                     let mat_M_m_n = vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
-                    let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&pp.zk_matrix_srs);
+                    let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&zkp_pp.zk_matrix_srs);
                     PrecomputedFixedComms { M_m_n_comm, M_1_n_comm, neg_one_comm }
                 });
                 assert!(
                     verify_neg_b_plus_M_zkrp(
-                        &pp, entry.c_b, fc.M_1_n_comm,
+                        &zkp_pp, &dims, entry.c_b, fc.M_1_n_comm,
                         &entry.neg_b_plus_M_zkrp, big_M,
                     )
                 );
@@ -721,10 +719,9 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             });
 
             lambda_verify.par_iter().for_each(|entry| {
-                let mut pp = zkp_pp.clone();
-                pp.n = entry.m;
+                let dims = ZkpDims { n: entry.m, ..Default::default() };
                 assert!(
-                    verify_lambda_zkrp(&pp, entry.commitment, &entry.zkrp_proof, big_M)
+                    verify_lambda_zkrp(&zkp_pp, &dims, entry.commitment, &entry.zkrp_proof, big_M)
                 );
                 verifier_lambda_cache.insert(
                     HashableGtElement(entry.commitment),
@@ -733,10 +730,9 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             });
 
             mu_verify.par_iter().for_each(|entry| {
-                let mut pp = zkp_pp.clone();
-                pp.n_prime = entry.m;
+                let dims = ZkpDims { n_prime: entry.m, ..Default::default() };
                 assert!(
-                    verify_mu_zkrp(&pp, entry.commitment, &entry.zkrp_proof, big_M)
+                    verify_mu_zkrp(&zkp_pp, &dims, entry.commitment, &entry.zkrp_proof, big_M)
                 );
                 verifier_mu_cache.insert(
                     HashableGtElement(entry.commitment),
@@ -745,11 +741,12 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             });
 
             e1_verify.par_iter().for_each(|entry| {
-                let mut pp = zkp_pp.clone();
-                pp.A_lambda_e1_dims =
-                    ZkMatMulDimsCached { m: entry.m, n: entry.n, l: entry.l };
+                let dims = ZkpDims {
+                    A_lambda_e1_dims: ZkMatMulDimsCached { m: entry.m, n: entry.n, l: entry.l },
+                    ..Default::default()
+                };
                 assert!(
-                    verify_e1_zkmm(&pp, entry.c_a, entry.c_lambda, entry.c_e, &entry.proof)
+                    verify_e1_zkmm(&zkp_pp, &dims, entry.c_a, entry.c_lambda, entry.c_e, &entry.proof)
                 );
                 verifier_e1_cache.insert(
                     (
@@ -762,11 +759,12 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
             });
 
             e2_verify.par_iter().for_each(|entry| {
-                let mut pp = zkp_pp.clone();
-                pp.b_lambda_e2_dims =
-                    ZkMatMulDimsCached { m: entry.m, n: entry.n, l: entry.l };
+                let dims = ZkpDims {
+                    b_lambda_e2_dims: ZkMatMulDimsCached { m: entry.m, n: entry.n, l: entry.l },
+                    ..Default::default()
+                };
                 assert!(
-                    verify_e2_zkmm(&pp, entry.c_a, entry.c_lambda, entry.c_e, &entry.proof)
+                    verify_e2_zkmm(&zkp_pp, &dims, entry.c_a, entry.c_lambda, entry.c_e, &entry.proof)
                 );
                 verifier_e2_cache.insert(
                     (
@@ -803,7 +801,7 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
 
                 // --- prove ---
                 let prove_timer = Instant::now();
-                let proof_results: Vec<(ZkpProofCached, ZkpSRSCached, Vec<Vec<i64>>, Vec<Vec<i64>>)> =
+                let proof_results: Vec<(ZkpProofCached, ZkpDims, Vec<Vec<i64>>, Vec<Vec<i64>>)> =
                     chunk
                         .par_iter()
                         .enumerate()
@@ -838,12 +836,13 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                                 ZkMatMulDimsCached::new(&A_s_T, &lambda_s, &e1_padded);
                             let b_lambda_e2_dims =
                                 ZkMatMulDimsCached::new(&neg_b_s_T, &lambda_s, &e2_padded);
-                            let mut local_zkp_pp = zkp_pp.clone();
-                            local_zkp_pp.A_lambda_e1_dims = A_lambda_e1_dims;
-                            local_zkp_pp.b_lambda_e2_dims = b_lambda_e2_dims;
-                            local_zkp_pp.m = m;
-                            local_zkp_pp.n = n;
-                            local_zkp_pp.n_prime = n_prime;
+                            let dims = ZkpDims {
+                                m,
+                                n,
+                                n_prime,
+                                A_lambda_e1_dims,
+                                b_lambda_e2_dims,
+                            };
 
                             let pieces = CachedProverPieces {
                                 A_r: a.A_r, A_blind: a.A_blind,
@@ -863,10 +862,10 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                                 e3_blind: e3.e3_blind, h_r: e3.h_r,
                             };
                             let zkp_proof = prove_cached(
-                                &local_zkp_pp, &G_p_T, &h_p_T, &pieces, alpha,
+                                &zkp_pp, &dims, &G_p_T, &h_p_T, &pieces, alpha,
                             );
 
-                            (zkp_proof, local_zkp_pp, G_p_T, h_p_T)
+                            (zkp_proof, dims, G_p_T, h_p_T)
                         })
                         .collect::<Vec<_>>();
                 total_prove_time += prove_timer.elapsed().as_millis();
@@ -886,7 +885,7 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                 let verify_results: Vec<bool> = proof_results
                     .par_iter()
                     .enumerate()
-                    .map(|(_inner_idx, (zkp_proof, local_zkp_pp, G_p_T, h_p_T))| {
+                    .map(|(_inner_idx, (zkp_proof, dims, G_p_T, h_p_T))| {
                         let mut zkp_verified = false;
 
                         let (is_a_cached, a_mismatch) = {
@@ -958,37 +957,37 @@ fn prove_and_verify_benchmarks_full_cache_cached(c: &mut Criterion) {
                                 is_e2_cached,
                             };
                             let fc_val = verifier_fixed_comms
-                                .get(&(local_zkp_pp.m, local_zkp_pp.n))
+                                .get(&(dims.m, dims.n))
                                 .map(|fc| fc.clone())
                                 .unwrap_or_else(|| {
                                     let M_m_n: Vec<Vec<i64>> =
-                                        vec![vec![big_M as i64; local_zkp_pp.n]; local_zkp_pp.m];
+                                        vec![vec![big_M as i64; dims.n]; dims.m];
                                     let mat_M_m_n =
                                         vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
                                     let (M_m_n_comm, _) =
-                                        mat_M_m_n.commit_rm(&local_zkp_pp.zk_matrix_srs);
+                                        mat_M_m_n.commit_rm(&zkp_pp.zk_matrix_srs);
                                     let M_1_n: Vec<Vec<i64>> =
-                                        vec![vec![big_M as i64; local_zkp_pp.n]];
+                                        vec![vec![big_M as i64; dims.n]];
                                     let mat_M_1_n =
                                         vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
                                     let (M_1_n_comm, _) =
-                                        mat_M_1_n.commit_rm(&local_zkp_pp.zk_matrix_srs);
+                                        mat_M_1_n.commit_rm(&zkp_pp.zk_matrix_srs);
                                     let neg_one = vec![vec![-1i64]];
                                     let mat_neg_one =
                                         vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
                                     let (neg_one_comm, _) =
-                                        mat_neg_one.commit_cm(&local_zkp_pp.zk_matrix_srs);
+                                        mat_neg_one.commit_cm(&zkp_pp.zk_matrix_srs);
                                     let comms = PrecomputedFixedComms {
                                         M_m_n_comm,
                                         M_1_n_comm,
                                         neg_one_comm,
                                     };
                                     verifier_fixed_comms
-                                        .insert((local_zkp_pp.m, local_zkp_pp.n), comms.clone());
+                                        .insert((dims.m, dims.n), comms.clone());
                                     comms
                                 });
                             zkp_verified = zkp_proof.verify(
-                                local_zkp_pp, G_p_T, h_p_T, &flags, Some(&fc_val),
+                                &zkp_pp, &dims, G_p_T, h_p_T, &flags, Some(&fc_val),
                             );
                             if zkp_verified {
                                 if !is_a_cached {

@@ -14,7 +14,7 @@ use zkmatrix::{
     zkprotocols::{zk_matmul::ZkMatMul, zk_trans::ZkTranSeqProver},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ZkMatMulDimsCached {
     pub m: usize,
     pub n: usize,
@@ -52,6 +52,15 @@ pub struct ZkpSRSCached {
     pub zk_matrix_srs: zkmatrix::setup::SRS,
     pub pc_gens: PedersenGens,
     pub bp_gens: BulletproofGens,
+    pub A_lambda_e1_dims: ZkMatMulDimsCached,
+    pub b_lambda_e2_dims: ZkMatMulDimsCached,
+}
+
+#[derive(Clone, Default)]
+pub struct ZkpDims {
+    pub m: usize,
+    pub n: usize,
+    pub n_prime: usize,
     pub A_lambda_e1_dims: ZkMatMulDimsCached,
     pub b_lambda_e2_dims: ZkMatMulDimsCached,
 }
@@ -573,6 +582,7 @@ pub fn prove(
 
 pub fn prove_cached(
     pp: &ZkpSRSCached,
+    dims: &ZkpDims,
     G_p_T: &Vec<Vec<i64>>,
     h_p_T: &Vec<Vec<i64>>,
     cached: &CachedProverPieces,
@@ -598,12 +608,12 @@ pub fn prove_cached(
     // Equals proof
     // println!("proving equals (cached)");
     let mu_T = transpose_matrix(&cached.mu_s);
-    let mut first_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
-    let mut second_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
-    let mut third_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
-    for k in 0..pp.n_prime {
+    let mut first_basis_vec: Vec<GtElement> = Vec::with_capacity(dims.n_prime);
+    let mut second_basis_vec: Vec<GtElement> = Vec::with_capacity(dims.n_prime);
+    let mut third_basis_vec: Vec<GtElement> = Vec::with_capacity(dims.n_prime);
+    for k in 0..dims.n_prime {
         let mut first_basis_prod = get_bls_gt_zero();
-        for j in 0..pp.m {
+        for j in 0..dims.m {
             first_basis_prod += (pp.g_hat_mat[j][0] * (-G_p_T[j][k]));
         }
         first_basis_vec.push(first_basis_prod);
@@ -680,17 +690,18 @@ pub fn prove_cached(
 
 pub fn verify_A_plus_M_zkrp(
     pp: &ZkpSRSCached,
+    dims: &ZkpDims,
     c_A: GtElement,
     M_m_n_comm: GtElement,
     proof: &ZKRPProof,
     big_M: u32,
 ) -> bool {
     let A_prime_comm = c_A + M_m_n_comm;
-    let A_plus_M_l = pp.m * pp.n;
+    let A_plus_M_l = dims.m * dims.n;
     let mut A_plus_M_g_i = pp.g_i_vec[0..2 * A_plus_M_l].to_vec();
     A_plus_M_g_i[A_plus_M_l] = get_bls_g1_zero();
     let A_plus_M_zkrp_pp = zkrp::ZKRPParams {
-        l: A_plus_M_l, m: pp.m, n: pp.n,
+        l: A_plus_M_l, m: dims.m, n: dims.n,
         g_blstrs: pp.g_blstrs, g_bls: pp.g_bls,
         g_prime: pp.g_prime, g_prime_alpha: pp.g_prime_alpha,
         g_i: pp.g_i_vec.clone(),
@@ -703,17 +714,18 @@ pub fn verify_A_plus_M_zkrp(
 
 pub fn verify_neg_b_plus_M_zkrp(
     pp: &ZkpSRSCached,
+    dims: &ZkpDims,
     c_b: GtElement,
     M_1_n_comm: GtElement,
     proof: &ZKRPProof,
     big_M: u32,
 ) -> bool {
     let b_prime_comm = c_b + M_1_n_comm;
-    let neg_b_plus_M_l = pp.n;
+    let neg_b_plus_M_l = dims.n;
     let mut neg_b_plus_M_g_i = pp.g_i_vec[0..2 * neg_b_plus_M_l].to_vec();
     neg_b_plus_M_g_i[neg_b_plus_M_l] = get_bls_g1_zero();
     let neg_b_plus_M_zkrp_pp = zkrp::ZKRPParams {
-        l: neg_b_plus_M_l, m: 1usize, n: pp.n,
+        l: neg_b_plus_M_l, m: 1usize, n: dims.n,
         g_blstrs: pp.g_blstrs, g_bls: pp.g_bls,
         g_prime: pp.g_prime, g_prime_alpha: pp.g_prime_alpha,
         g_i: pp.g_i_vec.clone(),
@@ -726,15 +738,16 @@ pub fn verify_neg_b_plus_M_zkrp(
 
 pub fn verify_lambda_zkrp(
     pp: &ZkpSRSCached,
+    dims: &ZkpDims,
     c_lambda: GtElement,
     proof: &ZKRPProof,
     big_M: u32,
 ) -> bool {
-    let lambda_l = pp.n;
+    let lambda_l = dims.n;
     let mut lambda_g_i = pp.g_i_vec[0..2 * lambda_l].to_vec();
     lambda_g_i[lambda_l] = get_bls_g1_zero();
     let lambda_zkrp_pp = zkrp::ZKRPParams {
-        l: lambda_l, m: pp.n, n: 1usize,
+        l: lambda_l, m: dims.n, n: 1usize,
         g_blstrs: pp.g_blstrs, g_bls: pp.g_bls,
         g_prime: pp.g_prime, g_prime_alpha: pp.g_prime_alpha,
         g_i: pp.g_i_vec.clone(),
@@ -747,15 +760,16 @@ pub fn verify_lambda_zkrp(
 
 pub fn verify_mu_zkrp(
     pp: &ZkpSRSCached,
+    dims: &ZkpDims,
     c_mu: GtElement,
     proof: &ZKRPProof,
     big_M: u32,
 ) -> bool {
-    let mu_l = pp.n_prime;
+    let mu_l = dims.n_prime;
     let mut mu_g_i = pp.g_i_vec[0..2 * mu_l].to_vec();
     mu_g_i[mu_l] = get_bls_g1_zero();
     let mu_zkrp_pp = zkrp::ZKRPParams {
-        l: mu_l, m: pp.n_prime, n: 1usize,
+        l: mu_l, m: dims.n_prime, n: 1usize,
         g_blstrs: pp.g_blstrs, g_bls: pp.g_bls,
         g_prime: pp.g_prime, g_prime_alpha: pp.g_prime_alpha,
         g_i: pp.g_i_vec.clone(),
@@ -768,6 +782,7 @@ pub fn verify_mu_zkrp(
 
 pub fn verify_e1_zkmm(
     pp: &ZkpSRSCached,
+    dims: &ZkpDims,
     c_A: GtElement,
     c_lambda: GtElement,
     c_e1: GtElement,
@@ -775,13 +790,14 @@ pub fn verify_e1_zkmm(
 ) -> bool {
     let verifier = ZkMatMul::new(
         c_e1, c_A, c_lambda,
-        pp.A_lambda_e1_dims.m, pp.A_lambda_e1_dims.n, pp.A_lambda_e1_dims.l,
+        dims.A_lambda_e1_dims.m, dims.A_lambda_e1_dims.n, dims.A_lambda_e1_dims.l,
     );
     verifier.verify(&pp.zk_matrix_srs, &mut proof.clone())
 }
 
 pub fn verify_e2_zkmm(
     pp: &ZkpSRSCached,
+    dims: &ZkpDims,
     c_b: GtElement,
     c_lambda: GtElement,
     c_e2: GtElement,
@@ -789,7 +805,7 @@ pub fn verify_e2_zkmm(
 ) -> bool {
     let verifier = ZkMatMul::new(
         c_e2, c_b, c_lambda,
-        pp.b_lambda_e2_dims.m, pp.b_lambda_e2_dims.n, pp.b_lambda_e2_dims.l,
+        dims.b_lambda_e2_dims.m, dims.b_lambda_e2_dims.n, dims.b_lambda_e2_dims.l,
     );
     verifier.verify(&pp.zk_matrix_srs, &mut proof.clone())
 }
@@ -798,6 +814,7 @@ impl ZkpProofCached {
     pub fn verify(
         &self,
         pp: &ZkpSRSCached,
+        dims: &ZkpDims,
         G_p_T: &Vec<Vec<i64>>,
         h_p_T: &Vec<Vec<i64>>,
         flags: &VerifierCacheFlagsCached,
@@ -807,13 +824,13 @@ impl ZkpProofCached {
             (fc.M_m_n_comm, fc.M_1_n_comm, fc.neg_one_comm)
         } else {
             let mut M_m_n: Vec<Vec<i64>> = vec![];
-            for _ in 0..pp.m {
-                M_m_n.push(vec![pp.big_M as i64; pp.n]);
+            for _ in 0..dims.m {
+                M_m_n.push(vec![pp.big_M as i64; dims.n]);
             }
             let mat_M_m_n = vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
             let (M_m_n_comm_fresh, _) = mat_M_m_n.commit_rm(&pp.zk_matrix_srs);
 
-            let mut M_1_n: Vec<Vec<i64>> = vec![vec![pp.big_M as i64; pp.n]];
+            let mut M_1_n: Vec<Vec<i64>> = vec![vec![pp.big_M as i64; dims.n]];
             let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
             let (M_1_n_comm_fresh, _) = mat_M_1_n.commit_rm(&pp.zk_matrix_srs);
 
@@ -834,9 +851,9 @@ impl ZkpProofCached {
                 self.c_e_1,
                 self.c_A,
                 self.c_lambda,
-                pp.A_lambda_e1_dims.m,
-                pp.A_lambda_e1_dims.n,
-                pp.A_lambda_e1_dims.l,
+                dims.A_lambda_e1_dims.m,
+                dims.A_lambda_e1_dims.n,
+                dims.A_lambda_e1_dims.l,
             );
             let A_lambda_e1_verified =
                 A_lambda_e1_verifier.verify(&pp.zk_matrix_srs, &mut self.A_lambda_e1_proof.clone());
@@ -853,9 +870,9 @@ impl ZkpProofCached {
                 self.c_e_2,
                 self.c_b,
                 self.c_lambda,
-                pp.b_lambda_e2_dims.m,
-                pp.b_lambda_e2_dims.n,
-                pp.b_lambda_e2_dims.l,
+                dims.b_lambda_e2_dims.m,
+                dims.b_lambda_e2_dims.n,
+                dims.b_lambda_e2_dims.l,
             );
             let b_lambda_e2_verified =
                 b_lambda_e2_verifier.verify(&pp.zk_matrix_srs, &mut self.b_lambda_e2_proof.clone());
@@ -867,12 +884,12 @@ impl ZkpProofCached {
 
         //Verify EqualProof
         // println!("verifying equal");
-        let mut first_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
-        let mut second_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
-        let mut third_basis_vec: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
-        for k in 0..pp.n_prime {
+        let mut first_basis_vec: Vec<GtElement> = Vec::with_capacity(dims.n_prime);
+        let mut second_basis_vec: Vec<GtElement> = Vec::with_capacity(dims.n_prime);
+        let mut third_basis_vec: Vec<GtElement> = Vec::with_capacity(dims.n_prime);
+        for k in 0..dims.n_prime {
             let mut first_basis_prod = get_bls_gt_zero();
-            for j in 0..pp.m {
+            for j in 0..dims.m {
                 first_basis_prod += (pp.g_hat_mat[j][0] * (-G_p_T[j][k]));
             }
             first_basis_vec.push(first_basis_prod);
@@ -898,18 +915,18 @@ impl ZkpProofCached {
             lambda_zkrp_verified = true;
         } else {
             // println!("verifying lambda zkrp");
-            let mut lambda_g_hat_i: Vec<GtElement> = Vec::with_capacity(pp.n);
-            for j in 0..pp.n {
+            let mut lambda_g_hat_i: Vec<GtElement> = Vec::with_capacity(dims.n);
+            for j in 0..dims.n {
                 for k in 0..1 {
                     lambda_g_hat_i.push(pp.g_hat_mat[j][k].clone());
                 }
             }
-            let lambda_l = pp.n;
+            let lambda_l = dims.n;
             let mut lambda_g_i = pp.g_i_vec[0..2 * lambda_l].to_vec();
             lambda_g_i[lambda_l] = get_bls_g1_zero();
             let lambda_zkrp_pp = zkrp::ZKRPParams {
                 l: lambda_l,
-                m: pp.n,
+                m: dims.n,
                 n: 1usize,
                 g_blstrs: pp.g_blstrs,
                 g_bls: pp.g_bls,
@@ -937,18 +954,18 @@ impl ZkpProofCached {
             mu_zkrp_verified = true;
         } else {
             // println!("verifying mu zkrp");
-            let mut mu_g_hat_i: Vec<GtElement> = Vec::with_capacity(pp.n_prime);
-            for j in 0..pp.n_prime {
+            let mut mu_g_hat_i: Vec<GtElement> = Vec::with_capacity(dims.n_prime);
+            for j in 0..dims.n_prime {
                 for k in 0..1 {
                     mu_g_hat_i.push(pp.g_hat_mat[j][k].clone());
                 }
             }
-            let mu_l = pp.n_prime;
+            let mu_l = dims.n_prime;
             let mut mu_g_i = pp.g_i_vec[0..2 * mu_l].to_vec();
             mu_g_i[mu_l] = get_bls_g1_zero();
             let mu_zkrp_pp = zkrp::ZKRPParams {
                 l: mu_l,
-                m: pp.n_prime,
+                m: dims.n_prime,
                 n: 1usize,
                 g_blstrs: pp.g_blstrs,
                 g_bls: pp.g_bls,
@@ -974,19 +991,19 @@ impl ZkpProofCached {
         if flags.is_A_plus_M_cached {
             A_plus_M_zkrp_verified = true;
         } else {
-            let mut A_plus_M_g_hat_i: Vec<GtElement> = Vec::with_capacity(pp.n * pp.m);
-            for j in 0..pp.m {
-                for k in 0..pp.n {
+            let mut A_plus_M_g_hat_i: Vec<GtElement> = Vec::with_capacity(dims.n * dims.m);
+            for j in 0..dims.m {
+                for k in 0..dims.n {
                     A_plus_M_g_hat_i.push(pp.g_hat_mat[j][k].clone());
                 }
             }
-            let A_plus_M_l = pp.m * pp.n;
+            let A_plus_M_l = dims.m * dims.n;
             let mut A_plus_M_g_i = pp.g_i_vec[0..2 * A_plus_M_l].to_vec();
             A_plus_M_g_i[A_plus_M_l] = get_bls_g1_zero();
             let A_plus_M_zkrp_pp = zkrp::ZKRPParams {
                 l: A_plus_M_l,
-                m: pp.m,
-                n: pp.n,
+                m: dims.m,
+                n: dims.n,
                 g_blstrs: pp.g_blstrs,
                 g_bls: pp.g_bls,
                 g_prime: pp.g_prime,
@@ -1013,19 +1030,19 @@ impl ZkpProofCached {
         if flags.is_neg_b_plus_M_cached {
             neg_b_plus_M_zkrp_verified = true;
         } else {
-            let mut neg_b_plus_M_g_hat_i: Vec<GtElement> = Vec::with_capacity(pp.n);
+            let mut neg_b_plus_M_g_hat_i: Vec<GtElement> = Vec::with_capacity(dims.n);
             for j in 0..1usize {
-                for k in 0..pp.n {
+                for k in 0..dims.n {
                     neg_b_plus_M_g_hat_i.push(pp.g_hat_mat[j][k].clone());
                 }
             }
-            let neg_b_plus_M_l = pp.n;
+            let neg_b_plus_M_l = dims.n;
             let mut neg_b_plus_M_g_i = pp.g_i_vec[0..2 * neg_b_plus_M_l].to_vec();
             neg_b_plus_M_g_i[neg_b_plus_M_l] = get_bls_g1_zero();
             let neg_b_plus_M_zkrp_pp = zkrp::ZKRPParams {
                 l: neg_b_plus_M_l,
                 m: 1usize,
-                n: pp.n,
+                n: dims.n,
                 g_blstrs: pp.g_blstrs,
                 g_bls: pp.g_bls,
                 g_prime: pp.g_prime,
