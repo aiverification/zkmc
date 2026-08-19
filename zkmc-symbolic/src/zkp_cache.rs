@@ -127,7 +127,6 @@ pub struct PrecomputedFixedComms {
 pub struct AVerifyEntry {
     pub c_A: GtElement,
     pub A_plus_M_zkrp: ZKRPProof,
-    pub q: usize,
     pub m: usize,
     pub n: usize,
 }
@@ -136,7 +135,6 @@ pub struct AVerifyEntry {
 pub struct BVerifyEntry {
     pub c_b: GtElement,
     pub neg_b_plus_M_zkrp: ZKRPProof,
-    pub q: usize,
     pub n: usize,
 }
 

@@ -32,14 +32,6 @@ name = "bench_testing"
 harness = false
 
 [[bench]]
-name = "benchmark_more_cache_1"
-harness = false
-
-[[bench]]
-name = "benchmark_more_cache_2"
-harness = false
-
-[[bench]]
 name = "benchmark_more_cache_3"
 harness = false
 
