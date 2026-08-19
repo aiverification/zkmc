@@ -1,29 +1,37 @@
 use crate::interpolation::*;
 use ark_bls12_381::Bls12_381 as bls;
-use ark_ec::pairing::Pairing;
-use ark_ff::Field;
-use ark_poly::{Polynomial, univariate::DensePolynomial};
-use ark_poly_commit::kzg10::{Commitment, KZG10, Powers, Proof, Randomness, VerifierKey};
-use ark_std::test_rng;
-use rayon::prelude::*;
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    time::Instant,
+use ark_ec::{CurveGroup, VariableBaseMSM, pairing::Pairing};
+use ark_ff::{Field, One, UniformRand, Zero};
+use ark_poly::{
+    DenseUVPolynomial, EvaluationDomain, GeneralEvaluationDomain, Polynomial,
+    univariate::{DenseOrSparsePolynomial, DensePolynomial},
 };
+use ark_poly_commit::kzg10::{Commitment, KZG10, Powers};
+use ark_std::test_rng;
+use std::{collections::HashSet, time::Instant};
 
 pub type F = <bls as Pairing>::ScalarField;
 type UniPoly_381 = ark_poly::univariate::DensePolynomial<F>;
+type G2Affine = <bls as Pairing>::G2Affine;
+
+// Degree of the random blinding polynomial rho. We commit to p + Z_H * rho, where Z_H is
+// the vanishing polynomial of the interpolation domain, so every evaluation on the domain
+// is unchanged while the commitment hides the unopened evaluations. The verifier only ever
+// sees one independent evaluation of the blinded polynomial per set (the quotient
+// commitment is determined by the commitment and the public Z_E), so a small constant
+// degree suffices heuristically; the formal zk analysis is still to be done.
+const BLINDING_DEGREE: usize = 2;
 
 pub struct ZkpProof {
     pub comm_p_S: Commitment<bls>,
     pub p_S_coset_offset: F,
     pub p_S_group_gen: F,
-    pub E_init_proofs: Vec<Proof<bls>>,
+    pub E_init_proof: Commitment<bls>,
     pub comm_p_T: Commitment<bls>,
     pub p_T_coset_offset: F,
     pub p_T_group_gen: F,
-    pub E_step_fairstep_proofs: Vec<Proof<bls>>,
-    pub vk: VerifierKey<bls>,
+    pub E_step_fairstep_proof: Commitment<bls>,
+    pub neg_powers_of_h: Vec<G2Affine>,
 }
 
 // Returns proof (if valid) and the time taken to set up the KZG parameters
@@ -39,15 +47,10 @@ pub fn prove(
     time_limit: u64,
 ) -> (Option<ZkpProof>, u128) {
     println!("================ Merging E_step and E_fairstep ================");
-    let mut E_step_fairstep: Vec<u64> = vec![];
-    for e in E_step.iter() {
-        E_step_fairstep.push(*e);
-    }
-    for e in E_fairstep.iter() {
-        if !E_step_fairstep.contains(e) {
-            E_step_fairstep.push(*e);
-        }
-    }
+    // Deduplicate within the sets as well as across them: repeated points would give the
+    // vanishing polynomial Z_E repeated roots, which p_S/p_T are not divisible by.
+    let E_step_fairstep = merge_dedup(E_step, E_fairstep);
+    let E_init_dedup = merge_dedup(E_init, &[]);
 
     println!("================ Calculating p_S_0 ================");
     // Create vector of 1s and 0s depending on whether s \in S_0, then interpolate
@@ -56,7 +59,6 @@ pub fn prove(
         p_S_values[*s as usize] = F::from(1u64);
     }
     let (p_S, p_S_coset_offset, p_S_group_gen) = interpolate(&p_S_values);
-    let p_S_degree = p_S.degree();
 
     println!("================ Calculating p_T ================");
     // Create vector of 1s and 0s depending on whether (s, s') \in T, then interpolate
@@ -65,6 +67,12 @@ pub fn prove(
         p_T_values[*t as usize] = F::from(1u64);
     }
     let (p_T, p_T_coset_offset, p_T_group_gen) = interpolate(&p_T_values);
+
+    println!("================ Blinding p_S_0 and p_T ================");
+    let blinding_rng = &mut rand::thread_rng();
+    let p_S = blind_over_domain(p_S, num_states, blinding_rng);
+    let p_T = blind_over_domain(p_T, num_transitions, blinding_rng);
+    let p_S_degree = p_S.degree();
     let p_T_degree = p_T.degree();
 
     let max_degree: usize;
@@ -77,8 +85,10 @@ pub fn prove(
     let setup_timer = Instant::now();
     println!("================ Generating KZG parameters ================");
     let rng = &mut test_rng();
+    // produce_g2_powers gives us h^{beta^-i}, which the verifier needs to check
+    // batched openings (see batch_check_zero)
     let params =
-        KZG10::<bls, UniPoly_381>::setup(max_degree, false, rng).expect("KZG Setup failed");
+        KZG10::<bls, UniPoly_381>::setup(max_degree, true, rng).expect("KZG Setup failed");
     let powers_of_g = params.powers_of_g[..=max_degree].to_vec();
     let powers_of_gamma_g = (0..=max_degree)
         .map(|i| params.powers_of_gamma_g[&i])
@@ -87,62 +97,40 @@ pub fn prove(
         powers_of_g: ark_std::borrow::Cow::Owned(powers_of_g),
         powers_of_gamma_g: ark_std::borrow::Cow::Owned(powers_of_gamma_g),
     };
+    let neg_powers_of_h: Vec<G2Affine> = (0..=max_degree)
+        .map(|i| params.neg_powers_of_h[&i])
+        .collect();
     let setup_elapsed = setup_timer.elapsed().as_millis();
 
-    let vk: VerifierKey<bls> = VerifierKey {
-        g: params.powers_of_g[0],
-        gamma_g: params.powers_of_gamma_g[&0],
-        h: params.h,
-        beta_h: params.beta_h,
-        prepared_h: params.prepared_h.clone(),
-        prepared_beta_h: params.prepared_beta_h.clone(),
-    };
-
     // Commit to both polynomials
-    let (comm_p_S, rand_p_S, comm_p_T, rand_p_T) =
-        commit_to_polys(&powers, &p_S, &p_T, &Some(1usize));
+    let (comm_p_S, comm_p_T) = commit_to_polys(&powers, &p_S, &p_T);
 
-    // Prove all points on p_S (E_init) and p_T (E_step_fairstep)
-    let E_init_proofs_opt = prove_on_poly(
-        &E_init,
-        &powers,
-        &p_S,
-        &rand_p_S,
-        p_S_coset_offset.clone(),
-        p_S_group_gen.clone(),
-        timer,
-        time_limit,
-    );
-    if E_init_proofs_opt.is_none() {
+    // Prove all points of E_init on p_S and E_step_fairstep on p_T, with one batched
+    // opening proof per set
+    println!("================ Proving E_init on p_S_0 ================");
+    let E_init_points = to_points(&E_init_dedup, p_S_coset_offset, p_S_group_gen);
+    let E_init_proof = batch_open_zero(&powers, &p_S, &E_init_points, &comm_p_S);
+    if timer.elapsed().as_secs() > time_limit {
         return (None, setup_elapsed);
     }
-    let E_init_proofs = E_init_proofs_opt.unwrap();
-    let E_step_fairstep_proofs_opt = prove_on_poly(
-        &E_step_fairstep,
-        &powers,
-        &p_T,
-        &rand_p_T,
-        p_T_coset_offset.clone(),
-        p_T_group_gen.clone(),
-        timer,
-        time_limit,
-    );
-    if E_step_fairstep_proofs_opt.is_none() {
+    println!("================ Proving E_step_fairstep on p_T ================");
+    let E_step_fairstep_points = to_points(&E_step_fairstep, p_T_coset_offset, p_T_group_gen);
+    let E_step_fairstep_proof = batch_open_zero(&powers, &p_T, &E_step_fairstep_points, &comm_p_T);
+    if timer.elapsed().as_secs() > time_limit {
         return (None, setup_elapsed);
     }
-    let E_step_fairstep_proofs = E_step_fairstep_proofs_opt.unwrap();
 
     return (
         Some(ZkpProof {
             comm_p_S,
             p_S_coset_offset,
             p_S_group_gen,
-            E_init_proofs,
+            E_init_proof,
             comm_p_T,
             p_T_coset_offset,
             p_T_group_gen,
-            E_step_fairstep_proofs,
-            vk,
+            E_step_fairstep_proof,
+            neg_powers_of_h,
         }),
         setup_elapsed,
     );
@@ -158,55 +146,32 @@ impl ZkpProof {
         time_limit: u64,
     ) -> Option<bool> {
         println!("================ Merging E_step and E_fairstep ================");
-        let mut E_step_fairstep: Vec<u64> = vec![];
-        for e in E_step.iter() {
-            E_step_fairstep.push(*e);
-        }
-        for e in E_fairstep.iter() {
-            if !E_step_fairstep.contains(e) {
-                E_step_fairstep.push(*e);
-            }
-        }
-
-        let mut verifier_rng = rand::thread_rng();
+        // Must match the prover's deduplication so both sides build the same Z_E
+        let E_step_fairstep = merge_dedup(E_step, E_fairstep);
+        let E_init_dedup = merge_dedup(E_init, &[]);
 
         // Verify points on p_S
-        let E_init_comms = vec![self.comm_p_S; E_init.len()];
-        let E_init_points: Vec<F> = E_init
-            .iter()
-            .map(|e| self.p_S_coset_offset * self.p_S_group_gen.pow(&[*e as u64]))
-            .collect();
-        let E_init_values = vec![F::from(0u64); E_init.len()]; // All points should open to 0
-        let E_init_checked = KZG10::<bls, DensePolynomial<F>>::batch_check(
-            &self.vk,
-            &E_init_comms,
+        let E_init_points = to_points(&E_init_dedup, self.p_S_coset_offset, self.p_S_group_gen);
+        let E_init_checked = batch_check_zero(
+            &self.neg_powers_of_h,
+            &self.comm_p_S,
+            &self.E_init_proof,
             &E_init_points,
-            &E_init_values,
-            &self.E_init_proofs,
-            &mut verifier_rng,
-        )
-        .expect("Error checking E_init");
+        );
         println!("Verified E_init: {:?}", E_init_checked);
         if timer.elapsed().as_secs() > time_limit {
             return None;
         }
 
         // Verify points on p_T
-        let E_step_fairstep_comms = vec![self.comm_p_T; E_step_fairstep.len()];
-        let E_step_fairstep_points: Vec<F> = E_step_fairstep
-            .iter()
-            .map(|e| self.p_T_coset_offset * self.p_T_group_gen.pow(&[*e as u64]))
-            .collect();
-        let E_step_fairstep_values = vec![F::from(0u64); E_step_fairstep.len()];
-        let E_step_fairstep_checked = KZG10::<bls, DensePolynomial<F>>::batch_check(
-            &self.vk,
-            &E_step_fairstep_comms,
+        let E_step_fairstep_points =
+            to_points(&E_step_fairstep, self.p_T_coset_offset, self.p_T_group_gen);
+        let E_step_fairstep_checked = batch_check_zero(
+            &self.neg_powers_of_h,
+            &self.comm_p_T,
+            &self.E_step_fairstep_proof,
             &E_step_fairstep_points,
-            &E_step_fairstep_values,
-            &self.E_step_fairstep_proofs,
-            &mut verifier_rng,
-        )
-        .expect("Error checking E_step_fairstep");
+        );
         println!("Verified E_step_fairstep: {:?}", E_step_fairstep_checked);
         if timer.elapsed().as_secs() > time_limit {
             return None;
@@ -221,63 +186,140 @@ pub fn commit_to_polys(
     powers: &Powers<'_, bls>,
     p_S: &DensePolynomial<F>,
     p_T: &DensePolynomial<F>,
-    hiding_bound: &Option<usize>,
-) -> (
-    Commitment<bls>,
-    Randomness<F, UniPoly_381>,
-    Commitment<bls>,
-    Randomness<F, UniPoly_381>,
-) {
+) -> (Commitment<bls>, Commitment<bls>) {
     println!("================ Calculating commitment to p_S_0 ================");
-    let mut poly_rng = rand::thread_rng();
-    let (comm_p_S, rand_p_S) =
-        KZG10::<bls, UniPoly_381>::commit(&powers, &p_S, hiding_bound.clone(), Some(&mut poly_rng))
-            .expect("Commitment to p_S failed");
+    let (comm_p_S, _) =
+        KZG10::<bls, UniPoly_381>::commit(&powers, &p_S, None, None).expect("Commitment to p_S failed");
 
     println!("================ Calculating commitment to p_T ================");
-    let (comm_p_T, rand_p_T) =
-        KZG10::<bls, UniPoly_381>::commit(&powers, &p_T, hiding_bound.clone(), Some(&mut poly_rng))
-            .expect("Commitment to p_T failed");
+    let (comm_p_T, _) =
+        KZG10::<bls, UniPoly_381>::commit(&powers, &p_T, None, None).expect("Commitment to p_T failed");
 
-    return (comm_p_S, rand_p_S, comm_p_T, rand_p_T);
+    return (comm_p_S, comm_p_T);
 }
 
-// Prove all points on a polynomial in parallel with time checking (for OOT) across threads
-pub fn prove_on_poly(
-    embeddings: &Vec<u64>,
+// Prove that poly evaluates to 0 at every point in points with a single group element:
+// since poly vanishes on all of E, it is divisible by Z_E(X) = prod_{e in E} (X - e), and
+// the proof is the commitment to the quotient q(X) = poly(X) / Z_E(X). This is the batch
+// opening of the KZG10 paper (Section 3.4), specialised to all-zero values.
+pub fn batch_open_zero(
     powers: &Powers<'_, bls>,
     poly: &DensePolynomial<F>,
-    rand: &Randomness<F, UniPoly_381>,
-    poly_coset_offset: F,
-    poly_group_gen: F,
-    time: &Instant,
-    time_limit: u64,
-) -> Option<Vec<Proof<bls>>> {
-    let embedding_points: Vec<F> = embeddings
-        .iter()
-        .map(|e| poly_coset_offset * poly_group_gen.pow(&[*e as u64]))
-        .collect();
-    let timed_out = AtomicBool::new(false);
-    let results: Vec<Option<Proof<bls>>> = embedding_points
-        .par_iter()
-        .enumerate()
-        .map(|(i, e)| {
-            if timed_out.load(Ordering::Relaxed) {
-                return None;
-            }
-            // Each thread checks its own slice of indices
-            if i % 500 == 0 && time.elapsed().as_secs() > time_limit {
-                timed_out.store(true, Ordering::Relaxed);
-                return None;
-            }
-            Some(
-                KZG10::open(&powers, poly, *e, rand).expect("Failed to prove e in E_step_fairstep"),
-            )
-        })
-        .collect();
-    if results.iter().any(|r| r.is_none()) {
-        return None;
+    points: &[F],
+    comm: &Commitment<bls>,
+) -> Commitment<bls> {
+    if points.is_empty() {
+        // Z_E = 1 and q = poly, so the proof is the commitment itself
+        return *comm;
     }
+    let Z_E = vanishing_poly(points);
+    let (q, rem) = DenseOrSparsePolynomial::from(poly)
+        .divide_with_q_and_r(&DenseOrSparsePolynomial::from(&Z_E))
+        .expect("Division by Z_E failed");
+    assert!(rem.is_zero(), "Polynomial does not vanish on all points");
+    let (w, _) =
+        KZG10::<bls, UniPoly_381>::commit(powers, &q, None, None).expect("Commitment to quotient failed");
+    return w;
+}
 
-    Some(results.into_iter().flatten().collect())
+// Check a batched opening proof, i.e. that the polynomial behind comm evaluates to 0 on
+// all of points. The standard check would be e(C, h) == e(W, h^{Z_E(beta)}), but our SRS
+// only contains the negative powers h^{beta^-i}, so we scale both sides by beta^-m
+// (m = deg Z_E) and check e(C, h^{beta^-m}) == e(W, h^{Z_E(beta) * beta^-m}) instead,
+// where h^{Z_E(beta) * beta^-m} = prod_j (h^{beta^-j})^{z_{m-j}}.
+pub fn batch_check_zero(
+    neg_powers_of_h: &[G2Affine],
+    comm: &Commitment<bls>,
+    proof: &Commitment<bls>,
+    points: &[F],
+) -> bool {
+    let Z_E = vanishing_poly(points);
+    let m = Z_E.degree();
+    assert!(m < neg_powers_of_h.len(), "Not enough negative powers of h");
+    let scalars: Vec<F> = Z_E.coeffs.iter().rev().copied().collect();
+    let D = <bls as Pairing>::G2::msm(&neg_powers_of_h[..=m], &scalars)
+        .expect("MSM failed")
+        .into_affine();
+    return bls::pairing(comm.0, neg_powers_of_h[m]) == bls::pairing(proof.0, D);
+}
+
+// Z_E(X) = prod_{e in E} (X - e), built as a balanced product tree so that the FFT-based
+// polynomial multiplication keeps this O(m log^2 m) instead of O(m^2)
+pub fn vanishing_poly(points: &[F]) -> DensePolynomial<F> {
+    match points.len() {
+        0 => DensePolynomial::from_coefficients_vec(vec![F::one()]),
+        1 => DensePolynomial::from_coefficients_vec(vec![-points[0], F::one()]),
+        n => &vanishing_poly(&points[..n / 2]) * &vanishing_poly(&points[n / 2..]),
+    }
+}
+
+// Merge two embedding vectors, dropping duplicates within and across them
+pub fn merge_dedup(a: &[u64], b: &[u64]) -> Vec<u64> {
+    let mut seen = HashSet::new();
+    a.iter().chain(b.iter()).copied().filter(|e| seen.insert(*e)).collect()
+}
+
+// Map embedding indices to their evaluation points on the domain
+fn to_points(embeddings: &[u64], coset_offset: F, group_gen: F) -> Vec<F> {
+    embeddings
+        .iter()
+        .map(|e| coset_offset * group_gen.pow(&[*e]))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_valid_and_rejects_invalid_openings() {
+        let timer = Instant::now();
+        // S_0 = {0}, T = {0, 1}; all opened embeddings lie outside these sets
+        let E_init = vec![1u64];
+        let E_step = vec![2u64];
+        let E_fairstep = vec![3u64];
+        let E_S0 = vec![0u64];
+        let E_T = vec![0u64, 1u64];
+        let (proof, _) = prove(
+            &E_init, &E_step, &E_fairstep, &E_S0, &E_T, 4, 8, &timer, 3600,
+        );
+        let proof = proof.unwrap();
+        assert_eq!(
+            proof.verify(&E_init, &E_step, &E_fairstep, &timer, 3600),
+            Some(true)
+        );
+        // Claiming p_S_0 opens to 0 at state 0 must fail: state 0 is in S_0
+        assert_eq!(
+            proof.verify(&vec![0u64], &E_step, &E_fairstep, &timer, 3600),
+            Some(false)
+        );
+        // Verifying against a different point set than was proven must also fail
+        assert_eq!(
+            proof.verify(&E_init, &E_step, &vec![3u64, 4u64], &timer, 3600),
+            Some(false)
+        );
+    }
+}
+
+// Add Z_H(X) * rho(X) for a random rho of degree BLINDING_DEGREE, where Z_H is the
+// vanishing polynomial of the interpolation domain for num_values values. This leaves
+// every evaluation on the domain unchanged, so divisibility by Z_E is preserved.
+fn blind_over_domain<R: rand::RngCore>(
+    p: DensePolynomial<F>,
+    num_values: usize,
+    rng: &mut R,
+) -> DensePolynomial<F> {
+    let domain =
+        GeneralEvaluationDomain::<F>::new(num_values).expect("no domain of this size");
+    let n = domain.size();
+    // Z_H(X) = X^n - offset^n
+    let offset_pow_n = domain.coset_offset_pow_size();
+    let mut coeffs = p.coeffs;
+    coeffs.resize(n + BLINDING_DEGREE + 1, F::zero());
+    for i in 0..=BLINDING_DEGREE {
+        let r = F::rand(rng);
+        coeffs[n + i] += r;
+        coeffs[i] -= offset_pow_n * r;
+    }
+    return DensePolynomial::from_coefficients_vec(coeffs);
 }
