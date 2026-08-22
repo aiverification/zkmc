@@ -341,6 +341,34 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
                 })
                 .collect();
 
+            // Precompute the fixed commitments (M_m_n, M_1_n, neg_one) once, serially,
+            // so the parallel pre-verify below only performs lookups.
+            let mut fixed_comm_keys: std::collections::HashSet<(usize, usize)> =
+                std::collections::HashSet::new();
+            for e in a_verify.iter() {
+                fixed_comm_keys.insert((e.m, e.n));
+            }
+            for e in b_verify.iter() {
+                fixed_comm_keys.insert((1, e.n));
+            }
+            let verifier_fixed_comms: DashMap<(usize, usize), PrecomputedFixedComms> =
+                DashMap::new();
+            for (m, n) in fixed_comm_keys {
+                let M_m_n: Vec<Vec<i64>> = vec![vec![big_M as i64; n]; m];
+                let mat_M_m_n = vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
+                let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&zkp_pp.zk_matrix_srs);
+                let M_1_n: Vec<Vec<i64>> = vec![vec![big_M as i64; n]];
+                let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
+                let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&zkp_pp.zk_matrix_srs);
+                let neg_one = vec![vec![-1i64]];
+                let mat_neg_one = vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
+                let (neg_one_comm, _) = mat_neg_one.commit_cm(&zkp_pp.zk_matrix_srs);
+                verifier_fixed_comms.insert(
+                    (m, n),
+                    PrecomputedFixedComms { M_m_n_comm, M_1_n_comm, neg_one_comm },
+                );
+            }
+
             total_prove_time += prove_timer.elapsed().as_millis();
 
             if total_prove_time > timeout_ms {
@@ -360,23 +388,10 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
             );
             let verifier_A_cache: DashMap<HashableGtElement, ZKRPProof> = DashMap::new();
             let verifier_b_cache: DashMap<HashableGtElement, ZKRPProof> = DashMap::new();
-            let verifier_fixed_comms: DashMap<(usize, usize), PrecomputedFixedComms> = DashMap::new();
 
             a_verify.par_iter().for_each(|entry| {
                 let dims = ZkpDims { m: entry.m, n: entry.n, ..Default::default() };
-                let fc = verifier_fixed_comms.entry((entry.m, entry.n)).or_insert_with(|| {
-                    let M_m_n: Vec<Vec<i64>> =
-                        vec![vec![big_M as i64; entry.n]; entry.m];
-                    let mat_M_m_n = vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
-                    let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&zkp_pp.zk_matrix_srs);
-                    let M_1_n: Vec<Vec<i64>> = vec![vec![big_M as i64; entry.n]];
-                    let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
-                    let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&zkp_pp.zk_matrix_srs);
-                    let neg_one = vec![vec![-1i64]];
-                    let mat_neg_one = vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
-                    let (neg_one_comm, _) = mat_neg_one.commit_cm(&zkp_pp.zk_matrix_srs);
-                    PrecomputedFixedComms { M_m_n_comm, M_1_n_comm, neg_one_comm }
-                });
+                let fc = verifier_fixed_comms.get(&(entry.m, entry.n)).unwrap().clone();
                 assert!(
                     verify_A_plus_M_zkrp(
                         &zkp_pp, &dims, entry.c_A, fc.M_m_n_comm,
@@ -391,18 +406,7 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
 
             b_verify.par_iter().for_each(|entry| {
                 let dims = ZkpDims { n: entry.n, ..Default::default() };
-                let fc = verifier_fixed_comms.entry((1, entry.n)).or_insert_with(|| {
-                    let M_1_n: Vec<Vec<i64>> = vec![vec![big_M as i64; entry.n]];
-                    let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
-                    let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&zkp_pp.zk_matrix_srs);
-                    let neg_one = vec![vec![-1i64]];
-                    let mat_neg_one = vec_mat_to_zkmatrix_i128("-1".to_string(), &neg_one);
-                    let (neg_one_comm, _) = mat_neg_one.commit_cm(&zkp_pp.zk_matrix_srs);
-                    let M_m_n: Vec<Vec<i64>> = vec![vec![big_M as i64; entry.n]; 1];
-                    let mat_M_m_n = vec_mat_to_zkmatrix_i64("M_m_n".to_string(), &M_m_n);
-                    let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&zkp_pp.zk_matrix_srs);
-                    PrecomputedFixedComms { M_m_n_comm, M_1_n_comm, neg_one_comm }
-                });
+                let fc = verifier_fixed_comms.get(&(1, entry.n)).unwrap().clone();
                 assert!(
                     verify_neg_b_plus_M_zkrp(
                         &zkp_pp, &dims, entry.c_b, fc.M_1_n_comm,
