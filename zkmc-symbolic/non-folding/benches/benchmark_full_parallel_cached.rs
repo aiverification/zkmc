@@ -14,8 +14,8 @@ use std::{collections::HashMap, fs, fs::File, io::Write, path::Path, time::Insta
 use dashmap::DashMap;
 use zkmatrix::commit_mat::CommitMat;
 use zkmatrix::utils::curve as bls;
-use zkmc_symbolic::zkrp;
-use zkmc_symbolic::{utils::*, zkp, zkp::*, zkrp::*};
+use zkmc_symbolic_non_folding::zkrp;
+use zkmc_symbolic_non_folding::{utils::*, zkp, zkp::*, zkrp::*};
 
 // Type alias for cache keys: (matrix, q)
 type MatrixCacheKey = (Vec<Vec<i64>>, usize);

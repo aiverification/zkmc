@@ -15,8 +15,8 @@ use dashmap::DashMap;
 use zkmatrix::commit_mat::CommitMat;
 use zkmatrix::utils::curve as bls;
 use zkmatrix::zkprotocols::{zk_matmul::ZkMatMul, zk_trans::ZkTranSeqProver};
-use zkmc_symbolic::zkp_cache::*;
-use zkmc_symbolic::{utils::*, zkrp, zkrp::*};
+use zkmc_symbolic_non_folding::zkp_cache::*;
+use zkmc_symbolic_non_folding::{utils::*, zkrp, zkrp::*};
 
 // Type alias for cache keys: (matrix, q)
 type MatrixCacheKey = (Vec<Vec<i64>>, usize);
