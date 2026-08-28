@@ -1,4 +1,4 @@
-# zkmc-symbolic
+# zkmc-symbolic non-folding
 
 A Rust prototype implementation of ZKMC's symbolic non-folding approach.
 
