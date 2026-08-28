@@ -8,10 +8,9 @@ use blstrs;
 use zkmatrix::utils::curve as bls;
 use zkmatrix::utils::curve::{G1Element, G2Element, GtElement, ZpElement};
 use zkmatrix::utils::fiat_shamir::TranSeq;
-
 use zkmatrix::{
     commit_mat::CommitMat,
-    zkprotocols::{zk_matmul::ZkMatMul, zk_trans::ZkTranSeqProver},
+    zkprotocols::{zk_matmul::ZkMatMul},
 };
 
 #[derive(Clone, Default)]
