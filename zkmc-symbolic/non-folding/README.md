@@ -1,6 +1,6 @@
 # zkmc-symbolic
 
-A Rust prototype implementation of ZKMC.
+A Rust prototype implementation of ZKMC's symbolic non-folding approach.
 
 ## Installation
 - Install [Rust](https://rust-lang.org/)
@@ -14,8 +14,8 @@ There are two ways to run this prototype:
 - `cargo bench` - this will execute all of the benchmarks in `benches/`, on all inputs in `input/` (by default). Note: for weaker/slower systems, such as everyday laptops, some of these inputs may take a while to execute. Instead, you may wish to choose an individual benchmark type to run (all of which run on all `input/` files by default):
   - `cargo bench --bench bench_testing` - a benchmark used to measure and output the number of unique instances of `A`, `-b`, etc. in a given input file. Used for debugging and testing.
   - `cargo bench --bench benchmark_full_parallel_cached` - full end-to-end benchmark. Prover caches `A, -b` proofs only, no verifier cache.
-  - `cargo bench --bench benchmark_fpc_updated` - full end-to-end benchmark. Prover caches `A, -b` proofs, verifier caches `A, -b` verifications. **This benchmark was used for data generation in the ZKMC paper**.
-  - `cargo bench --bench benchmark_more_cache` - full end to end benchmark. Prover caches `A, -b, mu, lambda, alpha, beta` proofs, verifier caches likewise.
+  - `cargo bench --bench benchmark_fpc_updated` - full end-to-end benchmark. Prover caches `A, -b` proofs, verifier caches `A, -b` verifications.
+  - `cargo bench --bench benchmark_more_cache` - full end to end benchmark. Prover caches `A, -b, mu, lambda, alpha, beta` proofs, verifier caches likewise. **There are potential information leakage and security concerns with this method**.
 
 Running any of these will install the required Rust toolchain (if not already installed), and build the prototype, which may take a few minutes.
 
