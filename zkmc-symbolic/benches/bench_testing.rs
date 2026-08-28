@@ -1,3 +1,9 @@
+/*
+    Benchmark used in testing. Reads input file, returns some info
+    about the structure of the ZKP inputs, such as the number of unique
+    A, -b, lambda, mu, e_1 (= alpha), e_2 (= beta), etc.
+*/
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use serde::Deserialize;
 use serde_json::Value;
