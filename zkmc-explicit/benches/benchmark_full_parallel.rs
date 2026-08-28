@@ -41,9 +41,9 @@ fn prove_and_verify_benchmark(c: &mut Criterion) {
     let sample_size: usize = 1;
     let path_to_file_g = "input/".to_string();
     let candidate_files = vec![
-        "dhcp_i1a2.json".to_string(),
-        "dhcp_i2a2.json".to_string(),
-        "dhcp_i4a2.json".to_string(),
+        "exb_i1a2.json".to_string(),
+        "exb_i2a2.json".to_string(),
+        "exb_i4a2.json".to_string(),
         "rr_2.json".to_string(),
         "rr_3.json".to_string(),
     ];
