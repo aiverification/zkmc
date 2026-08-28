@@ -1,3 +1,8 @@
+/*
+    Benchmark that caches A, -b unique occurrences for the prover
+    but not for the verifier.
+*/
+
 use bls_bulletproofs::group::ff::Field;
 use criterion::{Criterion, criterion_group, criterion_main};
 use rand::SeedableRng;
@@ -91,9 +96,9 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
     let path_to_file_g = "input/".to_string();
     let candidate_files = vec![
         "test.json".to_string(),
-        // "exb_i4a2.json".to_string(),
-        // "rr_2.json".to_string(),
-        // "dhcp_noOFF_7_2_7.json".to_string(),
+        "exb_i4a2.json".to_string(),
+        "rr_2.json".to_string(),
+        "dhcp_noOFF_7_2_7.json".to_string(),
     ];
 
     for input_file in candidate_files {

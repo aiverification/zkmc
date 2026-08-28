@@ -1,3 +1,10 @@
+/*
+    Benchmark that caches A, -b, mu, lambda, e_1 (= alpha), e_2 (= beta)
+    for both prover and verifier.
+    Not used for paper benchmarks due to potential security implications
+    from caching lambda, mu.
+*/
+
 use bls_bulletproofs::group::ff::Field;
 use criterion::{Criterion, criterion_group, criterion_main};
 use rand::SeedableRng;

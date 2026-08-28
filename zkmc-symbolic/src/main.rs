@@ -48,12 +48,12 @@ fn main() {
     alpha_vec.remove(0);
 
     //Get powers for g_bar_i, g_prime_bar_i
-    let mut q_alpha_vec: Vec<bls::ZpElement> =
+    let q_alpha_vec: Vec<bls::ZpElement> =
         std::iter::successors(Some(alpha), |&x| Some(x * alpha))
             .take(q)
             .collect();
     let alpha_pow_q = *q_alpha_vec.last().unwrap();
-    let mut q_i_alpha_vec: Vec<bls::ZpElement> =
+    let q_i_alpha_vec: Vec<bls::ZpElement> =
         std::iter::successors(Some(alpha_pow_q), |&x| Some(x * alpha_pow_q))
             .take(q)
             .collect();

@@ -231,9 +231,9 @@ impl ZKRPProof {
         let g_pow_b = pp.g_bls * ZpElement::from(b as u64);
         for i in 0..pp.l {
             equality_comms_verified &=
-                (self.c_i[i] == blstrs_affine_to_bls_g1(&self.v_range_proof.lower_comms[i].into()));
-            equality_comms_verified &= ((g_pow_b - self.c_i[i])
-                == blstrs_affine_to_bls_g1(&self.v_range_proof.upper_comms[i].into()));
+                self.c_i[i] == blstrs_affine_to_bls_g1(&self.v_range_proof.lower_comms[i].into());
+            equality_comms_verified &= g_pow_b - self.c_i[i]
+                == blstrs_affine_to_bls_g1(&self.v_range_proof.upper_comms[i].into());
         }
         if !equality_comms_verified {
             println!("Error showing equality of commitments with c_i");
