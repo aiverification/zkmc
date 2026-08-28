@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use zkmc_symbolic::utils::*;
+use zkmc_symbolic_non_folding::utils::*;
 
 #[derive(Debug, Deserialize, Clone)]
 struct InputParams {

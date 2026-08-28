@@ -10,7 +10,7 @@ A Rust prototype implementation of ZKMC.
 
 ## Running the code
 
-To run this code, use `cargo bench`. This will execute `benches/benchmark_full_parallel.rs`, which by default runs the full ZKP on the input files found in `inputs/` and outputs timing data to `outputs/`. Note: for weaker/slower systems, such as everyday laptops, some of these inputs may take a while to execute.
+To run this code, use `cargo bench`. This will execute `benches/benchmark_full_parallel.rs`, which by default runs the full ZKP on the input files found in `inputs/` and outputs timing data to `outputs/`. Note: for weaker/slower systems, such as everyday laptops, some of these inputs may take a while to execute. **This is the benchmark used for data generation for the ZKMC paper**.
 
 Running this will install the required Rust toolchain (if not already installed), and build the prototype, which may take a few minutes.
 
