@@ -167,7 +167,7 @@ pub fn prove(
     let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&pp.zk_matrix_srs);
     let A_prime_comm = A_blind + M_m_n_comm;
 
-    let mut M_1_n: Vec<Vec<i64>> = vec![vec![pp.big_M as i64; pp.n]];
+    let M_1_n: Vec<Vec<i64>> = vec![vec![pp.big_M as i64; pp.n]];
     let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
     let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&pp.zk_matrix_srs);
     let b_prime_comm = b_blind + M_1_n_comm;
@@ -268,7 +268,7 @@ pub fn prove(
     for k in 0..pp.n_prime {
         let mut first_basis_prod = get_bls_gt_zero();
         for j in 0..pp.m {
-            first_basis_prod += (pp.g_hat_mat[j][0] * (-G_p_T[j][k]));
+            first_basis_prod += pp.g_hat_mat[j][0] * (-G_p_T[j][k]);
         }
         first_basis_vec.push(first_basis_prod);
         second_basis_vec.push(pp.g_hat_mat[0][0] * (-h_p_T[0][k]));
@@ -353,7 +353,7 @@ pub fn prove(
 
     //Now A_s^T + M^mxn
     println!("proving A+M ZKRP");
-    let mut A_plus_M_zkrp_proof: zkrp::ZKRPProof;
+    let A_plus_M_zkrp_proof: zkrp::ZKRPProof;
     if A_plus_M_zkrp_proof_cached.is_some() {
         A_plus_M_zkrp_proof = A_plus_M_zkrp_proof_cached.unwrap();
     } else {
@@ -396,7 +396,7 @@ pub fn prove(
 
     //Now -b_s^T + M^1xn
     println!("proving -b+M ZKRP");
-    let mut neg_b_plus_M_zkrp_proof: zkrp::ZKRPProof;
+    let neg_b_plus_M_zkrp_proof: zkrp::ZKRPProof;
     if neg_b_plus_M_zkrp_proof_cached.is_some() {
         neg_b_plus_M_zkrp_proof = neg_b_plus_M_zkrp_proof_cached.unwrap();
     } else {
@@ -505,7 +505,7 @@ impl ZkpProof {
         let (M_m_n_comm, _) = mat_M_m_n.commit_rm(&pp.zk_matrix_srs);
         let A_prime_comm = self.c_A + M_m_n_comm;
 
-        let mut M_1_n: Vec<Vec<i64>> = vec![vec![pp.big_M as i64; pp.n]];
+        let M_1_n: Vec<Vec<i64>> = vec![vec![pp.big_M as i64; pp.n]];
         let mat_M_1_n = vec_mat_to_zkmatrix_i64("M_1_n".to_string(), &M_1_n);
         let (M_1_n_comm, _) = mat_M_1_n.commit_rm(&pp.zk_matrix_srs);
         let b_prime_comm = self.c_b + M_1_n_comm;
@@ -557,7 +557,7 @@ impl ZkpProof {
         for k in 0..pp.n_prime {
             let mut first_basis_prod = get_bls_gt_zero();
             for j in 0..pp.m {
-                first_basis_prod += (pp.g_hat_mat[j][0] * (-G_p_T[j][k]));
+                first_basis_prod += pp.g_hat_mat[j][0] * (-G_p_T[j][k]);
             }
             first_basis_vec.push(first_basis_prod);
             second_basis_vec.push(pp.g_hat_mat[0][0] * (-h_p_T[0][k]));
