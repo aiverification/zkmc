@@ -1,5 +1,5 @@
 [package]
-name = "zkmc-symbolic"
+name = "zkmc-symbolic-non-folding"
 version = "0.1.0"
 edition = "2024"
 
