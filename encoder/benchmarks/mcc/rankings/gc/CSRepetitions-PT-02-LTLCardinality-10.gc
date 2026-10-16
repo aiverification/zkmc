@@ -1,0 +1,104 @@
+// MCC instance CSRepetitions-PT-02
+// 23 places, 28 transitions
+// places: p0=RequestBuffer_1, p1=Server_Anwering_3_2, p2=Server_Anwering_1_2, p3=Client_Waiting_4, p4=RequestBuffer_2, p5=Server_Anwering_4_1, p6=Client_Waiting_3, p7=Server_Anwering_3_1, p8=Server_Waiting_2, p9=Client_Sending_1, p10=Client_Sending_2, p11=Server_Anwering_2_1, p12=Client_Sending_3, p13=Server_Anwering_1_1, p14=Client_Sending_4, p15=Server_Anwering_4_2, p16=RequestBuffer_4, p17=Server_Waiting_1, p18=Server_Anwering_2_2, p19=RequestBuffer_3, p20=RequestBufferSlots, p21=Client_Waiting_2, p22=Client_Waiting_1
+
+init: p0 == 0 && p1 == 0 && p2 == 0 && p3 == 1 && p4 == 0 && p5 == 0 && p6 == 1 && p7 == 0 && p8 == 1 && p9 == 0 && p10 == 0 && p11 == 0 && p12 == 0 && p13 == 0 && p14 == 0 && p15 == 0 && p16 == 0 && p17 == 1 && p18 == 0 && p19 == 0 && p20 == 2 && p21 == 1 && p22 == 1
+
+// Read_Request_4_2
+[] p16 >= 1 && p8 >= 1 -> p8 = p8 - 1; p15 = p15 + 1; p16 = p16 - 1; p20 = p20 + 1
+// Send_Request_2
+[] p10 >= 1 && p20 >= 1 -> p4 = p4 + 1; p20 = p20 - 1
+// Send_Answer_3_2
+[] p12 >= 1 && p1 >= 1 -> p1 = p1 - 1; p6 = p6 + 1; p8 = p8 + 1; p12 = p12 - 1
+// Prepare_Request_2
+[] p21 >= 1 -> p10 = p10 + 1; p21 = p21 - 1
+// Read_Request_3_2
+[] p19 >= 1 && p8 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p19 = p19 - 1; p20 = p20 + 1
+// Send_Answer_4_2
+[] p14 >= 1 && p15 >= 1 -> p3 = p3 + 1; p8 = p8 + 1; p14 = p14 - 1; p15 = p15 - 1
+// Send_Answer_1_1
+[] p9 >= 1 && p13 >= 1 -> p9 = p9 - 1; p13 = p13 - 1; p17 = p17 + 1; p22 = p22 + 1
+// Send_Request_4
+[] p14 >= 1 && p20 >= 1 -> p16 = p16 + 1; p20 = p20 - 1
+// Prepare_Request_3
+[] p6 >= 1 -> p6 = p6 - 1; p12 = p12 + 1
+// Read_Request_1_1
+[] p0 >= 1 && p17 >= 1 -> p0 = p0 - 1; p13 = p13 + 1; p17 = p17 - 1; p20 = p20 + 1
+// Read_Request_2_2
+[] p4 >= 1 && p8 >= 1 -> p4 = p4 - 1; p8 = p8 - 1; p18 = p18 + 1; p20 = p20 + 1
+// Read_Request_1_2
+[] p0 >= 1 && p8 >= 1 -> p0 = p0 - 1; p2 = p2 + 1; p8 = p8 - 1; p20 = p20 + 1
+// Lose_Request_4
+[] p16 >= 1 -> p16 = p16 - 1
+// Prepare_Request_1
+[] p22 >= 1 -> p9 = p9 + 1; p22 = p22 - 1
+// Send_Answer_3_1
+[] p12 >= 1 && p7 >= 1 -> p6 = p6 + 1; p7 = p7 - 1; p12 = p12 - 1; p17 = p17 + 1
+// Read_Request_4_1
+[] p16 >= 1 && p17 >= 1 -> p5 = p5 + 1; p16 = p16 - 1; p17 = p17 - 1; p20 = p20 + 1
+// Send_Answer_2_1
+[] p10 >= 1 && p11 >= 1 -> p10 = p10 - 1; p11 = p11 - 1; p17 = p17 + 1; p21 = p21 + 1
+// Lose_Request_2
+[] p4 >= 1 -> p4 = p4 - 1
+// Read_Request_3_1
+[] p19 >= 1 && p17 >= 1 -> p7 = p7 + 1; p17 = p17 - 1; p19 = p19 - 1; p20 = p20 + 1
+// Send_Answer_4_1
+[] p14 >= 1 && p5 >= 1 -> p3 = p3 + 1; p5 = p5 - 1; p14 = p14 - 1; p17 = p17 + 1
+// Send_Request_1
+[] p9 >= 1 && p20 >= 1 -> p0 = p0 + 1; p20 = p20 - 1
+// Lose_Request_3
+[] p19 >= 1 -> p19 = p19 - 1
+// Read_Request_2_1
+[] p4 >= 1 && p17 >= 1 -> p4 = p4 - 1; p11 = p11 + 1; p17 = p17 - 1; p20 = p20 + 1
+// Prepare_Request_4
+[] p3 >= 1 -> p3 = p3 - 1; p14 = p14 + 1
+// Send_Answer_1_2
+[] p9 >= 1 && p2 >= 1 -> p2 = p2 - 1; p8 = p8 + 1; p9 = p9 - 1; p22 = p22 + 1
+// Send_Request_3
+[] p12 >= 1 && p20 >= 1 -> p19 = p19 + 1; p20 = p20 - 1
+// Send_Answer_2_2
+[] p10 >= 1 && p18 >= 1 -> p8 = p8 + 1; p10 = p10 - 1; p18 = p18 - 1; p21 = p21 + 1
+// Lose_Request_1
+[] p0 >= 1 -> p0 = p0 - 1
+// deadlock: stutter (MCC semantics)
+[] p0 <= 0 && p1 <= 0 && p2 <= 0 && p3 <= 0 && p4 <= 0 && p5 <= 0 && p6 <= 0 && p7 <= 0 && p11 <= 0 && p13 <= 0 && p15 <= 0 && p16 <= 0 && p18 <= 0 && p19 <= 0 && p20 <= 0 && p21 <= 0 && p22 <= 0 -> p0 = p0
+
+// CSRepetitions-PT-02-LTLCardinality-10
+// ap a0 := 1 <= p8
+// ap a1 := p3 <= p12
+// ap a2 := 2 <= p18
+// spec: "G((!(X(!(X(X(X(a0)))))) | F(((!(a1)) U (!(a2))))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q0): true
+trans(q0, q1): 2 <= p18
+trans(q1, q2): 2 <= p18
+trans(q2, q3): 2 <= p18
+trans(q3, q4): 2 <= p18
+trans(q4, q5): 2 <= p18 && 1 > p8
+trans!(q5, q5): 2 <= p18
+
+rank(q0):
+  [] ((((p1 + p15) + p18) + p2) + p8) = 1 && p1 >= 0 && p15 >= 0 && p2 >= 0 && p8 >= 0 -> 0
+  [] ((((p1 + p15) + p18) + p2) + p8) < 1 -> inf
+  [] ((((p1 + p15) + p18) + p2) + p8) > 1 -> inf
+  [] ((((p1 + p15) + p18) + p2) + p8) = 1 && p1 < 0 -> inf
+  [] ((((p1 + p15) + p18) + p2) + p8) = 1 && p1 >= 0 && p15 < 0 -> inf
+  [] ((((p1 + p15) + p18) + p2) + p8) = 1 && p1 >= 0 && p15 >= 0 && p2 < 0 -> inf
+  [] ((((p1 + p15) + p18) + p2) + p8) = 1 && p1 >= 0 && p15 >= 0 && p2 >= 0 && p8 < 0 -> inf
+
+rank(q1):
+  [] true -> inf
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] true -> inf
+
+rank(q4):
+  [] true -> inf
+
+rank(q5):
+  [] true -> inf

@@ -1,0 +1,223 @@
+// MCC instance TwoPhaseLocking-PT-nC05000vD
+// 8 places, 6 transitions
+// places: p0=resB, p1=haveA, p2=haveA2, p3=resA, p4=haveB, p5=Clients, p6=haveAandB, p7=haveA2andB
+
+init: p0 == 2500 && p1 == 0 && p2 == 0 && p3 == 2500 && p4 == 0 && p5 == 5000 && p6 == 0 && p7 == 0
+
+// relB
+[] p7 >= 1 -> p0 = p0 + 1; p2 = p2 + 1; p7 = p7 - 1
+// lockB
+[] p1 >= 1 && p0 >= 1 -> p0 = p0 - 1; p1 = p1 - 1; p6 = p6 + 1
+// lockA
+[] p5 >= 1 && p3 >= 1 -> p1 = p1 + 1; p3 = p3 - 1; p5 = p5 - 1
+// relA2
+[] p2 >= 1 -> p2 = p2 - 1; p3 = p3 + 1; p5 = p5 + 1
+// relA
+[] p6 >= 1 -> p3 = p3 + 1; p4 = p4 + 1; p6 = p6 - 1
+// lockA2
+[] p4 >= 1 && p3 >= 1 -> p3 = p3 - 1; p4 = p4 - 1; p7 = p7 + 1
+// deadlock: stutter (MCC semantics)
+[] p0 <= 0 && p2 <= 0 && p3 <= 0 && p6 <= 0 && p7 <= 0 -> p0 = p0
+
+// TwoPhaseLocking-PT-nC05000vD-LTLCardinality-07
+// ap a0 := 1 <= p5
+// ap a1 := p3 <= p4
+// ap a2 := p1 <= p2
+// spec: "X(((F(!(X((a0 | X(X(F(X(X(a1)))))))))) U (!(a2))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q1): true
+trans(q1, q2): p1 <= p2
+trans!(q2, q2): p1 <= p2
+trans!(q2, q3): p1 > p2 && 1 <= p5
+trans!(q2, q4): p1 > p2 && 1 > p5
+trans!(q3, q3): 1 <= p5
+trans!(q3, q4): 1 > p5
+trans!(q4, q5): 1 > p5
+trans!(q4, q6): 1 <= p5
+trans!(q5, q7): 1 > p5
+trans!(q5, q8): 1 <= p5
+trans!(q6, q9): 1 > p5
+trans!(q6, q10): 1 <= p5
+trans!(q7, q11): 1 > p5
+trans!(q7, q12): 1 <= p5
+trans!(q8, q13): 1 > p5
+trans!(q8, q14): 1 <= p5
+trans!(q9, q15): 1 > p5
+trans!(q9, q16): 1 <= p5
+trans!(q10, q17): 1 > p5
+trans!(q10, q18): 1 <= p5
+trans!(q11, q11): 1 > p5 && p3 <= p4
+trans!(q11, q12): 1 <= p5 && p3 <= p4
+trans!(q11, q19): 1 > p5 && p3 > p4
+trans!(q11, q20): 1 <= p5 && p3 > p4
+trans!(q12, q13): 1 > p5 && p3 <= p4
+trans!(q12, q14): 1 <= p5 && p3 <= p4
+trans!(q12, q21): 1 > p5 && p3 > p4
+trans!(q12, q22): 1 <= p5 && p3 > p4
+trans!(q13, q15): 1 > p5 && p3 <= p4
+trans!(q13, q16): 1 <= p5 && p3 <= p4
+trans!(q13, q23): 1 > p5 && p3 > p4
+trans!(q13, q24): 1 <= p5 && p3 > p4
+trans!(q14, q17): 1 > p5 && p3 <= p4
+trans!(q14, q18): 1 <= p5 && p3 <= p4
+trans!(q14, q25): 1 > p5 && p3 > p4
+trans!(q14, q26): 1 <= p5 && p3 > p4
+trans!(q15, q7): 1 > p5 && p3 <= p4
+trans!(q15, q8): 1 <= p5 && p3 <= p4
+trans!(q15, q19): 1 > p5 && p3 > p4
+trans!(q15, q20): 1 <= p5 && p3 > p4
+trans!(q16, q9): 1 > p5 && p3 <= p4
+trans!(q16, q10): 1 <= p5 && p3 <= p4
+trans!(q16, q21): 1 > p5 && p3 > p4
+trans!(q16, q22): 1 <= p5 && p3 > p4
+trans!(q17, q5): 1 > p5 && p3 <= p4
+trans!(q17, q6): 1 <= p5 && p3 <= p4
+trans!(q17, q23): 1 > p5 && p3 > p4
+trans!(q17, q24): 1 <= p5 && p3 > p4
+trans!(q18, q3): 1 <= p5 && p3 <= p4
+trans!(q18, q4): 1 > p5 && p3 <= p4
+trans!(q18, q25): 1 > p5 && p3 > p4
+trans!(q18, q26): 1 <= p5 && p3 > p4
+trans(q19, q11): 1 > p5 && p3 <= p4
+trans(q19, q12): 1 <= p5 && p3 <= p4
+trans(q19, q19): 1 > p5 && p3 > p4
+trans(q19, q20): 1 <= p5 && p3 > p4
+trans(q20, q13): 1 > p5 && p3 <= p4
+trans(q20, q14): 1 <= p5 && p3 <= p4
+trans(q20, q21): 1 > p5 && p3 > p4
+trans(q20, q22): 1 <= p5 && p3 > p4
+trans(q21, q15): 1 > p5 && p3 <= p4
+trans(q21, q16): 1 <= p5 && p3 <= p4
+trans(q21, q23): 1 > p5 && p3 > p4
+trans(q21, q24): 1 <= p5 && p3 > p4
+trans(q22, q17): 1 > p5 && p3 <= p4
+trans(q22, q18): 1 <= p5 && p3 <= p4
+trans(q22, q25): 1 > p5 && p3 > p4
+trans(q22, q26): 1 <= p5 && p3 > p4
+trans(q23, q7): 1 > p5 && p3 <= p4
+trans(q23, q8): 1 <= p5 && p3 <= p4
+trans(q23, q19): 1 > p5 && p3 > p4
+trans(q23, q20): 1 <= p5 && p3 > p4
+trans(q24, q9): 1 > p5 && p3 <= p4
+trans(q24, q10): 1 <= p5 && p3 <= p4
+trans(q24, q21): 1 > p5 && p3 > p4
+trans(q24, q22): 1 <= p5 && p3 > p4
+trans(q25, q5): 1 > p5 && p3 <= p4
+trans(q25, q6): 1 <= p5 && p3 <= p4
+trans(q25, q23): 1 > p5 && p3 > p4
+trans(q25, q24): 1 <= p5 && p3 > p4
+trans(q26, q3): 1 <= p5 && p3 <= p4
+trans(q26, q4): 1 > p5 && p3 <= p4
+trans(q26, q25): 1 > p5 && p3 > p4
+trans(q26, q26): 1 <= p5 && p3 > p4
+
+rank(q0):
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 = 0 && p7 = 0 -> 0
+  [] p5 < 5000 -> inf
+  [] p5 > 5000 -> inf
+  [] p5 = 5000 && p0 < 2500 -> inf
+  [] p5 = 5000 && p0 > 2500 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 < 0 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 > 0 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 < 0 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 > 0 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) < 5000 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) > 5000 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 < 0 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 > 0 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 = 0 && p7 < 0 -> inf
+  [] p5 = 5000 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 = 0 && p7 > 0 -> inf
+
+rank(q1):
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 = 0 && p7 = 0 -> 0
+  [] p5 < 4999 -> inf
+  [] p5 > 4999 -> inf
+  [] p5 = 4999 && p0 < 2500 -> inf
+  [] p5 = 4999 && p0 > 2500 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 < 0 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 > 0 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 < 0 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 > 0 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) < 5000 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) > 5000 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 < 0 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 > 0 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 = 0 && p7 < 0 -> inf
+  [] p5 = 4999 && p0 = 2500 && p2 = 0 && p4 = 0 && (p1 + p5) = 5000 && p6 = 0 && p7 > 0 -> inf
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] true -> inf
+
+rank(q4):
+  [] true -> inf
+
+rank(q5):
+  [] true -> inf
+
+rank(q6):
+  [] true -> inf
+
+rank(q7):
+  [] true -> inf
+
+rank(q8):
+  [] true -> inf
+
+rank(q9):
+  [] true -> inf
+
+rank(q10):
+  [] true -> inf
+
+rank(q11):
+  [] true -> inf
+
+rank(q12):
+  [] true -> inf
+
+rank(q13):
+  [] true -> inf
+
+rank(q14):
+  [] true -> inf
+
+rank(q15):
+  [] true -> inf
+
+rank(q16):
+  [] true -> inf
+
+rank(q17):
+  [] true -> inf
+
+rank(q18):
+  [] true -> inf
+
+rank(q19):
+  [] true -> inf
+
+rank(q20):
+  [] true -> inf
+
+rank(q21):
+  [] true -> inf
+
+rank(q22):
+  [] true -> inf
+
+rank(q23):
+  [] true -> inf
+
+rank(q24):
+  [] true -> inf
+
+rank(q25):
+  [] true -> inf
+
+rank(q26):
+  [] true -> inf
