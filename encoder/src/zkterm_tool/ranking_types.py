@@ -22,7 +22,7 @@ class RankingCase:
     is_infinity: bool = False     # True for infinity cases, False for finite cases
 
     def __repr__(self) -> str:
-        guard_str = " && ".join(str(g) for g in self.guards)
+        guard_str = " && ".join(str(g) for g in self.guards) or "true"
         if self.is_infinity:
             return f"[] {guard_str} -> inf"
         else:

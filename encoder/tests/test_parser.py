@@ -527,6 +527,20 @@ class TestInfinityCases:
         assert rf.cases[2].is_infinity is True
         assert rf.cases[2].expression is None
 
+    def test_unguarded_cases_round_trip(self):
+        """An empty guard is printed as 'true' so the output parses again."""
+        rf = RankingFunction("q0", [RankingCase([], Num(1)), RankingCase([], None, is_infinity=True)])
+        assert str(rf.cases[0]) == "[] true -> 1"
+        assert str(rf.cases[1]) == "[] true -> inf"
+
+        parsed = parse_with_constants(str(rf)).ranking_functions["q0"]
+        assert [c.is_infinity for c in parsed.cases] == [False, True]
+        assert all(c.guards == [] for c in parsed.cases)
+
+        t = AutomatonTransition("q0", "q0", [], is_fair=True)
+        assert str(t) == "trans!(q0, q0): true"
+        assert parse_with_constants(str(t)).automaton_transitions == [t]
+
     def test_infinity_case_encoding(self):
         """Test encoding infinity cases."""
         from zkterm_tool import encode_ranking_function

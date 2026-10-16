@@ -20,7 +20,7 @@ class AutomatonTransition:
 
     def __repr__(self) -> str:
         fair_mark = "!" if self.is_fair else ""
-        guard_str = " && ".join(str(g) for g in self.guards)
+        guard_str = " && ".join(str(g) for g in self.guards) or "true"
         return f"trans{fair_mark}({self.from_state}, {self.to_state}): {guard_str}"
 
     def get_variables(self) -> set[str]:
