@@ -1,0 +1,29 @@
+#!/bin/sh
+# Spot's ltl2tgba from a local Docker image, for ZKTERM_LTL2TGBA.
+# Build once: docker build -t zkmc-spot:local benchmarks/mcc/spot
+#
+# Successful translations are cached by argument list (LTL2TGBA_CACHE, default
+# ~/.cache/zkmc-ltl2tgba), and failed `docker run`s are retried a few times.
+cache="${LTL2TGBA_CACHE:-$HOME/.cache/zkmc-ltl2tgba}"
+mkdir -p "$cache"
+key=$(printf '%s\0' "$@" | sha256sum | cut -d' ' -f1)
+if [ -f "$cache/$key.hoa" ]; then
+    exec cat "$cache/$key.hoa"
+fi
+tmp="$cache/$key.$$.tmp"
+err="$cache/$key.$$.err"
+for attempt in 1 2 3 4; do
+    if docker run --rm -i zkmc-spot:local ltl2tgba "$@" > "$tmp" 2> "$err"; then
+        mv "$tmp" "$cache/$key.hoa"
+        rm -f "$err"
+        exec cat "$cache/$key.hoa"
+    fi
+    # A real Spot error (bad formula) is deterministic: don't retry it.
+    if grep -q -E 'syntax error|ltl2tgba:' "$err"; then
+        break
+    fi
+    sleep "$attempt"
+done
+cat "$err" >&2
+rm -f "$tmp" "$err"
+exit 1
