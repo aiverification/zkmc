@@ -124,6 +124,7 @@ fn full_prove_and_verify(_c: &mut Criterion) {
             let obligations = data.obligations;
             let read_time = read_timer.elapsed().as_millis();
             let N = obligations.len();
+            assert!(N >= 2); // To avoid error in verification of bulletproof aggregated proofs
             let schedule = salem_spencer_schedule(N);
 
             println!(
@@ -246,7 +247,6 @@ fn full_prove_and_verify(_c: &mut Criterion) {
         let g_prime_alpha = g_prime * s_hat;
         let h = blstrs_proj_to_bls_g1(&pc_gens.B_blinding);
         let h_prime = g_prime * blind_factor_zp;
-        assert!(max_n < N); // So that bp_gens works
         let lambda_mu_zkrp_pp = zkrp::ZKRPParams {
             l: max_n,
             m: max_n,
