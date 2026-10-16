@@ -93,8 +93,14 @@ struct ComputedValues {
 fn full_prove_and_verify(_c: &mut Criterion) {
     fs::create_dir_all(OUTPUT_DIR).unwrap();
 
-    for input_file in CANDIDATE_FILES {
-        let log_path = format!("{OUTPUT_DIR}bench_{input_file}.log");
+    // ZKMC_BENCH_FILES (comma-separated, relative to INPUT_DIR or absolute) overrides the defaults.
+    let files: Vec<String> = match std::env::var("ZKMC_BENCH_FILES") {
+        Ok(list) => list.split(',').map(|f| f.trim().to_string()).filter(|f| !f.is_empty()).collect(),
+        Err(_) => CANDIDATE_FILES.iter().map(|f| f.to_string()).collect(),
+    };
+    for input_file in files.iter() {
+        let log_name = std::path::Path::new(input_file).file_name().unwrap().to_string_lossy().to_string();
+        let log_path = format!("{OUTPUT_DIR}bench_{log_name}.log");
         let mut log_file = fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -102,7 +108,11 @@ fn full_prove_and_verify(_c: &mut Criterion) {
             .unwrap();
 
         for loop_idx in 0..NUM_LOOPS {
-            let file_path = format!("{INPUT_DIR}{input_file}");
+            let file_path = if input_file.starts_with('/') {
+                input_file.clone()
+            } else {
+                format!("{INPUT_DIR}{input_file}")
+            };
             let read_timer = Instant::now();
             let json = fs::read_to_string(&file_path)
                 .expect("failed to read full ZKP test data");
