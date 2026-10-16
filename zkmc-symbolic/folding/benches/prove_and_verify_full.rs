@@ -29,6 +29,7 @@ const CANDIDATE_FILES: [&str; 3] = [
 struct FullZkpData {
     obligations: Vec<Obligation>,
     count: usize,
+    #[serde(default)]
     constants: HashMap<String, i64>,
 }
 
