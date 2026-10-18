@@ -75,3 +75,86 @@ Keep `--mem-limit-mb`: without it a single runaway formula can exhaust the host'
 None of the 80 FALSE formulas of the soundness run passed, and the deadlock encoding agrees with an
 explicit product check on all 1,173 formulas small enough to decide that way. All 1907 rankings in
 `rankings/` re-verify from disk (`reverify.py`).
+
+## Farkas JSON export (`export_farkas.py`)
+
+The folding prover (`zkmc-symbolic/folding`) consumes JSON of shape `FullZkpData` — the same shape
+`zkfarkas` emits. `export_farkas.py` bridges the committed `rankings/gc/*.gc` files to that format
+for the bench: one worker per file (same `Process`/`Queue` pattern as `reverify.py`), per-worker
+`RLIMIT_AS` for OOM isolation, timeout-kill, JSONL journal + resume.
+
+```bash
+uv run python benchmarks/mcc/export_farkas.py                           # full export (1907 files)
+uv run python benchmarks/mcc/export_farkas.py --range 0..100            # first 100 files
+uv run python benchmarks/mcc/export_farkas.py --exams LTLCardinality --random 50
+uv run python benchmarks/mcc/export_farkas.py --max-obligations 1000    # calibration set
+uv run python benchmarks/mcc/export_farkas.py --dry-run                 # print selection, no work
+```
+
+Selection filters compose (AND):
+
+| Flag | Effect |
+|---|---|
+| `[paths]` | positional files/dirs; default `benchmarks/mcc/rankings/gc` |
+| `--range START..END` | half-open Rust-style slice of the canonical sorted list |
+| `--exams LTLCardinality,LTLFireability` | keep only files matching the given exams |
+| `--min/--max-obligations N` | read from `rankings/index.csv` — zero parsing |
+| `--random N` | deterministic random sample (seed 0), applied last |
+| `--dry-run` | print selection + obligations and exit |
+
+Other flags:
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--jobs N` / `--jobs all` | `2` | worker count; `all` = `min(cpu, RAM/mem-limit)` |
+| `--timeout` | `1200` | per-file wall timeout (s) |
+| `--mem-limit-mb` | `3000` | `RLIMIT_AS` per worker |
+| `--out-dir` | `benchmarks/corpus/mcc2025/farkas-json/` | output directory for `.json` files |
+| `--out CSV` | — | manifest CSV; `<out>.jsonl` journal written automatically for resume |
+| `--pretty` | compact | emit zkfarkas-compatible spaced JSON (default is compact, ~15% smaller) |
+| `--retry-status` | `timeout,error,crashed,memory` | on resume, re-run files whose last status **starts with** one of these |
+| `--force` | — | ignore journal, re-export everything |
+
+### Alignment with the folding bench's range selector
+
+The Rust bench (`prove_and_verify_full.rs`) sorts its `ZKMC_BENCH_FILES` list and accepts the
+same `START..END` syntax after `--`. Both sides sort over identical stems (`.gc` vs `.json`, same
+prefix), so ranges align **iff the JSON dir contains exactly one JSON per GC**. To keep indices
+stable across machines and reruns (and so the bench never sees a missing file), build
+`ZKMC_BENCH_FILES` from the manifest's `pass` rows rather than from `find`:
+
+```bash
+# After the export campaign, write a frozen file list from the manifest:
+uv run python -c "
+import csv
+with open('benchmarks/corpus/mcc2025/farkas-json/export.csv') as fh:
+    rows = [r['file'] for r in csv.DictReader(fh) if r['status'] == 'pass']
+print(','.join(sorted(rows)))
+" > /tmp/mcc_files.txt
+export ZKMC_BENCH_FILES=$(cat /tmp/mcc_files.txt)
+
+# Then on each machine, slice the shared list:
+cargo bench --bench prove_and_verify_full -- 0..954      # machine A
+cargo bench --bench prove_and_verify_full -- 954..       # machine B
+```
+
+## TODO
+
+- [ ] **Stats program** — read all exported `.json` files and report, per file and in aggregate:
+  unique `A_s`, unique `b_s`, unique `(A_s, b_s)` pairs, distinct `program_transition` values
+  (i.e. net commands), plus the bench-relevant dimensions `max_m`, `max_n`, `aggregation_size`,
+  `party_cap`. The point is twofold: (a) estimate total prover time from calibration runs on
+  size buckets, and (b) flag files where `max_n >= N` (the old bench assert) or other known
+  pre-flight failures before the bench sees them.
+- [ ] **Driver harness** — a wrapper that coordinates the exporter + bench across multiple
+  machines: (i) generates the canonical file list, (ii) slices it per machine, (iii) invokes
+  `export_farkas.py --range k..m` and the bench on each host, (iv) collects timing logs and
+  produces summary tables. Probably a Python script in `encoder/benchmarks/mcc/` or a Makefile.
+- [ ] **32-bit bounds pre-flight** — the bench's range proofs require entries in
+  `[-(2^31 - 1), 2^31 - 1]` (A/−b) and `[0, 2^31 - 1]` (λ/μ, α+β−1). The exporter already
+  catches unsatisfiable obligations and empty matrices, but it does not yet pre-emptively
+  reject files whose entries exceed these bounds (which would panic the bench's `.unwrap()`).
+  Add this check to `export_farkas.py`'s worker or to the stats program.
+- [ ] **Upstream `--emit-json` to `reverify.py`** — once the exporter stabilises, offer paberr
+  a `--emit-json DIR` flag on `reverify.py` (same worker pattern, just adds the Farkas dump to
+  the existing verify pass). Reduces tooling surface area.
