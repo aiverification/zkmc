@@ -262,6 +262,8 @@ def main() -> int:
         return 0
 
     os.makedirs(args.out_dir, exist_ok=True)
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)   # journal/manifest dir
 
     # Resume from journal
     journal = Path(args.out + ".jsonl") if args.out else None
