@@ -95,8 +95,9 @@ fn full_prove_and_verify(_c: &mut Criterion) {
     fs::create_dir_all(OUTPUT_DIR).unwrap();
 
     // ZKMC_BENCH_FILES (comma-separated, relative to INPUT_DIR or absolute) overrides the defaults.
-    let files = resolve_files();
-    for input_file in files.iter() {
+    let (files, file_offset, file_total) = resolve_files();
+    for (fi, input_file) in files.iter().enumerate() {
+        let global_idx = file_offset + fi;   // 0-based index in the full sorted list, matches `-- a..b`
         let log_name = std::path::Path::new(input_file).file_name().unwrap().to_string_lossy().to_string();
         let log_path = format!("{OUTPUT_DIR}bench_{log_name}.log");
         let mut log_file = fs::OpenOptions::new()
@@ -125,9 +126,9 @@ fn full_prove_and_verify(_c: &mut Criterion) {
             let schedule = salem_spencer_schedule(N);
 
             println!(
-                "Loaded {} obligations from {}",
+                "Loaded {} obligations from {} (benchmark file {} of {})",
                 obligations.len(),
-                file_path
+                file_path, global_idx, file_total
             );
 
         // Now pad + transpose matrices
@@ -349,7 +350,7 @@ fn full_prove_and_verify(_c: &mut Criterion) {
 
         writeln!(
             log_file,
-            "Loop {loop_idx} - setup: {total_setup_time}ms, prove: {prover_total}ms, verify: {verifier_total}ms, total: {total_time}ms - {}",
+            "Loop {loop_idx} - setup: {total_setup_time}ms, prove: {prover_total}ms, verify: {verifier_total}ms, total: {total_time}ms - {} (benchmark file {global_idx} of {file_total})",
             if ok { "SUCCESS" } else { "VERIFICATION_FAILED" }
         ).unwrap();
         }
@@ -362,18 +363,25 @@ fn full_prove_and_verify(_c: &mut Criterion) {
 // Omitted lower end begins at 0; omitted upper end ends at final file
 // Omitting the argument outright runs on all files
 // The argument *only* applies when `ZKMC_BENCH_FILES` environment variable is set
-fn resolve_files() -> Vec<String> {
+// Returns (selected files, 0-based offset into the full sorted list, full-list total) so each
+// result's stdout/log line can state which file of the benchmark set it was.
+fn resolve_files() -> (Vec<String>, usize, usize) {
     let mut files: Vec<String> = match std::env::var("ZKMC_BENCH_FILES") {
         Ok(list) => list
             .split(',')
             .map(|f| f.trim().to_string())
             .filter(|f| !f.is_empty())
             .collect(),
-        Err(_) => return CANDIDATE_FILES.iter().map(|f| f.to_string()).collect(),
+        Err(_) => {
+            let defaults: Vec<String> = CANDIDATE_FILES.iter().map(|f| f.to_string()).collect();
+            let n = defaults.len();
+            return (defaults, 0, n);
+        }
     };
     files.sort();
+    let total = files.len();
     let Some(spec) = std::env::args().skip(1).find(|a| a.contains("..")) else {
-        return files;
+        return (files, 0, total);
     };
     let bad = |what: &str| -> ! {
         eprintln!("bad range selector '{spec}' ({what}): expected START..END, START.. or ..END");
@@ -381,12 +389,11 @@ fn resolve_files() -> Vec<String> {
     };
     let (s, e) = spec.split_once("..").unwrap_or_else(|| bad("missing '..'"));
     let start = if s.is_empty() { 0 } else { s.parse::<usize>().unwrap_or_else(|_| bad("START not a number")) };
-    let end = if e.is_empty() { files.len() } else { e.parse::<usize>().unwrap_or_else(|_| bad("END not a number")) };
+    let end = if e.is_empty() { total } else { e.parse::<usize>().unwrap_or_else(|_| bad("END not a number")) };
     if start > end { bad("START > END") }
-    let total = files.len();
     let (start, end) = (start.min(total), end.min(total));
     println!("range {start}..{end} of {total} files ({} selected)", end - start);
-    files[start..end].to_vec()
+    (files[start..end].to_vec(), start, total)
 }
 
 criterion_group!(benches, full_prove_and_verify);
