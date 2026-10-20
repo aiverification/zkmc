@@ -69,9 +69,12 @@ git -C benchmarks/corpus/tlaplus-examples checkout bfcdea6a906fbad2cb6025c909377
 ## Runs
 
 ```bash
-uv run --group tlaplus python benchmarks/tlaplus/run_tlaplus.py translate --max-states 200000 --jobs 3
+uv run --group tlaplus python benchmarks/tlaplus/run_tlaplus.py translate --max-states 200000 --jobs 3 \
+    --timeout 3600 --tlc-timeout 600 --prop-timeout 900
 uv run --group tlaplus python benchmarks/tlaplus/run_tlaplus.py prove --explicit --houdini --samples 50000 \
-    --relational --minimize --synth-budget 300 --timeout 600 --jobs 3
+    --relational --minimize --cegis-fallback --synth-budget 120 --timeout 300 --jobs 2 --mem-limit-mb 3000
+uv run --group tlaplus python benchmarks/tlaplus/summarize.py
+uv run --group tlaplus python benchmarks/tlaplus/bundle.py --out benchmarks/tlaplus/rankings
 ```
 
 TLC runs in a container with its state files in a 2 GB tmpfs and stops once its state graph
@@ -84,3 +87,4 @@ to `<work>/gc/` (`--work`, default `benchmarks/corpus/tlaplus`); TLC results are
 hold, since TLC verified the model). `--relational` adds affine-hull and pairwise-bound guesses
 to Houdini (`benchmarks/mcc/invariants.py`), which TLA+ models need far more often than P/T
 nets. Both phases are journaled; rerunning resumes (`--retry-status` reruns given statuses).
+`bundle.py` collects the verified files into `rankings/` (see `rankings/README.md`).
