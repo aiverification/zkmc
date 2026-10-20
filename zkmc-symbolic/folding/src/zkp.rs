@@ -4,7 +4,7 @@ use group::ff::Field;
 use merlin::Transcript;
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use zkmatrix::setup::SRS;
 use zkmatrix::utils::curve::{G1Element, GtElement, ZpElement};
 use zkmatrix::utils::fiat_shamir::TranSeq;
@@ -19,6 +19,12 @@ use crate::utils::public_exponent_schedule::*;
 use crate::utils::zk_utils::mat_col_to_dense_zp;
 use crate::zkmmeq;
 use crate::zkrp;
+
+#[derive(Debug)]
+pub enum ProveError{
+    TimedOut { elapsed_ms: u128 }, // Used when prover surpasses time-out threshold provided
+    Failed { details: String }, // Used when proof generation fails for some other reason
+}
 
 // Public parameters for the full ZKP: the SRS, exponent schedule, Pedersen /
 // Bulletproof generators, and the ZKRP parameters shared by the range proofs.
@@ -134,7 +140,15 @@ fn dedupe(mats: &[Vec<Vec<i64>>]) -> (Vec<usize>, Vec<Vec<Vec<i64>>>) {
 // zkmmeq, and produces all the range proofs. s_hat (the SRS "toxic waste") is
 // prover-only and is used as the ZKRP alpha.
 // Returns the proof plus the total prover time in milliseconds.
-pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProof, u128) {
+pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput, time_limit: Option<Duration>) -> Result<(ZKPProof, u128), ProveError> {
+    // Use to print total elapsed time on OOT
+    let start_time = Instant::now();
+    // Used as running timing total
+    let mut end_time: Option<Instant> = None;
+    if time_limit.is_some(){
+        end_time = Some(start_time + time_limit.unwrap());
+    }
+
     let N = params.N;
     let max_m = params.max_m;
     let max_n = params.max_n;
@@ -156,6 +170,12 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
         unique_b.len(),
         N
     );
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after dedupe. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     // ---- Commit to all matrices ----
     // A and -b are committed once per distinct matrix and then expanded, so
@@ -188,6 +208,12 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
         .collect();
     let comm_time = comm_timer.elapsed().as_millis();
     println!("Committed matrices");
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after commits. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     // ---- Prover Fold ----
     let ctx = FoldContext {
@@ -211,6 +237,12 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
         &ctx,
     );
     let prover_folding_time = prover_folding_timer.elapsed().as_millis();
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after prover fold. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     // ---- Secret families: two zkmm invocations ----
     let lambda_star_blind_gt = folded.lambda_star.blind_gt(srs);
@@ -246,6 +278,12 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
     );
     println!("Proved A* . lambda* = e_A*");
     let prover_proof_A_lambda_e_time = prover_proof_A_lambda_e_timer.elapsed().as_millis();
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after proving A* . lambda* = e_A*. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     let prover_proof_b_lambda_alpha_timer = Instant::now();
     let b_lambda_alpha_protocol = ZkMatMul::new(
@@ -278,6 +316,12 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
     );
     println!("Proved b* . lambda* = alpha*");
     let prover_proof_b_lambda_alpha_time = prover_proof_b_lambda_alpha_timer.elapsed().as_millis();
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after proving b* . lambda* = alpha*. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     // ---- Public families: one batched zkmmeq (fig:ZKMC-S2-fold) ----
     // G* and h* are public, so they are folded in the clear and encoded into
@@ -295,6 +339,12 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
     );
     println!("Proved G* . mu* = e_G* and h* . mu* = beta* (batched zkmmeq)");
     let prover_zkmmeq_time = prover_zkmmeq_timer.elapsed().as_millis();
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after proving G* . mu* = e_G* and h* . mu* = beta*. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     let total_zkmm_proving_time = prover_proof_A_lambda_e_time
         + prover_proof_b_lambda_alpha_time
@@ -354,6 +404,12 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
     .unwrap();
     let prover_v_range_proof_time = prover_v_range_proof_timer.elapsed().as_millis();
     println!("Proved v_i ranges");
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after proving v_i ranges. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     // zkrp checks a target-group commitment, so the column commitments are
     // paired up here -- N pairings, against the 4(N + |K|) target-group
@@ -362,52 +418,97 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
     let mu_blind_gt = commitments.mu.blind_gt(srs);
 
     let prover_lambda_range_proofs_timer = Instant::now();
-    let lambda_zkrp_proofs: Vec<zkrp::ZKRPProof> = (0..N)
+    let lambda_zkrp_proofs: Option<Vec<zkrp::ZKRPProof>> = (0..N)
         .into_par_iter()
         .map(|i| {
+            // Time-out check
+            if end_time.is_some() && Instant::now() > end_time.unwrap(){
+                return None;
+            }
             let rho_i: Vec<blstrs::Scalar> = (0..input.lambda_i[i].len())
                 .map(|_| bls_field_elem_to_blstrs_scalar(&ZpElement::rand()))
                 .collect();
-            zkrp::prove(
-                &params.lambda_mu_zkrp_pp,
-                &input.lambda_i[i],
-                lambda_blind_gt[i],
-                commitments.lambda.randomness[i],
-                big_M,
-                s_hat,
-                &rho_i,
+            Some(
+                zkrp::prove(
+                    &params.lambda_mu_zkrp_pp,
+                    &input.lambda_i[i],
+                    lambda_blind_gt[i],
+                    commitments.lambda.randomness[i],
+                    big_M,
+                    s_hat,
+                    &rho_i,
+                )
             )
         })
         .collect();
+    // Handle returned proof or OOT case
+    let lambda_zkrp_proofs = match lambda_zkrp_proofs{
+        Some(proofs) => proofs,
+        None => {
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out during proving lambda_i ranges. Total time elapsed: {}ms", elapsed_time);
+            return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+        }
+    };
     let prover_lambda_range_proofs_time = prover_lambda_range_proofs_timer.elapsed().as_millis();
     println!("Proved lambda_i ranges");
+    // Time-out check (*after*) proofs
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after proving lambda_i ranges. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     let prover_mu_range_proofs_timer = Instant::now();
-    let mu_zkrp_proofs: Vec<zkrp::ZKRPProof> = (0..N)
+    let mu_zkrp_proofs: Option<Vec<zkrp::ZKRPProof>> = (0..N)
         .into_par_iter()
         .map(|i| {
+            // Time-out check
+            if end_time.is_some() && Instant::now() > end_time.unwrap(){
+                return None;
+            }
             let rho_i: Vec<blstrs::Scalar> = (0..input.mu_i[i].len())
                 .map(|_| bls_field_elem_to_blstrs_scalar(&ZpElement::rand()))
                 .collect();
-            zkrp::prove(
-                &params.lambda_mu_zkrp_pp,
-                &input.mu_i[i],
-                mu_blind_gt[i],
-                commitments.mu.randomness[i],
-                big_M,
-                s_hat,
-                &rho_i,
+            Some(
+                zkrp::prove(
+                    &params.lambda_mu_zkrp_pp,
+                    &input.mu_i[i],
+                    mu_blind_gt[i],
+                    commitments.mu.randomness[i],
+                    big_M,
+                    s_hat,
+                    &rho_i,
+                )
             )
         })
         .collect();
+    // Handle returned proof or OOT case
+    let mu_zkrp_proofs = match mu_zkrp_proofs{
+        Some(proofs) => proofs,
+        None => {
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out during proving mu_i ranges. Total time elapsed: {}ms", elapsed_time);
+            return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+        }
+    };
     let prover_mu_range_proofs_time = prover_mu_range_proofs_timer.elapsed().as_millis();
     println!("Proved mu_i ranges");
+    // Time-out check (*after*) proofs
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after proving mu_i ranges. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     let prover_A_range_proofs_timer = Instant::now();
-    let A_zkrp_proofs: Vec<zkrp::ZKRPProof> = unique_A
+    let A_zkrp_proofs: Option<Vec<zkrp::ZKRPProof>> = unique_A
         .par_iter()
         .enumerate()
         .map(|(u, A_u)| {
+            if end_time.is_some() && Instant::now() > end_time.unwrap(){
+                return None;
+            }
             let rho_i: Vec<blstrs::Scalar> = (0..max_m * max_n)
                 .map(|_| bls_field_elem_to_blstrs_scalar(&ZpElement::rand()))
                 .collect();
@@ -417,19 +518,35 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
                 .iter()
                 .map(|row| row.iter().map(|&v| v + big_M as i64).collect())
                 .collect();
-            zkrp::prove(
-                &params.A_zkrp_pp,
-                &A_plus_M,
-                unique_A_blinds[u] + M_A_comm,
-                unique_A_randomness[u],
-                2 * big_M,
-                s_hat,
-                &rho_i,
+            Some(
+                zkrp::prove(
+                    &params.A_zkrp_pp,
+                    &A_plus_M,
+                    unique_A_blinds[u] + M_A_comm,
+                    unique_A_randomness[u],
+                    2 * big_M,
+                    s_hat,
+                    &rho_i,
+                )
             )
         })
         .collect();
+    let A_zkrp_proofs = match A_zkrp_proofs{
+        Some(proofs) => proofs,
+        None => {
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out during proving A_i ranges. Total time elapsed: {}ms", elapsed_time);
+            return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+        }
+    };
     let prover_A_range_proofs_time = prover_A_range_proofs_timer.elapsed().as_millis();
     println!("Proved {} unique A_i ranges", unique_A.len());
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after proving A_i ranges. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     let prover_b_range_proofs_timer = Instant::now();
     let b_zkrp_proofs: Vec<zkrp::ZKRPProof> = unique_b
@@ -456,6 +573,12 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
         .collect();
     let prover_b_range_proofs_time = prover_b_range_proofs_timer.elapsed().as_millis();
     println!("Proved {} unique -b_i ranges", unique_b.len());
+    // Time-out check
+    if end_time.is_some() && Instant::now() > end_time.unwrap(){
+        let elapsed_time = (Instant::now() - start_time).as_millis();
+        println!("Time out after proving -b_i ranges. Total time elapsed: {}ms", elapsed_time);
+        return Err(ProveError::TimedOut { elapsed_ms: elapsed_time })
+    }
 
     let total_proving_range_proofs_time = prover_v_range_proof_time
         + prover_lambda_range_proofs_time
@@ -484,28 +607,31 @@ pub fn prove(params: &ZKPParams, s_hat: ZpElement, input: &ZKPInput) -> (ZKPProo
         + total_zkmm_proving_time
         + total_proving_range_proofs_time;
 
-    (
-        ZKPProof {
-            commitments,
-            cross_a: folded.cross_a,
-            cross_b: folded.cross_b,
-            cross_g: folded.cross_g,
-            cross_h: folded.cross_h,
-            A_lambda_e_proof,
-            b_lambda_alpha_proof,
-            A_lambda_e_dims,
-            b_lambda_alpha_dims,
-            zkmmeq_proof,
-            v_range_proof,
-            lambda_zkrp_proofs,
-            mu_zkrp_proofs,
-            A_zkrp_proofs,
-            b_zkrp_proofs,
-            unique_A_blinds,
-            unique_b_blinds,
-        },
-        prover_total,
+    Ok(
+        (
+            ZKPProof {
+                commitments,
+                cross_a: folded.cross_a,
+                cross_b: folded.cross_b,
+                cross_g: folded.cross_g,
+                cross_h: folded.cross_h,
+                A_lambda_e_proof,
+                b_lambda_alpha_proof,
+                A_lambda_e_dims,
+                b_lambda_alpha_dims,
+                zkmmeq_proof,
+                v_range_proof,
+                lambda_zkrp_proofs,
+                mu_zkrp_proofs,
+                A_zkrp_proofs,
+                b_zkrp_proofs,
+                unique_A_blinds,
+                unique_b_blinds,
+            },
+            prover_total,
+        )
     )
+
 }
 
 fn first_with_class(class_of: &[usize], class: usize) -> usize {
@@ -562,8 +688,16 @@ impl ZKPProof {
     // verifies all the range proofs. Uses only the public statement
     // (neg_G_i, neg_h_i) plus the proof; it recomputes the public mask
     // commitments itself rather than trusting the prover's.
-    // Returns whether everything verified plus the total verifier time in ms.
-    pub fn verify(&self, params: &ZKPParams, statement: &ZKPStatement) -> (bool, u128) {
+    // Returns whether everything verified plus whether the verification ran out of time plus the total verifier time in ms.
+    pub fn verify(&self, params: &ZKPParams, statement: &ZKPStatement, time_limit: Option<Duration>) -> (bool, bool, u128) {
+        // Use to print total elapsed time on OOT
+        let start_time = Instant::now();
+        // Used as running timing total
+        let mut end_time: Option<Instant> = None;
+        if time_limit.is_some(){
+            end_time = Some(start_time + time_limit.unwrap());
+        }
+
         let N = params.N;
         let max_m = params.max_m;
         let max_n = params.max_n;
@@ -590,6 +724,12 @@ impl ZKPProof {
             &ctx,
         );
         let verifier_fold_time = verifier_fold_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after verifier fold. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         // ---- Secret families ----
         let lambda_star_blind_gt = col_comm_to_gt(folded.lambda_star_blind, srs);
@@ -607,6 +747,12 @@ impl ZKPProof {
             A_lambda_e_verifier.verify(srs, &mut self.A_lambda_e_proof.clone());
         println!("A* . lambda* = e_A* verified: {A_lambda_e_verified}");
         let verifier_proof_A_lambda_e_time = verifier_proof_A_lambda_e_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after A* . lambda* = e_A* verified. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         let verifier_proof_b_lambda_alpha_timer = Instant::now();
         let b_lambda_alpha_verifier = ZkMatMul::new(
@@ -622,6 +768,12 @@ impl ZKPProof {
         println!("b* . lambda* = alpha* verified: {b_lambda_alpha_verified}");
         let verifier_proof_b_lambda_alpha_time =
             verifier_proof_b_lambda_alpha_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after b* . lambda* = alpha* verified. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         // ---- Public families ----
         let verifier_zkmmeq_timer = Instant::now();
@@ -634,6 +786,12 @@ impl ZKPProof {
         );
         println!("G* . mu* = e_G* and h* . mu* = beta* verified: {zkmmeq_verified}");
         let verifier_zkmmeq_time = verifier_zkmmeq_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after G* . mu* = e_G* and h* . mu* = beta* verified. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         let total_zkmm_verifying_time = verifier_proof_A_lambda_e_time
             + verifier_proof_b_lambda_alpha_time
@@ -649,6 +807,12 @@ impl ZKPProof {
         println!("v_i range proof verified: {v_range_proof_verified}");
         let verifier_v_range_proof_verify_time =
             verifier_v_range_proof_verify_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after v_i range proof verified. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         let lambda_blind_gt = self.commitments.lambda.blind_gt(srs);
         let mu_blind_gt = self.commitments.mu.blind_gt(srs);
@@ -660,6 +824,12 @@ impl ZKPProof {
         println!("lambda_i range proofs verified: {lambda_ranges_ok}");
         let verifier_lambda_range_proofs_verify_time =
             verifier_lambda_range_proofs_verify_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after lambda_i range proofs verified. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         let verifier_mu_range_proofs_verify_timer = Instant::now();
         let mu_ranges_ok = (0..N).into_par_iter().all(|i| {
@@ -668,6 +838,12 @@ impl ZKPProof {
         println!("mu_i range proofs verified: {mu_ranges_ok}");
         let verifier_mu_range_proofs_verify_time =
             verifier_mu_range_proofs_verify_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after mu_i range proofs verified. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         // Verifier independently recomputes the public mask commitments.
         let (verifier_M_A_comm, _) = commit_rm_i64(
@@ -693,6 +869,12 @@ impl ZKPProof {
         );
         let verifier_A_range_proofs_verify_time =
             verifier_A_range_proofs_verify_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after A_i range proofs verified. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         let verifier_b_range_proofs_verify_timer = Instant::now();
         let b_ranges_ok = (0..self.unique_b_blinds.len()).into_par_iter().all(|u| {
@@ -708,6 +890,12 @@ impl ZKPProof {
         );
         let verifier_b_range_proofs_verify_time =
             verifier_b_range_proofs_verify_timer.elapsed().as_millis();
+        // Time-out check
+        if end_time.is_some() && Instant::now() > end_time.unwrap(){
+            let elapsed_time = (Instant::now() - start_time).as_millis();
+            println!("Time out after -b_i range proofs verified. Total time elapsed: {}ms", elapsed_time);
+            return (false, true, elapsed_time)
+        }
 
         // The per-obligation A / -b commitments must be the canonical ones the
         // range proofs were made against, otherwise a prover could range-prove
@@ -752,7 +940,7 @@ impl ZKPProof {
             && b_ranges_ok
             && canonical_ok;
 
-        (ok, verifier_total)
+        (ok, false, verifier_total)
     }
 
     /// Every per-obligation A / -b commitment must equal one of the canonical

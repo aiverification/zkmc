@@ -3,7 +3,7 @@ use rayon::prelude::*;
 use serde::Deserialize;
 use std::fs;
 use criterion::{Criterion, criterion_group, criterion_main};
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use std::collections::HashMap;
 use std::io::Write;
 use blstrs;
@@ -13,10 +13,12 @@ use zkmc_symbolic_folding::utils::curve_utils::*;
 use zkmc_symbolic_folding::utils::public_exponent_schedule::*;
 use zkmc_symbolic_folding::zkrp;
 use zkmc_symbolic_folding::zkp;
+use zkmc_symbolic_folding::zkp::ProveError;
 
 const INPUT_DIR: &str = "input/";
 const OUTPUT_DIR: &str = "outputs/";
 const NUM_LOOPS: usize = 1;
+const TIME_LIMIT: u64 = 1000*60*60*2; // 2h in ms
 
 // Files to benchmark (read from INPUT_DIR); each gets OUTPUT_DIR/bench_<name>.log.
 const CANDIDATE_FILES: [&str; 3] = [
@@ -333,8 +335,33 @@ fn full_prove_and_verify(_c: &mut Criterion) {
         };
 
         // Prover + Verifier (full ZKP)
-        let (proof, prover_total) = zkp::prove(&params, s_hat, &input);
-        let (ok, verifier_total) = proof.verify(&params, &statement);
+        let (proof, prover_total) = match zkp::prove(&params, s_hat, &input, Some(Duration::from_millis(TIME_LIMIT))){
+            Err(ProveError::TimedOut { elapsed_ms }) => {
+                println!("Proof generation for {input_file} failed: OOT");
+                writeln!(
+                    log_file,
+                    "Loop {loop_idx} - setup: {total_setup_time}ms, prove: OOT ({elapsed_ms}ms) - TIMED_OUT (benchmark file {global_idx} of {file_total})",
+                ).unwrap();
+                break
+            }
+            Err(ProveError::Failed { details }) => {
+                println!("Proof generation for {input_file} failed: {:?}", details);
+                writeln!(
+                    log_file,
+                    "Loop {loop_idx} - setup: {total_setup_time}ms, prove: FAILED - FAILED (benchmark file {global_idx} of {file_total})",
+                ).unwrap();
+                break
+            },
+            Ok((proof, time)) => (proof, time),
+        };
+        let (ok, out_of_time, verifier_total) = proof.verify(&params, &statement, Some(Duration::from_millis(TIME_LIMIT)));
+        if out_of_time{
+            writeln!(
+                log_file,
+                "Loop {loop_idx} - setup: {total_setup_time}ms, prove: {prover_total}ms, verify: OOT ({verifier_total}ms) - TIMED_OUT (benchmark file {global_idx} of {file_total})",
+            ).unwrap();
+            break
+        }
         println!("Loop {loop_idx} of {input_file}: ZKP verified: {ok}");
 
         let total_time = total_setup_time + prover_total + verifier_total;
