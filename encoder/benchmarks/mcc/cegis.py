@@ -166,5 +166,5 @@ def cegis_rankings(result: ParseResult, invariants: Dict[str, List[Comparison]],
                 for f in w[q] + [u[q]]:
                     scale = lcm(scale, f.denominator)
             pieces = {(q, 0): ([int(f * scale) for f in w[q]], int(u[q] * scale)) for q in live}
-            return _assemble_invariant([{}], pieces, states, variables, invariants)
+            return _assemble_invariant([], [{}], pieces, states, variables, invariants, {})
     raise CegisFailure("too many refinement rounds")
