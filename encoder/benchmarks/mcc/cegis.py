@@ -50,12 +50,13 @@ def sample_edges(result: ParseResult, budget: int):
 
     from explicit_check import _holds, _product
 
-    variables, x0, program_successors, by_state = _product(result)
+    variables, x0s, program_successors, by_state = _product(result)
     seen, edges = set(), []
     queue = deque()
     for q in result.automaton_initial_states or []:
-        seen.add((q, x0))
-        queue.append((q, x0))
+        for x0 in x0s:
+            seen.add((q, x0))
+            queue.append((q, x0))
     while queue and len(seen) < budget:
         q, x = queue.popleft()
         enabled = [(to, fair) for guard, to, fair in by_state.get(q, []) if _holds(guard, x)]

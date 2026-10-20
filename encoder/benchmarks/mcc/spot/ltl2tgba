@@ -13,13 +13,21 @@ fi
 tmp="$cache/$key.$$.tmp"
 err="$cache/$key.$$.err"
 for attempt in 1 2 3 4; do
-    if docker run --rm -i zkmc-spot:local ltl2tgba "$@" > "$tmp" 2> "$err"; then
+    # The container is capped (LTL2TGBA_MEMORY, LTL2TGBA_TIMEOUT seconds): killing the docker
+    # client on a timeout would leave it running.
+    docker run --rm -i --memory "${LTL2TGBA_MEMORY:-2g}" zkmc-spot:local \
+        timeout "${LTL2TGBA_TIMEOUT:-600}" ltl2tgba "$@" > "$tmp" 2> "$err"
+    status=$?
+    if [ "$status" -eq 0 ]; then
         mv "$tmp" "$cache/$key.hoa"
         rm -f "$err"
         exec cat "$cache/$key.hoa"
     fi
-    # A real Spot error (bad formula) is deterministic: don't retry it.
-    if grep -q -E 'syntax error|ltl2tgba:' "$err"; then
+    # A real Spot error (bad formula), a timeout (124) or running out of memory (137) is
+    # deterministic: don't retry it.
+    if [ "$status" -eq 124 ] || [ "$status" -eq 137 ] || grep -q -E 'syntax error|ltl2tgba:' "$err"; then
+        [ "$status" -eq 124 ] && echo "ltl2tgba: timed out" >> "$err"
+        [ "$status" -eq 137 ] && echo "ltl2tgba: out of memory" >> "$err"
         break
     fi
     sleep "$attempt"
