@@ -1,0 +1,36 @@
+// TLA+ model Prisoners_Single_Switch__PrisonerSolo
+// 5 variables, 2 slots, 1 commands, 1 initial states
+//   count: (constant)
+//   announced: announced
+//   signalled: (constant)
+//   light: (constant)
+//   has_visited: has_visited_Alice
+//   has_visited_Alice: "Alice" in set
+
+type announced: 0..1
+type has_visited_Alice: 0..1
+
+init: announced == 0 && has_visited_Alice == 0
+
+// WardenAction("Alice")
+[] true -> announced = 1; has_visited_Alice = 1
+// stuttering
+[] true -> announced = announced
+
+// VictoryOK: invariant VictoryOK
+// LTL: G(p0)
+//   p0 := (announced == 0) || (has_visited_Alice == 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q1
+trans!(q0, q0): true
+trans(q1, q0): announced == 1 && has_visited_Alice == 0
+trans(q1, q1): announced == 0
+trans(q1, q1): has_visited_Alice == 1
+
+rank(q1):
+  [] ((-1 * announced) + has_visited_Alice) = 0 -> 0
+  [] ((-1 * announced) + has_visited_Alice) < 0 -> inf
+  [] ((-1 * announced) + has_visited_Alice) > 0 -> inf
+
+rank(q0):
+  [] true -> inf

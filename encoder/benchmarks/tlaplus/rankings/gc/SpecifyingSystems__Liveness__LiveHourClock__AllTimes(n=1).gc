@@ -1,0 +1,120 @@
+// TLA+ model SpecifyingSystems__Liveness__LiveHourClock
+// 1 variables, 1 slots, 12 commands, 12 initial states
+//   hr: hr
+
+type hr: 1..12
+type act: 0..1
+
+init: hr >= 1 && hr <= 12 && act == 0
+
+// HCnxt
+[] hr == 1 -> act = 1; hr = 2
+// HCnxt
+[] hr == 2 -> act = 1; hr = 3
+// HCnxt
+[] hr == 3 -> act = 1; hr = 4
+// HCnxt
+[] hr == 4 -> act = 1; hr = 5
+// HCnxt
+[] hr == 5 -> act = 1; hr = 6
+// HCnxt
+[] hr == 6 -> act = 1; hr = 7
+// HCnxt
+[] hr == 7 -> act = 1; hr = 8
+// HCnxt
+[] hr == 8 -> act = 1; hr = 9
+// HCnxt
+[] hr == 9 -> act = 1; hr = 10
+// HCnxt
+[] hr == 10 -> act = 1; hr = 11
+// HCnxt
+[] hr == 11 -> act = 1; hr = 12
+// HCnxt
+[] hr == 12 -> act = 1; hr = 1
+// stuttering
+[] true -> act = 0
+
+// AllTimes[n=1]: property AllTimes[n=1] under 1 of the 1 fairness conditions
+// LTL: !(((G(F(false)) | G(F(p1))) & F(G(p0))))
+//   p0 := (hr >= 2)
+//   p1 := (act == 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q0
+trans(q0, q0): true
+trans(q0, q1): act == 1 && hr >= 2
+trans!(q1, q1): act == 1 && hr >= 2
+trans!(q1, q2): act == 0 && hr >= 2
+trans(q2, q1): act == 1 && hr >= 2
+trans(q2, q2): act == 0 && hr >= 2
+
+rank(q0):
+  [] hr >= 1 && hr <= 1 -> 11
+  [] hr >= 2 && hr <= 2 -> 11
+  [] hr >= 3 && hr <= 3 -> 11
+  [] hr >= 4 && hr <= 4 -> 11
+  [] hr >= 5 && hr <= 5 -> 11
+  [] hr >= 6 && hr <= 6 -> 11
+  [] hr >= 7 && hr <= 7 -> 11
+  [] hr >= 8 && hr <= 8 -> 11
+  [] hr >= 9 && hr <= 9 -> 11
+  [] hr >= 10 && hr <= 10 -> 11
+  [] hr >= 11 && hr <= 11 -> 11
+  [] hr >= 12 && hr <= 12 -> 11
+  [] hr < 1 -> inf
+  [] hr > 12 -> inf
+
+rank(q1):
+  [] hr >= 1 && hr <= 1 && act >= 0 -> 0
+  [] hr >= 1 && hr <= 1 && act < 0 -> inf
+  [] hr >= 2 && hr <= 2 && act >= 0 -> (11 + act)
+  [] hr >= 2 && hr <= 2 && act < 0 -> inf
+  [] hr >= 3 && hr <= 3 && act >= 0 -> (10 + act)
+  [] hr >= 3 && hr <= 3 && act < 0 -> inf
+  [] hr >= 4 && hr <= 4 && act >= 0 -> (9 + act)
+  [] hr >= 4 && hr <= 4 && act < 0 -> inf
+  [] hr >= 5 && hr <= 5 && act >= 0 -> (8 + act)
+  [] hr >= 5 && hr <= 5 && act < 0 -> inf
+  [] hr >= 6 && hr <= 6 && act >= 0 -> (7 + act)
+  [] hr >= 6 && hr <= 6 && act < 0 -> inf
+  [] hr >= 7 && hr <= 7 && act >= 0 -> (6 + act)
+  [] hr >= 7 && hr <= 7 && act < 0 -> inf
+  [] hr >= 8 && hr <= 8 && act >= 0 -> (5 + act)
+  [] hr >= 8 && hr <= 8 && act < 0 -> inf
+  [] hr >= 9 && hr <= 9 && act >= 0 -> (4 + act)
+  [] hr >= 9 && hr <= 9 && act < 0 -> inf
+  [] hr >= 10 && hr <= 10 && act >= 0 -> (3 + act)
+  [] hr >= 10 && hr <= 10 && act < 0 -> inf
+  [] hr >= 11 && hr <= 11 && act >= 0 -> (2 + act)
+  [] hr >= 11 && hr <= 11 && act < 0 -> inf
+  [] hr >= 12 && hr <= 12 && act >= 0 -> (1 + act)
+  [] hr >= 12 && hr <= 12 && act < 0 -> inf
+  [] hr < 1 -> inf
+  [] hr > 12 -> inf
+
+rank(q2):
+  [] hr >= 1 && hr <= 1 && act >= 0 -> 0
+  [] hr >= 1 && hr <= 1 && act < 0 -> inf
+  [] hr >= 2 && hr <= 2 && act >= 0 -> (10 + act)
+  [] hr >= 2 && hr <= 2 && act < 0 -> inf
+  [] hr >= 3 && hr <= 3 && act >= 0 -> (9 + act)
+  [] hr >= 3 && hr <= 3 && act < 0 -> inf
+  [] hr >= 4 && hr <= 4 && act >= 0 -> (8 + act)
+  [] hr >= 4 && hr <= 4 && act < 0 -> inf
+  [] hr >= 5 && hr <= 5 && act >= 0 -> (7 + act)
+  [] hr >= 5 && hr <= 5 && act < 0 -> inf
+  [] hr >= 6 && hr <= 6 && act >= 0 -> (6 + act)
+  [] hr >= 6 && hr <= 6 && act < 0 -> inf
+  [] hr >= 7 && hr <= 7 && act >= 0 -> (5 + act)
+  [] hr >= 7 && hr <= 7 && act < 0 -> inf
+  [] hr >= 8 && hr <= 8 && act >= 0 -> (4 + act)
+  [] hr >= 8 && hr <= 8 && act < 0 -> inf
+  [] hr >= 9 && hr <= 9 && act >= 0 -> (3 + act)
+  [] hr >= 9 && hr <= 9 && act < 0 -> inf
+  [] hr >= 10 && hr <= 10 && act >= 0 -> (2 + act)
+  [] hr >= 10 && hr <= 10 && act < 0 -> inf
+  [] hr >= 11 && hr <= 11 && act >= 0 -> (1 + act)
+  [] hr >= 11 && hr <= 11 && act < 0 -> inf
+  [] hr >= 12 && hr <= 12 && act >= 0 -> (0 + act)
+  [] hr >= 12 && hr <= 12 && act < 0 -> inf
+  [] hr < 1 -> inf
+  [] hr > 12 -> inf

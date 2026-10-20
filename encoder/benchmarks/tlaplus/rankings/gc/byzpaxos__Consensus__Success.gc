@@ -1,0 +1,44 @@
+// TLA+ model byzpaxos__Consensus
+// 1 variables, 3 slots, 3 commands, 1 initial states
+//   chosen: chosen_v1 chosen_v2 chosen_v3
+//   chosen_v1: v1 in set
+//   chosen_v2: v2 in set
+//   chosen_v3: v3 in set
+
+type chosen_v1: 0..1
+type chosen_v2: 0..1
+type chosen_v3: 0..1
+type act: 0..1
+
+init: chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0 && act == 0
+
+// 
+[] chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0 -> act = 1; chosen_v1 = 1
+// 
+[] chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0 -> act = 1; chosen_v2 = 1
+// 
+[] chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0 -> act = 1; chosen_v3 = 1
+// stuttering
+[] true -> act = 0
+
+// Success: property Success under 1 of the 1 fairness conditions
+// LTL: !(((G(F(p1)) | G(F(p2))) & G(p0)))
+//   p0 := (chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0)
+//   p1 := (chosen_v3 == 1) || (chosen_v2 == 1) || (chosen_v1 == 1)
+//   p2 := (act == 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q0
+trans!(q0, q0): act == 1 && chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0
+trans!(q0, q1): act == 0 && chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0
+trans(q1, q0): act == 1 && chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0
+trans(q1, q1): act == 0 && chosen_v1 == 0 && chosen_v2 == 0 && chosen_v3 == 0
+
+rank(q0):
+  [] act = 0 -> 1
+  [] act < 0 -> inf
+  [] act > 0 -> inf
+
+rank(q1):
+  [] ((((-1 * act) + chosen_v1) + chosen_v2) + chosen_v3) = 0 -> 0
+  [] ((((-1 * act) + chosen_v1) + chosen_v2) + chosen_v3) < 0 -> inf
+  [] ((((-1 * act) + chosen_v1) + chosen_v2) + chosen_v3) > 0 -> inf

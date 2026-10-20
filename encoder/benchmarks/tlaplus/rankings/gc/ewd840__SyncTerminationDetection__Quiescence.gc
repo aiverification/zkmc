@@ -1,0 +1,263 @@
+// TLA+ model ewd840__SyncTerminationDetection
+// 2 variables, 8 slots, 99 commands, 129 initial states
+//   active: active_0 active_1 active_2 active_3 active_4 active_5 active_6
+//   terminationDetected: terminationDetected
+
+type active_0: 0..1
+type active_1: 0..1
+type active_2: 0..1
+type active_3: 0..1
+type active_4: 0..1
+type active_5: 0..1
+type active_6: 0..1
+type terminationDetected: 0..1
+
+init: active_0 >= 0 && active_0 <= 1 && active_1 >= 0 && active_1 <= 1 && active_2 >= 0 && active_2 <= 1 && active_3 >= 0 && active_3 <= 1 && active_4 >= 0 && active_4 <= 1 && active_5 >= 0 && active_5 <= 1 && active_6 >= 0 && active_6 <= 1 && terminationDetected >= 0 && terminationDetected <= 1 && active_0 + terminationDetected <= 1 && active_1 + terminationDetected <= 1 && active_2 + terminationDetected <= 1 && active_3 + terminationDetected <= 1 && active_4 + terminationDetected <= 1 && active_5 + terminationDetected <= 1 && active_6 + terminationDetected <= 1 && active_0 + active_1 + active_2 + active_3 + active_4 + active_5 + active_6 + terminationDetected <= 7
+
+// Terminate(0)
+[] active_0 == 1 -> active_0 = 0
+// Terminate(0)
+[] active_0 == 1 && active_1 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_2 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_3 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_4 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_5 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_6 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_1 == 0 && active_2 == 0 && active_3 == 0 && active_4 == 0 && active_5 == 0 && active_6 == 0 -> active_0 = 0; terminationDetected = 1
+// Terminate(1)
+[] active_1 == 1 -> active_1 = 0
+// Terminate(1)
+[] active_0 == 1 && active_1 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && active_2 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && active_3 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && active_4 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && active_5 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && active_6 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_0 == 0 && active_1 == 1 && active_2 == 0 && active_3 == 0 && active_4 == 0 && active_5 == 0 && active_6 == 0 -> active_1 = 0; terminationDetected = 1
+// Terminate(2)
+[] active_2 == 1 -> active_2 = 0
+// Terminate(2)
+[] active_0 == 1 && active_2 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_1 == 1 && active_2 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && active_3 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && active_4 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && active_5 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && active_6 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_0 == 0 && active_1 == 0 && active_2 == 1 && active_3 == 0 && active_4 == 0 && active_5 == 0 && active_6 == 0 -> active_2 = 0; terminationDetected = 1
+// Terminate(3)
+[] active_3 == 1 -> active_3 = 0
+// Terminate(3)
+[] active_0 == 1 && active_3 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_1 == 1 && active_3 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_2 == 1 && active_3 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_3 == 1 && active_4 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_3 == 1 && active_5 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_3 == 1 && active_6 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 1 && active_4 == 0 && active_5 == 0 && active_6 == 0 -> active_3 = 0; terminationDetected = 1
+// Terminate(4)
+[] active_4 == 1 -> active_4 = 0
+// Terminate(4)
+[] active_0 == 1 && active_4 == 1 -> active_4 = 0; terminationDetected = 0
+// Terminate(4)
+[] active_1 == 1 && active_4 == 1 -> active_4 = 0; terminationDetected = 0
+// Terminate(4)
+[] active_2 == 1 && active_4 == 1 -> active_4 = 0; terminationDetected = 0
+// Terminate(4)
+[] active_3 == 1 && active_4 == 1 -> active_4 = 0; terminationDetected = 0
+// Terminate(4)
+[] active_4 == 1 && active_5 == 1 -> active_4 = 0; terminationDetected = 0
+// Terminate(4)
+[] active_4 == 1 && active_6 == 1 -> active_4 = 0; terminationDetected = 0
+// Terminate(4)
+[] active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && active_4 == 1 && active_5 == 0 && active_6 == 0 -> active_4 = 0; terminationDetected = 1
+// Terminate(5)
+[] active_5 == 1 -> active_5 = 0
+// Terminate(5)
+[] active_0 == 1 && active_5 == 1 -> active_5 = 0; terminationDetected = 0
+// Terminate(5)
+[] active_1 == 1 && active_5 == 1 -> active_5 = 0; terminationDetected = 0
+// Terminate(5)
+[] active_2 == 1 && active_5 == 1 -> active_5 = 0; terminationDetected = 0
+// Terminate(5)
+[] active_3 == 1 && active_5 == 1 -> active_5 = 0; terminationDetected = 0
+// Terminate(5)
+[] active_4 == 1 && active_5 == 1 -> active_5 = 0; terminationDetected = 0
+// Terminate(5)
+[] active_5 == 1 && active_6 == 1 -> active_5 = 0; terminationDetected = 0
+// Terminate(5)
+[] active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && active_4 == 0 && active_5 == 1 && active_6 == 0 -> active_5 = 0; terminationDetected = 1
+// Terminate(6)
+[] active_6 == 1 -> active_6 = 0
+// Terminate(6)
+[] active_0 == 1 && active_6 == 1 -> active_6 = 0; terminationDetected = 0
+// Terminate(6)
+[] active_1 == 1 && active_6 == 1 -> active_6 = 0; terminationDetected = 0
+// Terminate(6)
+[] active_2 == 1 && active_6 == 1 -> active_6 = 0; terminationDetected = 0
+// Terminate(6)
+[] active_3 == 1 && active_6 == 1 -> active_6 = 0; terminationDetected = 0
+// Terminate(6)
+[] active_4 == 1 && active_6 == 1 -> active_6 = 0; terminationDetected = 0
+// Terminate(6)
+[] active_5 == 1 && active_6 == 1 -> active_6 = 0; terminationDetected = 0
+// Terminate(6)
+[] active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && active_4 == 0 && active_5 == 0 && active_6 == 1 -> active_6 = 0; terminationDetected = 1
+// Wakeup(0, 1), Wakeup(2, 1), Wakeup(3, 1) ...
+[] active_0 == 1 -> active_1 = 1
+// Wakeup(0, 1), Wakeup(2, 1), Wakeup(3, 1) ...
+[] active_2 == 1 -> active_1 = 1
+// Wakeup(0, 1), Wakeup(2, 1), Wakeup(3, 1) ...
+[] active_3 == 1 -> active_1 = 1
+// Wakeup(0, 1), Wakeup(2, 1), Wakeup(3, 1) ...
+[] active_4 == 1 -> active_1 = 1
+// Wakeup(0, 1), Wakeup(2, 1), Wakeup(3, 1) ...
+[] active_5 == 1 -> active_1 = 1
+// Wakeup(0, 1), Wakeup(2, 1), Wakeup(3, 1) ...
+[] active_6 == 1 -> active_1 = 1
+// Wakeup(0, 2), Wakeup(1, 2), Wakeup(3, 2) ...
+[] active_0 == 1 -> active_2 = 1
+// Wakeup(0, 2), Wakeup(1, 2), Wakeup(3, 2) ...
+[] active_1 == 1 -> active_2 = 1
+// Wakeup(0, 2), Wakeup(1, 2), Wakeup(3, 2) ...
+[] active_3 == 1 -> active_2 = 1
+// Wakeup(0, 2), Wakeup(1, 2), Wakeup(3, 2) ...
+[] active_4 == 1 -> active_2 = 1
+// Wakeup(0, 2), Wakeup(1, 2), Wakeup(3, 2) ...
+[] active_5 == 1 -> active_2 = 1
+// Wakeup(0, 2), Wakeup(1, 2), Wakeup(3, 2) ...
+[] active_6 == 1 -> active_2 = 1
+// Wakeup(0, 3), Wakeup(1, 3), Wakeup(2, 3) ...
+[] active_0 == 1 -> active_3 = 1
+// Wakeup(0, 3), Wakeup(1, 3), Wakeup(2, 3) ...
+[] active_1 == 1 -> active_3 = 1
+// Wakeup(0, 3), Wakeup(1, 3), Wakeup(2, 3) ...
+[] active_2 == 1 -> active_3 = 1
+// Wakeup(0, 3), Wakeup(1, 3), Wakeup(2, 3) ...
+[] active_4 == 1 -> active_3 = 1
+// Wakeup(0, 3), Wakeup(1, 3), Wakeup(2, 3) ...
+[] active_5 == 1 -> active_3 = 1
+// Wakeup(0, 3), Wakeup(1, 3), Wakeup(2, 3) ...
+[] active_6 == 1 -> active_3 = 1
+// Wakeup(0, 4), Wakeup(1, 4), Wakeup(2, 4) ...
+[] active_0 == 1 -> active_4 = 1
+// Wakeup(0, 4), Wakeup(1, 4), Wakeup(2, 4) ...
+[] active_1 == 1 -> active_4 = 1
+// Wakeup(0, 4), Wakeup(1, 4), Wakeup(2, 4) ...
+[] active_2 == 1 -> active_4 = 1
+// Wakeup(0, 4), Wakeup(1, 4), Wakeup(2, 4) ...
+[] active_3 == 1 -> active_4 = 1
+// Wakeup(0, 4), Wakeup(1, 4), Wakeup(2, 4) ...
+[] active_5 == 1 -> active_4 = 1
+// Wakeup(0, 4), Wakeup(1, 4), Wakeup(2, 4) ...
+[] active_6 == 1 -> active_4 = 1
+// Wakeup(0, 5), Wakeup(1, 5), Wakeup(2, 5) ...
+[] active_0 == 1 -> active_5 = 1
+// Wakeup(0, 5), Wakeup(1, 5), Wakeup(2, 5) ...
+[] active_1 == 1 -> active_5 = 1
+// Wakeup(0, 5), Wakeup(1, 5), Wakeup(2, 5) ...
+[] active_2 == 1 -> active_5 = 1
+// Wakeup(0, 5), Wakeup(1, 5), Wakeup(2, 5) ...
+[] active_3 == 1 -> active_5 = 1
+// Wakeup(0, 5), Wakeup(1, 5), Wakeup(2, 5) ...
+[] active_4 == 1 -> active_5 = 1
+// Wakeup(0, 5), Wakeup(1, 5), Wakeup(2, 5) ...
+[] active_6 == 1 -> active_5 = 1
+// Wakeup(0, 6), Wakeup(1, 6), Wakeup(2, 6) ...
+[] active_0 == 1 -> active_6 = 1
+// Wakeup(0, 6), Wakeup(1, 6), Wakeup(2, 6) ...
+[] active_1 == 1 -> active_6 = 1
+// Wakeup(0, 6), Wakeup(1, 6), Wakeup(2, 6) ...
+[] active_2 == 1 -> active_6 = 1
+// Wakeup(0, 6), Wakeup(1, 6), Wakeup(2, 6) ...
+[] active_3 == 1 -> active_6 = 1
+// Wakeup(0, 6), Wakeup(1, 6), Wakeup(2, 6) ...
+[] active_4 == 1 -> active_6 = 1
+// Wakeup(0, 6), Wakeup(1, 6), Wakeup(2, 6) ...
+[] active_5 == 1 -> active_6 = 1
+// Wakeup(1, 0), Wakeup(2, 0), Wakeup(3, 0) ...
+[] active_1 == 1 -> active_0 = 1
+// Wakeup(1, 0), Wakeup(2, 0), Wakeup(3, 0) ...
+[] active_2 == 1 -> active_0 = 1
+// Wakeup(1, 0), Wakeup(2, 0), Wakeup(3, 0) ...
+[] active_3 == 1 -> active_0 = 1
+// Wakeup(1, 0), Wakeup(2, 0), Wakeup(3, 0) ...
+[] active_4 == 1 -> active_0 = 1
+// Wakeup(1, 0), Wakeup(2, 0), Wakeup(3, 0) ...
+[] active_5 == 1 -> active_0 = 1
+// Wakeup(1, 0), Wakeup(2, 0), Wakeup(3, 0) ...
+[] active_6 == 1 -> active_0 = 1
+// DetectTermination
+[] active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && active_4 == 0 && active_5 == 0 && active_6 == 0 -> terminationDetected = 1
+// stuttering
+[] true -> active_0 = active_0
+
+// Quiescence: property Quiescence under 0 of the 1 fairness conditions
+// LTL: !(F((p0 & F(p1))))
+//   p0 := (active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && active_4 == 0 && active_5 == 0 && active_6 == 0)
+//   p1 := (active_0 == 1) || (active_1 == 1) || (active_2 == 1) || (active_3 == 1) || (active_4 == 1) || (active_5 == 1) || (active_6 == 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q2
+trans!(q0, q0): true
+trans(q1, q0): active_0 == 1
+trans(q1, q0): active_1 == 1
+trans(q1, q0): active_2 == 1
+trans(q1, q0): active_3 == 1
+trans(q1, q0): active_4 == 1
+trans(q1, q0): active_5 == 1
+trans(q1, q0): active_6 == 1
+trans(q1, q1): active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && active_4 == 0 && active_5 == 0 && active_6 == 0
+trans(q2, q1): active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && active_4 == 0 && active_5 == 0 && active_6 == 0
+trans(q2, q2): active_0 == 1
+trans(q2, q2): active_1 == 1
+trans(q2, q2): active_2 == 1
+trans(q2, q2): active_3 == 1
+trans(q2, q2): active_4 == 1
+trans(q2, q2): active_5 == 1
+trans(q2, q2): active_6 == 1
+
+rank(q2):
+  [] true -> 0
+
+rank(q0):
+  [] true -> inf
+
+rank(q1):
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && active_4 = 0 && active_5 = 0 && active_6 = 0 -> 0
+  [] active_0 < 0 -> inf
+  [] active_0 > 0 -> inf
+  [] active_0 = 0 && active_1 < 0 -> inf
+  [] active_0 = 0 && active_1 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && active_4 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && active_4 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && active_4 = 0 && active_5 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && active_4 = 0 && active_5 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && active_4 = 0 && active_5 = 0 && active_6 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && active_4 = 0 && active_5 = 0 && active_6 > 0 -> inf

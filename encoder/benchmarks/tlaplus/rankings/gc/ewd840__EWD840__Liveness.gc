@@ -1,0 +1,141 @@
+// TLA+ model ewd840__EWD840
+// 4 variables, 8 slots, 19 commands, 192 initial states
+//   active: active_0 active_1 active_2
+//   color: color_0 color_1 color_2
+//   tpos: tpos
+//   tcolor: tcolor
+//   color_0: 0="white", 1="black"
+//   color_1: 0="white", 1="black"
+//   color_2: 0="white", 1="black"
+//   tcolor: 0="white", 1="black"
+
+type active_0: 0..1
+type active_1: 0..1
+type active_2: 0..1
+type color_0: 0..1
+type color_1: 0..1
+type color_2: 0..1
+type tpos: 0..2
+type tcolor: 0..1
+type act: 0..1
+
+init: active_0 >= 0 && active_0 <= 1 && active_1 >= 0 && active_1 <= 1 && active_2 >= 0 && active_2 <= 1 && color_0 >= 0 && color_0 <= 1 && color_1 >= 0 && color_1 <= 1 && color_2 >= 0 && color_2 <= 1 && tpos >= 0 && tpos <= 2 && tcolor == 1 && act == 0
+
+// System
+[] tcolor == 1 && tpos == 0 -> act = 1; color_0 = 0; tpos = 2; tcolor = 0
+// System
+[] color_0 == 1 && tpos == 0 -> act = 1; color_0 = 0; tpos = 2; tcolor = 0
+// System
+[] color_1 == 1 && tpos == 1 -> act = 1; color_1 = 0; tpos = 0; tcolor = 1
+// System
+[] active_1 == 0 && color_1 == 0 && tpos == 1 -> act = 1; tpos = 0
+// System
+[] color_1 == 0 && tcolor == 1 && tpos == 1 -> act = 1; tpos = 0
+// System
+[] color_1 == 1 && tcolor == 1 && tpos == 1 -> act = 1; color_1 = 0; tpos = 0
+// System
+[] color_2 == 1 && tpos == 2 -> act = 1; color_2 = 0; tpos = 1; tcolor = 1
+// System
+[] active_2 == 0 && color_2 == 0 && tpos == 2 -> act = 1; tpos = 1
+// System
+[] color_2 == 0 && tcolor == 1 && tpos == 2 -> act = 1; tpos = 1
+// System
+[] color_2 == 1 && tcolor == 1 && tpos == 2 -> act = 1; color_2 = 0; tpos = 1
+// Environment
+[] active_0 == 1 -> act = 0; active_1 = 1; color_0 = 1
+// Environment
+[] active_0 == 1 -> act = 0; active_2 = 1; color_0 = 1
+// Environment
+[] active_0 == 1 -> act = 0; active_0 = 0
+// Environment
+[] active_1 == 1 -> act = 0; active_0 = 1
+// Environment
+[] active_2 == 1 -> act = 0; active_0 = 1
+// Environment
+[] active_1 == 1 -> act = 0; active_2 = 1; color_1 = 1
+// Environment
+[] active_1 == 1 -> act = 0; active_1 = 0
+// Environment
+[] active_2 == 1 -> act = 0; active_1 = 1
+// Environment
+[] active_2 == 1 -> act = 0; active_2 = 0
+// stuttering
+[] true -> act = 0
+
+// Liveness: property Liveness under 1 of the 1 fairness conditions
+// LTL: !(((G(F(p2)) | G(F(p3))) & F(p0 & G(p1))))
+//   p0 := (active_0 == 0 && active_1 == 0 && active_2 == 0)
+//   p1 := (tpos >= 1) || (tcolor == 1) || (color_0 == 1) || (active_0 == 1)
+//   p2 := (active_1 == 1 && active_2 == 1 && color_1 == 0 && color_2 == 0 && tcolor == 0 && tpos >= 1) || (active_1 == 1 && active_2 == 1 && color_0 == 0 && color_1 == 0 && color_2 == 0 && tcolor == 0) || (active_1 == 1 && color_0 == 0 && color_1 == 0 && tcolor == 0 && tpos <= 1) || (active_2 == 1 && color_2  ...
+//   p3 := (act == 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q0
+trans(q0, q0): true
+trans(q0, q1): active_0 == 0 && active_1 == 0 && active_2 == 0 && tpos >= 1
+trans(q0, q1): active_0 == 0 && active_1 == 0 && active_2 == 0 && tcolor == 1
+trans(q0, q1): active_0 == 0 && active_1 == 0 && active_2 == 0 && color_0 == 1
+trans!(q1, q1): act == 1 && tpos >= 1
+trans!(q1, q1): act == 1 && tcolor == 1
+trans!(q1, q1): act == 1 && color_0 == 1
+trans!(q1, q1): act == 1 && active_0 == 1
+trans!(q1, q1): active_1 == 1 && active_2 == 1 && color_1 == 0 && color_2 == 0 && tcolor == 0 && tpos >= 1
+trans!(q1, q1): active_2 == 1 && color_2 == 0 && tcolor == 0 && tpos == 2
+trans!(q1, q1): active_1 == 1 && color_1 == 0 && tcolor == 0 && tpos == 1
+trans!(q1, q1): active_0 == 1 && active_1 == 1 && active_2 == 1 && color_0 == 0 && color_1 == 0 && color_2 == 0 && tcolor == 0
+trans!(q1, q1): active_0 == 1 && active_1 == 1 && color_0 == 0 && color_1 == 0 && tcolor == 0 && tpos <= 1
+trans!(q1, q1): active_0 == 1 && color_0 == 0 && tcolor == 0 && tpos == 0
+trans!(q1, q2): act == 0 && tcolor == 1
+trans!(q1, q2): act == 0 && active_1 == 0 && tpos == 1
+trans!(q1, q2): act == 0 && color_1 == 1 && tpos == 1
+trans!(q1, q2): act == 0 && active_2 == 0 && tpos == 2
+trans!(q1, q2): act == 0 && color_2 == 1 && tpos == 2
+trans!(q1, q2): act == 0 && color_0 == 1 && tpos == 0
+trans(q2, q1): act == 1 && tpos >= 1
+trans(q2, q1): act == 1 && tcolor == 1
+trans(q2, q1): act == 1 && color_0 == 1
+trans(q2, q1): act == 1 && active_0 == 1
+trans(q2, q1): active_1 == 1 && active_2 == 1 && color_1 == 0 && color_2 == 0 && tcolor == 0 && tpos >= 1
+trans(q2, q1): active_2 == 1 && color_2 == 0 && tcolor == 0 && tpos == 2
+trans(q2, q1): active_1 == 1 && color_1 == 0 && tcolor == 0 && tpos == 1
+trans(q2, q1): active_0 == 1 && active_1 == 1 && active_2 == 1 && color_0 == 0 && color_1 == 0 && color_2 == 0 && tcolor == 0
+trans(q2, q1): active_0 == 1 && active_1 == 1 && color_0 == 0 && color_1 == 0 && tcolor == 0 && tpos <= 1
+trans(q2, q1): active_0 == 1 && color_0 == 0 && tcolor == 0 && tpos == 0
+trans(q2, q2): act == 0 && tcolor == 1
+trans(q2, q2): act == 0 && active_1 == 0 && tpos == 1
+trans(q2, q2): act == 0 && color_1 == 1 && tpos == 1
+trans(q2, q2): act == 0 && active_2 == 0 && tpos == 2
+trans(q2, q2): act == 0 && color_2 == 1 && tpos == 2
+trans(q2, q2): act == 0 && color_0 == 1 && tpos == 0
+
+rank(q0):
+  [] true -> 15
+
+rank(q1):
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 >= 0 && color_2 >= 0 && tcolor >= 0 && tpos >= 0 -> ((((((1 + act) + (3 * color_0)) + (3 * color_1)) + (3 * color_2)) + (3 * tcolor)) + tpos)
+  [] act < 0 -> inf
+  [] act >= 0 && active_0 < 0 -> inf
+  [] act >= 0 && active_0 > 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 > 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 > 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 >= 0 && color_2 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 >= 0 && color_2 >= 0 && tcolor < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 >= 0 && color_2 >= 0 && tcolor >= 0 && tpos < 0 -> inf
+
+rank(q2):
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 >= 0 && color_2 >= 0 && tcolor >= 0 && tpos >= 0 -> ((((((0 + act) + (3 * color_0)) + (3 * color_1)) + (3 * color_2)) + (3 * tcolor)) + tpos)
+  [] act < 0 -> inf
+  [] act >= 0 && active_0 < 0 -> inf
+  [] act >= 0 && active_0 > 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 > 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 > 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 >= 0 && color_2 < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 >= 0 && color_2 >= 0 && tcolor < 0 -> inf
+  [] act >= 0 && active_0 = 0 && active_1 = 0 && active_2 = 0 && color_0 >= 0 && color_1 >= 0 && color_2 >= 0 && tcolor >= 0 && tpos < 0 -> inf
