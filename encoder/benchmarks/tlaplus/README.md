@@ -47,6 +47,11 @@ properties, ...) or when a case split, DNF, or the number of commands exceeds it
   conditions: an auxiliary slot `act` records which fairness-relevant action the last step
   took, and `WF_v(A)` becomes `GF !ENABLED<<A>>_v | GF act_A` (`FG` for `SF`). A property is
   split into its top-level conjuncts (e.g. one instance per process for `\A p : P(p) ~> Q(p)`).
+  Each instance assumes only a minimal subset of the fairness conditions: conditions are dropped
+  greedily while the explicit product check says the property still holds (`--all-fairness`
+  keeps them all). Assuming less is a stronger property, so its proof proves the original, and
+  the automata get much smaller (e.g. 6 to 3 conditions and about 1650 to 200 transitions for
+  `SimpleAllocator`).
 - Spot (`ltl2tgba -B`) translates the negated property to a Büchi automaton, whose edge labels
   are lowered to guards with the slot ranges, and the automaton is written into the `.gc` file
   explicitly (no Spot needed downstream).
@@ -68,6 +73,9 @@ uv run --group tlaplus python benchmarks/tlaplus/run_tlaplus.py translate --max-
 uv run --group tlaplus python benchmarks/tlaplus/run_tlaplus.py prove --explicit --houdini --samples 50000 \
     --relational --minimize --synth-budget 300 --timeout 600 --jobs 3
 ```
+
+TLC runs in a container with its state files in a 2 GB tmpfs and stops once its state graph
+dump exceeds 1 GB (models without a known state count, e.g. failing ones, can be huge).
 
 `translate` writes `<work>/models.csv`, `<work>/instances.csv` and one `.gc` file per instance
 to `<work>/gc/` (`--work`, default `benchmarks/corpus/tlaplus`); TLC results are cached in

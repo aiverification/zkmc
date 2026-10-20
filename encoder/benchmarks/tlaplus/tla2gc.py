@@ -616,10 +616,10 @@ class FairnessInfo:
 def fairness_info(tr: Translation, actions: list) -> FairnessInfo:
     """Split the commands by the given actions (the specification's fairness conditions, and
     actions a property refers to), and number the combinations of actions a step takes."""
-    cacheable = actions == tr.fairness
-    cached = getattr(tr, "_fairness_info", None)
-    if cacheable and cached is not None:
-        return cached
+    key = tuple(id(a) for a in actions)
+    cache = tr.__dict__.setdefault("_fairness_infos", {})
+    if key in cache:
+        return cache[key]
     from layout import read_after
     from tla_sym import cube_formula
 
@@ -655,8 +655,8 @@ def fairness_info(tr: Translation, actions: list) -> FairnessInfo:
                         [Command(cube, c.assign, c.label) for cube, c, _ in regions],
                         [code.get(sig, 0) for _, _, sig in regions], enabled,
                         [[code[g] for g in sigs if i in g] for i in range(len(actions))])
-    if cacheable:
-        tr._fairness_info = info
+    if all(a in tr.fairness for a in actions):  # property actions are rebuilt per property
+        cache[key] = info
     return info
 
 
@@ -799,9 +799,61 @@ def _conjuncts(ev: Evaluator, node, env, label=""):
     return [(label, node, env)]
 
 
-def temporal_property(tr: Translation, name: str) -> list:
+def _instance(tr: Translation, pname: str, node, env, fairness: list, info_fairness: list):
+    """One property instance (a top-level conjunct) assuming `fairness` (a subset of the spec's
+    conditions); `act` tracks the actions of `info_fairness` (a superset) and of the property."""
+    aps = _APs(tr.ranges)
+    builder = _LTL(tr, aps)
+    neg_p = builder.build(node, env, False)
+    if neg_p == "false":
+        return None
+    actions = list(info_fairness) + builder.actions
+    info = fairness_info(tr, actions) if actions else None
+    ranges = tr.ranges_with({info.act_slot: (0, info.codes)}) if info else tr.ranges
+    aps.ranges = ranges
+    fair = []
+    if info:
+        act = Lin.var(info.act_slot)
+        taken = [disj(*(atom(act - c, "==") for c in info.taken[i])) for i in range(len(actions))]
+        for i, F in enumerate(info_fairness):
+            if F not in fairness:
+                continue
+            nen = aps.predicate(info.enabled[i], positive=False)
+            left = f"G(F({nen}))" if F.kind == "WF" else f"F(G({nen}))"
+            fair.append(_LTL._join([left, f"G(F({aps.predicate(taken[i])}))"], "|"))
+        m = len(info_fairness)
+        for j in range(len(builder.actions)):
+            i = m + j
+            neg_p = (neg_p.replace(f"@A{j}@", aps.predicate(taken[i]))
+                     .replace(f"@N{j}@", aps.predicate(taken[i], positive=False))
+                     .replace(f"@E{j}@", aps.predicate(info.enabled[i]))
+                     .replace(f"@D{j}@", aps.predicate(info.enabled[i], positive=False)))
+    spec = _LTL._join(fair + [neg_p], "&")
+    if spec == "false":
+        return None
+    desc = f"property {pname}"
+    if tr.fairness:
+        desc += f" under {len(fairness)} of the {len(tr.fairness)} fairness conditions"
+    prop = PropertyGC(pname, "temporal", desc, aps.preds, f"!({spec})")
+    try:
+        lower(prop, ranges, bool(tr.boot_slot))
+    except Tautology:
+        return None
+    if info and (fair or builder.actions):
+        prop.extra_slots = {info.act_slot: (0, info.codes)}
+        prop.commands, prop.act_of, prop.act_slot = info.commands, info.act_of, info.act_slot
+    prop.fairness_used = len(fairness)
+    return prop
+
+
+def temporal_property(tr: Translation, name: str, holds=None) -> list:
     """`PROPERTY name` under the specification's fairness, one instance per top-level conjunct:
-    Spot gets `!(fair & !P_i)`. Raises Tautology if every conjunct is trivial."""
+    Spot gets `!(fair & !P_i)`. Raises Tautology if every conjunct is trivial.
+
+    With `holds` (a function deciding a rendered `.gc` instance, e.g. by explicit search), each
+    instance only assumes a minimal subset of the fairness conditions: conditions are dropped
+    greedily while the property still holds. Assuming less is a stronger property, so a proof of
+    the instance proves the original one; the automaton gets much smaller."""
     ev = tr.ev
     d, scope = _resolve_def(ev, name)
     out = []
@@ -817,44 +869,17 @@ def temporal_property(tr: Translation, name: str) -> list:
             return [prop]
         parts = _conjuncts(ev, d.body, scope.env)
         for k, (label, node, env) in enumerate(parts):
-            aps = _APs(tr.ranges)
-            builder = _LTL(tr, aps)
-            neg_p = builder.build(node, env, False)
-            if neg_p == "false":
-                continue
-            actions = list(tr.fairness) + builder.actions
-            info = fairness_info(tr, actions) if actions else None
-            ranges = tr.ranges_with({info.act_slot: (0, info.codes)}) if info else tr.ranges
-            aps.ranges = ranges
-            fair = []
-            if info:
-                act = Lin.var(info.act_slot)
-                taken = [disj(*(atom(act - c, "==") for c in info.taken[i])) for i in range(len(actions))]
-                for i, F in enumerate(tr.fairness):
-                    nen = aps.predicate(info.enabled[i], positive=False)
-                    left = f"G(F({nen}))" if F.kind == "WF" else f"F(G({nen}))"
-                    fair.append(_LTL._join([left, f"G(F({aps.predicate(taken[i])}))"], "|"))
-                m = len(tr.fairness)
-                for j in range(len(builder.actions)):
-                    i = m + j
-                    neg_p = (neg_p.replace(f"@A{j}@", aps.predicate(taken[i]))
-                             .replace(f"@N{j}@", aps.predicate(taken[i], positive=False))
-                             .replace(f"@E{j}@", aps.predicate(info.enabled[i]))
-                             .replace(f"@D{j}@", aps.predicate(info.enabled[i], positive=False)))
-            spec = _LTL._join(fair + [neg_p], "&")
-            if spec == "false":
-                continue
             pname = name if len(parts) == 1 else f"{name}[{label or k}]"
-            desc = f"property {pname}" + (f" under {len(tr.fairness)} fairness conditions" if tr.fairness else "")
-            prop = PropertyGC(pname, "temporal", desc, aps.preds, f"!({spec})")
-            try:
-                lower(prop, ranges, bool(tr.boot_slot))
-            except Tautology:
-                continue
-            if info:
-                prop.extra_slots = {info.act_slot: (0, info.codes)}
-                prop.commands, prop.act_of, prop.act_slot = info.commands, info.act_of, info.act_slot
-            out.append(prop)
+            fairness = list(tr.fairness)
+            if holds is not None and fairness:
+                for F in list(fairness):
+                    trial = [G for G in fairness if G is not F]
+                    prop = _instance(tr, pname, node, env, trial, tr.fairness)
+                    if prop is None or holds(tr.render(prop)):
+                        fairness = trial
+            prop = _instance(tr, pname, node, env, fairness, fairness)
+            if prop is not None:
+                out.append(prop)
     except (TooBig, RecursionError) as e:
         raise TranslationError(f"too large: {e}")
     except (EvalError, RuntimeError) as e:
