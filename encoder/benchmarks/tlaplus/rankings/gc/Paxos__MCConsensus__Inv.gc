@@ -1,0 +1,37 @@
+// TLA+ model Paxos__MCConsensus
+// 1 variables, 3 slots, 3 commands, 4 initial states
+//   chosen: chosen_a chosen_b chosen_c
+//   chosen_a: "a" in set
+//   chosen_b: "b" in set
+//   chosen_c: "c" in set
+
+type chosen_a: 0..1
+type chosen_b: 0..1
+type chosen_c: 0..1
+
+init: chosen_a >= 0 && chosen_a <= 1 && chosen_b >= 0 && chosen_b <= 1 && chosen_c >= 0 && chosen_c <= 1 && chosen_a + chosen_b <= 1 && chosen_a + chosen_c <= 1 && chosen_b + chosen_c <= 1 && chosen_a + chosen_b + chosen_c <= 1
+
+// 
+[] chosen_a == 0 && chosen_b == 0 && chosen_c == 0 -> chosen_a = 1
+// 
+[] chosen_a == 0 && chosen_b == 0 && chosen_c == 0 -> chosen_b = 1
+// 
+[] chosen_a == 0 && chosen_b == 0 && chosen_c == 0 -> chosen_c = 1
+// stuttering
+[] true -> chosen_a = chosen_a
+
+// Inv: invariant Inv
+// LTL: G(p0)
+//   p0 := (chosen_a + chosen_b + chosen_c <= 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q1
+trans!(q0, q0): true
+trans(q1, q0): chosen_a + chosen_b + chosen_c - 2 >= 0
+trans(q1, q1): chosen_a + chosen_b + chosen_c <= 1
+
+rank(q1):
+  [] (((chosen_a + chosen_b) + chosen_c) - 2) < 0 -> 0
+  [] (((chosen_a + chosen_b) + chosen_c) - 2) >= 0 -> inf
+
+rank(q0):
+  [] true -> inf

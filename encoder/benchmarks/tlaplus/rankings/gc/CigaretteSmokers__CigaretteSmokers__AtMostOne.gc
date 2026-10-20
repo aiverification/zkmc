@@ -1,0 +1,95 @@
+// TLA+ model CigaretteSmokers__CigaretteSmokers
+// 2 variables, 6 slots, 28 commands, 3 initial states
+//   smokers: smokers_matches_smoking smokers_paper_smoking smokers_tobacco_smoking
+//   dealer: dealer_matches dealer_paper dealer_tobacco
+//   dealer_matches: matches in set
+//   dealer_paper: paper in set
+//   dealer_tobacco: tobacco in set
+
+type smokers_matches_smoking: 0..1
+type smokers_paper_smoking: 0..1
+type smokers_tobacco_smoking: 0..1
+type dealer_matches: 0..1
+type dealer_paper: 0..1
+type dealer_tobacco: 0..1
+
+init: smokers_matches_smoking == 0 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 0 && dealer_matches >= 0 && dealer_matches <= 1 && dealer_paper >= 0 && dealer_paper <= 1 && dealer_tobacco >= 0 && dealer_tobacco <= 1 && -dealer_matches - dealer_paper - dealer_tobacco == -2 && -dealer_matches - dealer_paper <= -1 && -dealer_matches - dealer_tobacco <= -1 && -dealer_paper - dealer_tobacco <= -1 && dealer_matches + dealer_paper + dealer_tobacco <= 2 && -dealer_matches - dealer_paper - dealer_tobacco <= -2
+
+// startSmoking
+[] dealer_matches == 1 && dealer_paper == 1 && dealer_tobacco == 1 -> smokers_matches_smoking = 1; smokers_paper_smoking = 1; smokers_tobacco_smoking = 1; dealer_matches = 0; dealer_paper = 0; dealer_tobacco = 0
+// startSmoking
+[] dealer_matches == 0 && dealer_paper == 1 && dealer_tobacco == 1 -> smokers_matches_smoking = 1; smokers_paper_smoking = 0; smokers_tobacco_smoking = 0; dealer_paper = 0; dealer_tobacco = 0
+// startSmoking
+[] dealer_matches == 1 && dealer_paper == 0 && dealer_tobacco == 1 -> smokers_matches_smoking = 0; smokers_paper_smoking = 1; smokers_tobacco_smoking = 0; dealer_matches = 0; dealer_tobacco = 0
+// startSmoking
+[] dealer_matches == 1 && dealer_paper == 1 && dealer_tobacco == 0 -> smokers_matches_smoking = 0; smokers_paper_smoking = 0; smokers_tobacco_smoking = 1; dealer_matches = 0; dealer_paper = 0
+// startSmoking
+[] dealer_matches == 1 && dealer_paper == 0 && dealer_tobacco == 0 -> smokers_matches_smoking = 0; smokers_paper_smoking = 0; smokers_tobacco_smoking = 0; dealer_matches = 0
+// startSmoking
+[] dealer_matches == 0 && dealer_paper == 1 && dealer_tobacco == 0 -> smokers_matches_smoking = 0; smokers_paper_smoking = 0; smokers_tobacco_smoking = 0; dealer_paper = 0
+// startSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 1 -> smokers_matches_smoking = 0; smokers_paper_smoking = 0; smokers_tobacco_smoking = 0; dealer_tobacco = 0
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 0 -> smokers_matches_smoking = 0; dealer_matches = 1; dealer_paper = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 1 && smokers_tobacco_smoking == 0 -> smokers_paper_smoking = 0; dealer_matches = 1; dealer_paper = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 1 -> smokers_tobacco_smoking = 0; dealer_matches = 1; dealer_paper = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_paper_smoking == 1 && smokers_tobacco_smoking == 1 -> dealer_matches = 1; dealer_paper = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 0 -> dealer_matches = 1; dealer_paper = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_paper_smoking == 1 -> dealer_matches = 1; dealer_paper = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_tobacco_smoking == 1 -> dealer_matches = 1; dealer_paper = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 0 -> smokers_matches_smoking = 0; dealer_matches = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 1 && smokers_tobacco_smoking == 0 -> smokers_paper_smoking = 0; dealer_matches = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 1 -> smokers_tobacco_smoking = 0; dealer_matches = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_paper_smoking == 1 && smokers_tobacco_smoking == 1 -> dealer_matches = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 0 -> dealer_matches = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_paper_smoking == 1 -> dealer_matches = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_tobacco_smoking == 1 -> dealer_matches = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 0 -> smokers_matches_smoking = 0; dealer_paper = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 1 && smokers_tobacco_smoking == 0 -> smokers_paper_smoking = 0; dealer_paper = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 1 -> smokers_tobacco_smoking = 0; dealer_paper = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_paper_smoking == 1 && smokers_tobacco_smoking == 1 -> dealer_paper = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 0 && smokers_paper_smoking == 0 && smokers_tobacco_smoking == 0 -> dealer_paper = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_paper_smoking == 1 -> dealer_paper = 1; dealer_tobacco = 1
+// stopSmoking
+[] dealer_matches == 0 && dealer_paper == 0 && dealer_tobacco == 0 && smokers_matches_smoking == 1 && smokers_tobacco_smoking == 1 -> dealer_paper = 1; dealer_tobacco = 1
+// stuttering
+[] true -> smokers_matches_smoking = smokers_matches_smoking
+
+// AtMostOne: invariant AtMostOne
+// LTL: G(p0)
+//   p0 := (smokers_matches_smoking + smokers_paper_smoking + smokers_tobacco_smoking <= 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q1
+trans!(q0, q0): true
+trans(q1, q0): smokers_matches_smoking + smokers_paper_smoking + smokers_tobacco_smoking - 2 >= 0
+trans(q1, q1): smokers_matches_smoking + smokers_paper_smoking + smokers_tobacco_smoking <= 1
+
+rank(q1):
+  [] ((((((-1 * dealer_matches) + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) + (-2 * smokers_matches_smoking)) + (-2 * smokers_paper_smoking)) + (-2 * smokers_tobacco_smoking)) = -2 && ((dealer_matches + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) <= 0 && ((dealer_paper + (-1 * dealer_matches)) + (-1 * dealer_tobacco)) <= 0 && ((dealer_tobacco + (-1 * dealer_matches)) + (-1 * dealer_paper)) <= 0 -> 0
+  [] ((((((-1 * dealer_matches) + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) + (-2 * smokers_matches_smoking)) + (-2 * smokers_paper_smoking)) + (-2 * smokers_tobacco_smoking)) < -2 -> inf
+  [] ((((((-1 * dealer_matches) + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) + (-2 * smokers_matches_smoking)) + (-2 * smokers_paper_smoking)) + (-2 * smokers_tobacco_smoking)) > -2 -> inf
+  [] ((((((-1 * dealer_matches) + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) + (-2 * smokers_matches_smoking)) + (-2 * smokers_paper_smoking)) + (-2 * smokers_tobacco_smoking)) = -2 && ((dealer_matches + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) > 0 -> inf
+  [] ((((((-1 * dealer_matches) + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) + (-2 * smokers_matches_smoking)) + (-2 * smokers_paper_smoking)) + (-2 * smokers_tobacco_smoking)) = -2 && ((dealer_matches + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) <= 0 && ((dealer_paper + (-1 * dealer_matches)) + (-1 * dealer_tobacco)) > 0 -> inf
+  [] ((((((-1 * dealer_matches) + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) + (-2 * smokers_matches_smoking)) + (-2 * smokers_paper_smoking)) + (-2 * smokers_tobacco_smoking)) = -2 && ((dealer_matches + (-1 * dealer_paper)) + (-1 * dealer_tobacco)) <= 0 && ((dealer_paper + (-1 * dealer_matches)) + (-1 * dealer_tobacco)) <= 0 && ((dealer_tobacco + (-1 * dealer_matches)) + (-1 * dealer_paper)) > 0 -> inf
+
+rank(q0):
+  [] true -> inf
