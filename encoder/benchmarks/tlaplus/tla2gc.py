@@ -868,7 +868,14 @@ def temporal_property(tr: Translation, name: str, holds=None) -> list:
             lower(prop, tr.ranges, bool(tr.boot_slot))
             return [prop]
         parts = _conjuncts(ev, d.body, scope.env)
+        counts = {}
+        for label, _, _ in parts:
+            counts[label] = counts.get(label, 0) + 1
+        seen = {}
         for k, (label, node, env) in enumerate(parts):
+            if label and counts[label] > 1:  # several conjuncts under one binding
+                seen[label] = seen.get(label, 0) + 1
+                label = f"{label},{seen[label]}"
             pname = name if len(parts) == 1 else f"{name}[{label or k}]"
             fairness = list(tr.fairness)
             if holds is not None and fairness:

@@ -285,6 +285,12 @@ def _worker(fn_name, task, q):
         _, hard = resource.getrlimit(resource.RLIMIT_AS)
         resource.setrlimit(resource.RLIMIT_AS, (hard, hard))
     fn = globals()[fn_name]
+
+    def where():
+        try:
+            return Path(task["phase_file"]).read_text() + ": "
+        except (KeyError, OSError):
+            return ""
     try:
         row = fn(task)
         lift()
@@ -292,12 +298,12 @@ def _worker(fn_name, task, q):
     except MemoryError:
         lift()
         q.put({task["key_field"]: task[task["key_field"]], "status": "memory",
-               "detail": f">{task['mem_limit_mb']} MB"})
+               "detail": f"{where()}>{task['mem_limit_mb']} MB"})
     except Exception as e:  # pragma: no cover - defensive
         lift()
         q.put({task["key_field"]: task[task["key_field"]],
                "status": "memory" if "out of memory" in str(e) else "error",
-               "detail": f"{type(e).__name__}: {str(e).splitlines()[0][:100] if str(e) else ''}"})
+               "detail": f"{where()}{type(e).__name__}: {str(e).splitlines()[0][:100] if str(e) else ''}"})
 
 
 def run_pool(fn_name: str, tasks: list, key_field: str, jobs: int, timeout: float, journal: Path,
@@ -384,7 +390,8 @@ def main(argv=None) -> int:
                          "'safety failure,liveness failure' for a soundness check: some property of each "
                          "such model must fail).")
     ap.add_argument("--specs", default=None, help="Comma-separated spec directories.")
-    ap.add_argument("--instances", default=None, help="Comma-separated instance names (prove).")
+    ap.add_argument("--instances", nargs="+", default=None,
+                    help="Instance names (prove); they may contain commas.")
     ap.add_argument("--kinds", default="inv,prop", help="Instance kinds to prove.")
     ap.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--timeout", type=float, default=600.0)
@@ -441,7 +448,7 @@ def main(argv=None) -> int:
     with open(args.work / "instances.csv") as fh:
         instances = [r for r in csv.DictReader(fh) if r["status"] == "ok" and r["kind"] in args.kinds.split(",")]
     if args.instances:
-        wanted = set(args.instances.split(","))
+        wanted = set(args.instances)
         instances = [r for r in instances if r["instance"] in wanted]
     emit = args.work / "rankings"
     emit.mkdir(parents=True, exist_ok=True)
