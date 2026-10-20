@@ -1,0 +1,86 @@
+// MCC instance CryptoMiner-PT-D10N000
+// 22 places, 22 transitions
+// places: p0=resource_c0, p1=resource_c1, p2=resource_c10, p3=resource_c2, p4=resource_c3, p5=resource_c4, p6=resource_c5, p7=resource_c6, p8=resource_c7, p9=resource_c8, p10=resource_c9, p11=state_c0, p12=state_c1, p13=state_c10, p14=state_c2, p15=state_c3, p16=state_c4, p17=state_c5, p18=state_c6, p19=state_c7, p20=state_c8, p21=state_c9
+
+init: p0 == 0 && p1 == 0 && p2 == 0 && p3 == 0 && p4 == 0 && p5 == 0 && p6 == 0 && p7 == 0 && p8 == 0 && p9 == 0 && p10 == 0 && p11 == 1 && p12 == 0 && p13 == 0 && p14 == 0 && p15 == 0 && p16 == 0 && p17 == 0 && p18 == 0 && p19 == 0 && p20 == 0 && p21 == 0
+
+// Compute_0
+[] p1 >= 1 && p12 >= 1 -> p1 = p1 - 1; p3 = p3 + 1
+// Compute_1
+[] p2 >= 1 && p13 >= 1 -> p0 = p0 + 1; p2 = p2 - 1
+// Compute_2
+[] p3 >= 1 && p14 >= 1 -> p3 = p3 - 1; p4 = p4 + 1
+// Compute_3
+[] p4 >= 1 && p15 >= 1 -> p4 = p4 - 1; p5 = p5 + 1
+// Compute_4
+[] p5 >= 1 && p16 >= 1 -> p5 = p5 - 1; p6 = p6 + 1
+// Compute_5
+[] p6 >= 1 && p17 >= 1 -> p6 = p6 - 1; p7 = p7 + 1
+// Compute_6
+[] p7 >= 1 && p18 >= 1 -> p7 = p7 - 1; p8 = p8 + 1
+// Compute_7
+[] p8 >= 1 && p19 >= 1 -> p8 = p8 - 1; p9 = p9 + 1
+// Compute_8
+[] p9 >= 1 && p20 >= 1 -> p9 = p9 - 1; p10 = p10 + 1
+// Compute_9
+[] p10 >= 1 && p21 >= 1 -> p2 = p2 + 1; p10 = p10 - 1
+// ComputeFirst_10
+[] p11 >= 1 -> p1 = p1 + 1
+// Exit_11
+[] p13 >= 1 -> p13 = p13 - 1
+// Go_12
+[] p11 >= 1 -> p11 = p11 - 1; p12 = p12 + 1
+// Go_13
+[] p12 >= 1 -> p12 = p12 - 1; p14 = p14 + 1
+// Go_14
+[] p14 >= 1 -> p14 = p14 - 1; p15 = p15 + 1
+// Go_15
+[] p15 >= 1 -> p15 = p15 - 1; p16 = p16 + 1
+// Go_16
+[] p16 >= 1 -> p16 = p16 - 1; p17 = p17 + 1
+// Go_17
+[] p17 >= 1 -> p17 = p17 - 1; p18 = p18 + 1
+// Go_18
+[] p18 >= 1 -> p18 = p18 - 1; p19 = p19 + 1
+// Go_19
+[] p19 >= 1 -> p19 = p19 - 1; p20 = p20 + 1
+// Go_20
+[] p20 >= 1 -> p20 = p20 - 1; p21 = p21 + 1
+// Go_21
+[] p21 >= 1 -> p13 = p13 + 1; p21 = p21 - 1
+// deadlock: stutter (MCC semantics)
+[] p11 <= 0 && p12 <= 0 && p13 <= 0 && p14 <= 0 && p15 <= 0 && p16 <= 0 && p17 <= 0 && p18 <= 0 && p19 <= 0 && p20 <= 0 && p21 <= 0 -> p0 = p0
+
+// CryptoMiner-PT-D10N000-LTLFireability-04
+// ap e0 := p13 >= 1
+// ap e1 := p11 >= 1
+// ap e2 := p12 >= 1
+// ap e3 := p14 >= 1
+// ap e4 := p15 >= 1
+// ap e5 := p16 >= 1
+// ap e6 := p17 >= 1
+// ap e7 := p18 >= 1
+// ap e8 := p19 >= 1
+// ap e9 := p20 >= 1
+// ap e10 := p21 >= 1
+// spec: "((G(F(G((e0))))) U ((e1 | e2 | e3 | e4 | e5 | e6 | e7 | e8 | e9 | e10)))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans!(q0, q0): p11 < 1 && p12 < 1 && p14 < 1 && p15 < 1 && p16 < 1 && p17 < 1 && p18 < 1 && p19 < 1 && p20 < 1 && p21 < 1
+trans!(q0, q1): p11 < 1 && p12 < 1 && p14 < 1 && p15 < 1 && p16 < 1 && p17 < 1 && p18 < 1 && p19 < 1 && p20 < 1 && p21 < 1
+trans!(q1, q1): p13 < 1
+trans!(q1, q2): p13 >= 1
+trans(q2, q1): p13 < 1
+trans(q2, q2): p13 >= 1
+
+rank(q0):
+  [] p11 = 1 -> 0
+  [] p11 < 1 -> inf
+  [] p11 > 1 -> inf
+
+rank(q1):
+  [] true -> inf
+
+rank(q2):
+  [] true -> inf

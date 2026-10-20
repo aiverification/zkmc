@@ -1,0 +1,173 @@
+// MCC instance ERK-PT-000001
+// 11 places, 11 transitions
+// places: p0=Raf1Star, p1=RKIP, p2=Raf1Star_RKIP, p3=ERKPP, p4=MEKPP_ERK, p5=Raf1Star_RKIP_ERKPP, p6=RKIPP_RP, p7=MEKPP, p8=ERK, p9=RKIPP, p10=RP
+
+init: p0 == 1 && p1 == 1 && p2 == 0 && p3 == 0 && p4 == 0 && p5 == 0 && p6 == 0 && p7 == 1 && p8 == 1 && p9 == 0 && p10 == 1
+
+// r1
+[] p1 >= 1 && p0 >= 1 -> p0 = p0 - 1; p1 = p1 - 1; p2 = p2 + 1
+// r2
+[] p2 >= 1 -> p0 = p0 + 1; p1 = p1 + 1; p2 = p2 - 1
+// r3
+[] p3 >= 1 && p2 >= 1 -> p2 = p2 - 1; p3 = p3 - 1; p5 = p5 + 1
+// r4
+[] p5 >= 1 -> p2 = p2 + 1; p3 = p3 + 1; p5 = p5 - 1
+// r6
+[] p8 >= 1 && p7 >= 1 -> p4 = p4 + 1; p7 = p7 - 1; p8 = p8 - 1
+// r7
+[] p4 >= 1 -> p4 = p4 - 1; p7 = p7 + 1; p8 = p8 + 1
+// r9
+[] p9 >= 1 && p10 >= 1 -> p6 = p6 + 1; p9 = p9 - 1; p10 = p10 - 1
+// r10
+[] p6 >= 1 -> p6 = p6 - 1; p9 = p9 + 1; p10 = p10 + 1
+// r5
+[] p5 >= 1 -> p0 = p0 + 1; p5 = p5 - 1; p8 = p8 + 1; p9 = p9 + 1
+// r8
+[] p4 >= 1 -> p3 = p3 + 1; p4 = p4 - 1; p7 = p7 + 1
+// r11
+[] p6 >= 1 -> p1 = p1 + 1; p6 = p6 - 1; p10 = p10 + 1
+
+// ERK-PT-000001-LTLCardinality-04
+// ap a0 := p10 <= p0
+// ap a1 := p5 <= p9
+// ap a2 := p10 <= p3
+// ap a3 := p9 <= p0
+// ap a4 := 2 <= p8
+// spec: "((G((!(a0) | X(a1)))) U (((((((a2) U (G(a3)))) U (a4))) U (a3))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans!(q0, q0): p9 > p0
+trans!(q0, q1): p9 > p0 && 2 > p8 && p10 > p3 && p10 <= p0
+trans!(q0, q2): p9 > p0 && 2 > p8 && p10 > p3
+trans!(q0, q3): p9 > p0 && 2 > p8 && p10 <= p3
+trans!(q0, q4): p9 > p0 && 2 > p8 && p10 <= p3
+trans!(q0, q5): p9 > p0 && 2 > p8 && p10 <= p3 && p10 <= p0
+trans!(q0, q6): p9 > p0 && 2 > p8 && p10 <= p3 && p10 <= p0
+trans!(q0, q7): p9 > p0 && 2 <= p8 && p10 <= p0
+trans!(q0, q7): p9 > p0 && p10 <= p3 && p10 <= p0
+trans(q1, q8): p5 > p9
+trans(q2, q1): p10 <= p0
+trans(q2, q2): true
+trans(q3, q1): p9 > p0 && p10 > p3 && p10 <= p0
+trans(q3, q2): p9 > p0 && p10 > p3
+trans(q3, q3): p10 <= p3
+trans(q3, q5): p10 <= p3 && p10 <= p0
+trans(q3, q9): p9 <= p0 && p10 > p3
+trans(q3, q10): p9 <= p0 && p10 > p3 && p10 <= p0
+trans(q4, q1): p9 > p0 && 2 > p8 && p10 > p3 && p10 <= p0
+trans(q4, q2): p9 > p0 && 2 > p8 && p10 > p3
+trans(q4, q3): 2 > p8 && p10 <= p3
+trans(q4, q4): p9 <= p0 && 2 > p8
+trans(q4, q4): 2 > p8 && p10 <= p3
+trans(q4, q5): 2 > p8 && p10 <= p3 && p10 <= p0
+trans(q4, q6): p9 <= p0 && 2 > p8 && p10 <= p0
+trans(q4, q6): 2 > p8 && p10 <= p3 && p10 <= p0
+trans(q4, q9): p9 <= p0 && 2 > p8 && p10 > p3
+trans(q4, q10): p9 <= p0 && 2 > p8 && p10 > p3 && p10 <= p0
+trans(q5, q8): p9 > p0 && p10 > p3 && p5 > p9
+trans(q5, q11): p9 <= p0 && p10 > p3 && p5 > p9
+trans(q5, q12): p10 <= p3 && p5 > p9
+trans(q6, q8): p9 > p0 && 2 > p8 && p10 > p3 && p5 > p9
+trans(q6, q11): p9 <= p0 && 2 > p8 && p10 > p3 && p5 > p9
+trans(q6, q12): 2 > p8 && p10 <= p3 && p5 > p9
+trans(q6, q13): p9 <= p0 && 2 > p8 && p5 > p9
+trans(q6, q13): 2 > p8 && p10 <= p3 && p5 > p9
+trans(q7, q8): p9 > p0 && 2 > p8 && p10 > p3 && p5 > p9
+trans(q7, q12): p9 > p0 && 2 > p8 && p10 <= p3 && p5 > p9
+trans(q7, q13): p9 > p0 && 2 > p8 && p10 <= p3 && p5 > p9
+trans(q7, q14): p9 > p0 && 2 <= p8 && p5 > p9
+trans(q7, q14): p9 > p0 && p10 <= p3 && p5 > p9
+trans!(q8, q8): true
+trans(q9, q1): p9 > p0 && p10 <= p0
+trans(q9, q2): p9 > p0
+trans(q9, q9): p9 <= p0
+trans(q9, q10): p9 <= p0 && p10 <= p0
+trans(q10, q8): p9 > p0 && p5 > p9
+trans(q10, q11): p9 <= p0 && p5 > p9
+trans(q11, q8): p9 > p0
+trans(q11, q11): p9 <= p0
+trans!(q12, q8): p9 > p0 && p10 > p3
+trans!(q12, q11): p9 <= p0 && p10 > p3
+trans!(q12, q12): p9 > p0 && p10 <= p3
+trans!(q12, q15): p9 <= p0 && p10 <= p3
+trans!(q13, q8): p9 > p0 && 2 > p8 && p10 > p3
+trans!(q13, q11): p9 <= p0 && 2 > p8 && p10 > p3
+trans!(q13, q12): 2 > p8 && p10 <= p3
+trans!(q13, q13): p9 <= p0 && 2 > p8
+trans!(q13, q13): 2 > p8 && p10 <= p3
+trans!(q14, q8): p9 > p0 && 2 > p8 && p10 > p3
+trans!(q14, q12): p9 > p0 && 2 > p8 && p10 <= p3
+trans!(q14, q13): p9 > p0 && 2 > p8 && p10 <= p3
+trans!(q14, q14): p9 > p0 && 2 <= p8
+trans!(q14, q14): p9 > p0 && p10 <= p3
+trans(q15, q8): p9 > p0 && p10 > p3
+trans(q15, q11): p9 <= p0 && p10 > p3
+trans(q15, q12): p9 > p0 && p10 <= p3
+trans(q15, q15): p9 <= p0 && p10 <= p3
+
+rank(q0):
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 >= 0 && p3 < 1 && p4 < 1 && p9 < 1 && 2 > p8 && p10 > p3 && p10 <= p0 && p5 <= p9 -> 0
+  [] ((p0 + p2) + p5) < 1 -> inf
+  [] ((p0 + p2) + p5) > 1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) < 1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) > 1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) < 1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) > 1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) < 0 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) > 0 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) < -1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) > -1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 < 0 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 >= 0 && p3 >= 1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 >= 0 && p3 < 1 && p4 >= 1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 >= 0 && p3 < 1 && p4 < 1 && p9 >= 1 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 >= 0 && p3 < 1 && p4 < 1 && p9 < 1 && 2 <= p8 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 >= 0 && p3 < 1 && p4 < 1 && p9 < 1 && 2 > p8 && p10 <= p3 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 >= 0 && p3 < 1 && p4 < 1 && p9 < 1 && 2 > p8 && p10 > p3 && p10 > p0 -> inf
+  [] ((p0 + p2) + p5) = 1 && (p10 + p6) = 1 && (p4 + p7) = 1 && (((((-1 * p0) + (-1 * p2)) + p3) + p4) + p8) = 0 && ((((-1 * p0) + p1) + (-1 * p10)) + p9) = -1 && p2 >= 0 && p3 < 1 && p4 < 1 && p9 < 1 && 2 > p8 && p10 > p3 && p10 <= p0 && p5 > p9 -> inf
+
+rank(q1):
+  [] true -> inf
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] true -> inf
+
+rank(q4):
+  [] true -> inf
+
+rank(q5):
+  [] true -> inf
+
+rank(q6):
+  [] true -> inf
+
+rank(q7):
+  [] true -> inf
+
+rank(q8):
+  [] true -> inf
+
+rank(q9):
+  [] true -> inf
+
+rank(q10):
+  [] true -> inf
+
+rank(q11):
+  [] true -> inf
+
+rank(q12):
+  [] true -> inf
+
+rank(q13):
+  [] true -> inf
+
+rank(q14):
+  [] true -> inf
+
+rank(q15):
+  [] true -> inf

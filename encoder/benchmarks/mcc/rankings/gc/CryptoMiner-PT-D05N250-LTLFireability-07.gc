@@ -1,0 +1,62 @@
+// MCC instance CryptoMiner-PT-D05N250
+// 18 places, 18 transitions
+// places: p0=capacity_c0, p1=capacity_c1, p2=capacity_c2, p3=capacity_c3, p4=capacity_c4, p5=capacity_c5, p6=resource_c0, p7=resource_c1, p8=resource_c2, p9=resource_c3, p10=resource_c4, p11=resource_c5, p12=state_c0, p13=state_c1, p14=state_c2, p15=state_c3, p16=state_c4, p17=state_c5
+
+init: p0 == 250 && p1 == 0 && p2 == 0 && p3 == 0 && p4 == 0 && p5 == 0 && p6 == 0 && p7 == 0 && p8 == 0 && p9 == 0 && p10 == 0 && p11 == 0 && p12 == 1 && p13 == 0 && p14 == 0 && p15 == 0 && p16 == 0 && p17 == 0
+
+// Compute_0
+[] p1 >= 1 && p7 >= 1 && p13 >= 1 -> p1 = p1 - 1; p7 = p7 - 1; p8 = p8 + 1
+// Compute_1
+[] p2 >= 1 && p8 >= 1 && p14 >= 1 -> p2 = p2 - 1; p8 = p8 - 1; p9 = p9 + 1
+// Compute_2
+[] p3 >= 1 && p9 >= 1 && p15 >= 1 -> p3 = p3 - 1; p9 = p9 - 1; p10 = p10 + 1
+// Compute_3
+[] p4 >= 1 && p10 >= 1 && p16 >= 1 -> p4 = p4 - 1; p10 = p10 - 1; p11 = p11 + 1
+// Compute_4
+[] p5 >= 1 && p11 >= 1 && p17 >= 1 -> p5 = p5 - 1; p6 = p6 + 1; p11 = p11 - 1
+// ComputeFirst_5
+[] p0 >= 1 && p12 >= 1 -> p0 = p0 - 1; p7 = p7 + 1
+// Exit_6
+[] p17 >= 1 -> p17 = p17 - 1
+// Go_7
+[] p12 >= 1 -> p12 = p12 - 1; p13 = p13 + 1
+// Go_8
+[] p13 >= 1 -> p13 = p13 - 1; p14 = p14 + 1
+// Go_9
+[] p14 >= 1 -> p14 = p14 - 1; p15 = p15 + 1
+// Go_10
+[] p15 >= 1 -> p15 = p15 - 1; p16 = p16 + 1
+// Go_11
+[] p16 >= 1 -> p16 = p16 - 1; p17 = p17 + 1
+// Transfer_12
+[] p0 >= 1 -> p0 = p0 - 1; p1 = p1 + 1
+// Transfer_13
+[] p1 >= 1 -> p1 = p1 - 1; p2 = p2 + 1
+// Transfer_14
+[] p2 >= 1 -> p2 = p2 - 1; p3 = p3 + 1
+// Transfer_15
+[] p3 >= 1 -> p3 = p3 - 1; p4 = p4 + 1
+// Transfer_16
+[] p4 >= 1 -> p4 = p4 - 1; p5 = p5 + 1
+// Transfer_17
+[] p5 >= 1 -> p0 = p0 + 1; p5 = p5 - 1
+// deadlock: stutter (MCC semantics)
+[] p0 <= 0 && p1 <= 0 && p2 <= 0 && p3 <= 0 && p4 <= 0 && p5 <= 0 && p12 <= 0 && p13 <= 0 && p14 <= 0 && p15 <= 0 && p16 <= 0 && p17 <= 0 -> p0 = p0
+
+// CryptoMiner-PT-D05N250-LTLFireability-07
+// ap e0 := p0 >= 1
+// ap e1 := p1 >= 1
+// ap e2 := p2 >= 1
+// ap e3 := p3 >= 1
+// ap e4 := p4 >= 1
+// ap e5 := p5 >= 1
+// spec: "((F((e0 | e1 | e2 | e3 | e4 | e5))) U ((F((e0 | e1 | e2 | e3 | e4 | e5)) | X(F((e0 | e1 | e2 | e3 | e4 | e5))))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans!(q0, q0): p0 < 1 && p1 < 1 && p2 < 1 && p3 < 1 && p4 < 1 && p5 < 1
+
+rank(q0):
+  [] p0 = 250 -> 0
+  [] p0 < 250 -> inf
+  [] p0 > 250 -> inf

@@ -1,0 +1,97 @@
+// MCC instance Sudoku-PT-AN01
+// 4 places, 1 transitions
+// places: p0=Rows_0_0, p1=Board_0_0_0, p2=Cells_0_0, p3=Columns_0_0
+
+init: p0 == 1 && p1 == 0 && p2 == 1 && p3 == 1
+
+// select_0_0_0
+[] p2 >= 1 && p3 >= 1 && p0 >= 1 -> p0 = p0 - 1; p1 = p1 + 1; p2 = p2 - 1; p3 = p3 - 1
+// deadlock: stutter (MCC semantics)
+[] p3 <= 0 -> p0 = p0
+
+// Sudoku-PT-AN01-LTLCardinality-04
+// ap a0 := p3 <= p0
+// ap a1 := p0 <= p3
+// ap a2 := 2 <= p1
+// spec: "G((X(X(X(X(a0)))) | !(G(((G(F(a1))) U (a2))))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q0): true
+trans(q0, q1): 2 > p1
+trans(q0, q2): 2 <= p1
+trans(q1, q3): true
+trans(q2, q3): 2 > p1
+trans(q2, q4): 2 <= p1
+trans(q3, q5): true
+trans(q4, q5): 2 > p1
+trans(q4, q6): 2 <= p1
+trans(q5, q7): true
+trans(q6, q7): 2 > p1
+trans(q6, q8): 2 <= p1
+trans(q7, q9): p3 > p0
+trans(q8, q9): 2 > p1 && p3 > p0
+trans(q8, q10): 2 <= p1 && p3 > p0
+trans!(q9, q9): p0 <= p3 && 2 <= p1
+trans!(q9, q11): 2 > p1
+trans!(q9, q12): p0 > p3 && 2 <= p1
+trans!(q10, q9): 2 > p1
+trans!(q10, q10): 2 <= p1
+trans(q11, q9): p0 <= p3 && 2 <= p1
+trans(q11, q11): 2 > p1
+trans(q11, q12): p0 > p3 && 2 <= p1
+trans(q12, q9): p0 <= p3
+trans(q12, q12): p0 > p3
+
+rank(q0):
+  [] (p0 + p1) = 1 && ((-1 * p0) + p3) = 0 && p3 >= 0 && p3 <= 1 -> 0
+  [] (p0 + p1) < 1 -> inf
+  [] (p0 + p1) > 1 -> inf
+  [] (p0 + p1) = 1 && ((-1 * p0) + p3) < 0 -> inf
+  [] (p0 + p1) = 1 && ((-1 * p0) + p3) > 0 -> inf
+  [] (p0 + p1) = 1 && ((-1 * p0) + p3) = 0 && p3 < 0 -> inf
+  [] (p0 + p1) = 1 && ((-1 * p0) + p3) = 0 && p3 >= 0 && p3 > 1 -> inf
+
+rank(q1):
+  [] p0 = 0 -> 0
+  [] p0 < 0 -> inf
+  [] p0 > 0 -> inf
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] p0 = 0 -> 0
+  [] p0 < 0 -> inf
+  [] p0 > 0 -> inf
+
+rank(q4):
+  [] true -> inf
+
+rank(q5):
+  [] p0 = 0 -> 0
+  [] p0 < 0 -> inf
+  [] p0 > 0 -> inf
+
+rank(q6):
+  [] true -> inf
+
+rank(q7):
+  [] p0 = 0 -> 0
+  [] p0 < 0 -> inf
+  [] p0 > 0 -> inf
+
+rank(q8):
+  [] true -> inf
+
+rank(q9):
+  [] true -> inf
+
+rank(q10):
+  [] true -> inf
+
+rank(q11):
+  [] true -> inf
+
+rank(q12):
+  [] true -> inf

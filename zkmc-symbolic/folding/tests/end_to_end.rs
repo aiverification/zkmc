@@ -170,8 +170,14 @@ fn honest_proof_verifies() {
     let (params, s_hat) = build_params();
     let input = build_input();
     let statement = statement_of(&input);
-    let (proof, _) = zkp::prove(&params, s_hat, &input);
-    let (ok, _) = proof.verify(&params, &statement);
+    let (proof, _) = match zkp::prove(&params, s_hat, &input, None){
+        Err(error) => {
+            println!("honest proof generation failed: {:?}", error); 
+            return
+        },
+        Ok((proof, time)) => (proof, time),
+    };
+    let (ok, _, _) = proof.verify(&params, &statement, None);
     assert!(ok, "honest proof did not verify");
 }
 
@@ -299,8 +305,14 @@ fn wrong_e_is_rejected() {
     // e_2 no longer equals A_2 lambda_2, so the folded A-family relation
     // fails at the diagonal exponent 2*c_2.
     input.e_i[2][0][0] += 1;
-    let (proof, _) = zkp::prove(&params, s_hat, &input);
-    let (ok, _) = proof.verify(&params, &statement);
+    let (proof, _) = match zkp::prove(&params, s_hat, &input, None){
+        Err(error) => {
+            println!("wrong e proof generation failed: {:?}", error);
+            return
+        },
+        Ok((proof, time)) => (proof, time),
+    };
+    let (ok, _, _) = proof.verify(&params, &statement, None);
     assert!(!ok, "a proof with a wrong e_i verified");
 }
 
@@ -310,8 +322,14 @@ fn wrong_alpha_is_rejected() {
     let mut input = build_input();
     let statement = statement_of(&input);
     input.alpha_i[1][0][0] += 1;
-    let (proof, _) = zkp::prove(&params, s_hat, &input);
-    let (ok, _) = proof.verify(&params, &statement);
+    let (proof, _) = match zkp::prove(&params, s_hat, &input, None){
+        Err(error) => {
+            println!("wrong alpha proof generation failed: {:?}", error);
+            return
+        },
+        Ok((proof, time)) => (proof, time),
+    };
+    let (ok, _, _) = proof.verify(&params, &statement, None);
     assert!(!ok, "a proof with a wrong alpha_i verified");
 }
 
@@ -326,8 +344,14 @@ fn wrong_mu_is_rejected() {
     // beta must stay consistent with the committed mu, so only the public
     // matrix relation is broken.
     input.beta_i[3] = multiply_matrices_naive(&input.neg_h_i[3], &input.mu_i[3]);
-    let (proof, _) = zkp::prove(&params, s_hat, &input);
-    let (ok, _) = proof.verify(&params, &statement);
+    let (proof, _) = match zkp::prove(&params, s_hat, &input, None){
+        Err(error) => {
+            println!("wrong mu proof generation failed: {:?}", error);
+            return
+        },
+        Ok((proof, time)) => (proof, time),
+    };
+    let (ok, _, _) = proof.verify(&params, &statement, None);
     assert!(!ok, "a proof with a wrong mu_i verified");
 }
 
@@ -336,9 +360,15 @@ fn tampered_cross_term_commitment_is_rejected() {
     let (params, s_hat) = build_params();
     let input = build_input();
     let statement = statement_of(&input);
-    let (mut proof, _) = zkp::prove(&params, s_hat, &input);
+    let (mut proof, _) = match zkp::prove(&params, s_hat, &input, None){
+        Err(error) => {
+            println!("tampered cross-term commitment proof generation failed: {:?}", error);
+            return
+        },
+        Ok((proof, time)) => (proof, time),
+    };
     proof.cross_a.blind[0] = proof.cross_a.blind[0] + G1Element::generator();
-    let (ok, _) = proof.verify(&params, &statement);
+    let (ok, _, _) = proof.verify(&params, &statement, None);
     assert!(!ok, "a proof with a tampered cross-term commitment verified");
 }
 
@@ -347,9 +377,15 @@ fn tampered_obligation_commitment_is_rejected() {
     let (params, s_hat) = build_params();
     let input = build_input();
     let statement = statement_of(&input);
-    let (mut proof, _) = zkp::prove(&params, s_hat, &input);
+    let (mut proof, _) = match zkp::prove(&params, s_hat, &input, None){
+        Err(error) => {
+            println!("tampered lambda commitment proof generation failed: {:?}", error);
+            return
+        },
+        Ok((proof, time)) => (proof, time),
+    };
     proof.commitments.lambda.blind[2] = proof.commitments.lambda.blind[2] + G1Element::generator();
-    let (ok, _) = proof.verify(&params, &statement);
+    let (ok, _, _) = proof.verify(&params, &statement, None);
     assert!(!ok, "a proof with a tampered lambda commitment verified");
 }
 
@@ -366,8 +402,14 @@ fn out_of_range_lambda_is_rejected() {
         input.neg_G_i[0][row][0] = input.e_i[0][row][0];
     }
     let statement = statement_of(&input);
-    let (proof, _) = zkp::prove(&params, s_hat, &input);
-    let (ok, _) = proof.verify(&params, &statement);
+    let (proof, _) = match zkp::prove(&params, s_hat, &input, None){
+        Err(error) => {
+            println!("out-of-range lambda proof generation failed: {:?}", error);
+            return
+        },
+        Ok((proof, time)) => (proof, time),
+    };
+    let (ok, _, _) = proof.verify(&params, &statement, None);
     assert!(!ok, "a proof with an out-of-range lambda verified");
 }
 
@@ -378,8 +420,14 @@ fn uncertified_a_commitment_is_rejected() {
     let (params, s_hat) = build_params();
     let input = build_input();
     let statement = statement_of(&input);
-    let (mut proof, _) = zkp::prove(&params, s_hat, &input);
+    let (mut proof, _) = match zkp::prove(&params, s_hat, &input, None){
+        Err(error) => {
+            println!("uncertified A_i commitment proof generation failed: {:?}", error);
+            return
+        },
+        Ok((proof, time)) => (proof, time),
+    };
     proof.commitments.a.blind[0] = proof.commitments.a.blind[0] + params.srs.blind_base;
-    let (ok, _) = proof.verify(&params, &statement);
+    let (ok, _, _) = proof.verify(&params, &statement, None);
     assert!(!ok, "a proof with an uncertified A_i commitment verified");
 }

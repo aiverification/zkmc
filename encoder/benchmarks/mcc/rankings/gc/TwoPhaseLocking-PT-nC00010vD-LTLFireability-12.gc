@@ -1,0 +1,73 @@
+// MCC instance TwoPhaseLocking-PT-nC00010vD
+// 8 places, 6 transitions
+// places: p0=resB, p1=haveA, p2=haveA2, p3=resA, p4=haveB, p5=Clients, p6=haveAandB, p7=haveA2andB
+
+init: p0 == 5 && p1 == 0 && p2 == 0 && p3 == 5 && p4 == 0 && p5 == 10 && p6 == 0 && p7 == 0
+
+// relB
+[] p7 >= 1 -> p0 = p0 + 1; p2 = p2 + 1; p7 = p7 - 1
+// lockB
+[] p1 >= 1 && p0 >= 1 -> p0 = p0 - 1; p1 = p1 - 1; p6 = p6 + 1
+// lockA
+[] p5 >= 1 && p3 >= 1 -> p1 = p1 + 1; p3 = p3 - 1; p5 = p5 - 1
+// relA2
+[] p2 >= 1 -> p2 = p2 - 1; p3 = p3 + 1; p5 = p5 + 1
+// relA
+[] p6 >= 1 -> p3 = p3 + 1; p4 = p4 + 1; p6 = p6 - 1
+// lockA2
+[] p4 >= 1 && p3 >= 1 -> p3 = p3 - 1; p4 = p4 - 1; p7 = p7 + 1
+// deadlock: stutter (MCC semantics)
+[] p0 <= 0 && p2 <= 0 && p3 <= 0 && p6 <= 0 && p7 <= 0 -> p0 = p0
+
+// TwoPhaseLocking-PT-nC00010vD-LTLFireability-12
+// ap e0 := p5 >= 1 && p3 >= 1
+// ap e1 := p1 >= 1 && p0 >= 1
+// ap e2 := p2 >= 1
+// spec: "((e0) & F(((e1) | G((e1)) | X((((e2)) U ((e0)))))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q1
+trans!(q0, q0): true
+trans(q1, q0): p5 < 1
+trans(q1, q0): p3 < 1
+trans(q1, q2): p5 >= 1 && p3 >= 1 && p1 < 1
+trans(q1, q2): p5 >= 1 && p3 >= 1 && p0 < 1
+trans!(q2, q2): p5 < 1 && p1 < 1
+trans!(q2, q2): p5 < 1 && p0 < 1
+trans!(q2, q2): p3 < 1 && p1 < 1
+trans!(q2, q2): p3 < 1 && p0 < 1
+
+rank(q1):
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 = 0 && (p1 + p5) = 10 && p6 = 0 && p7 = 0 -> 0
+  [] p5 < 10 -> inf
+  [] p5 > 10 -> inf
+  [] p5 = 10 && p0 < 5 -> inf
+  [] p5 = 10 && p0 > 5 -> inf
+  [] p5 = 10 && p0 = 5 && p2 < 0 -> inf
+  [] p5 = 10 && p0 = 5 && p2 > 0 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) < 5 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) > 5 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 < 0 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 > 0 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 = 0 && (p1 + p5) < 10 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 = 0 && (p1 + p5) > 10 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 = 0 && (p1 + p5) = 10 && p6 < 0 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 = 0 && (p1 + p5) = 10 && p6 > 0 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 = 0 && (p1 + p5) = 10 && p6 = 0 && p7 < 0 -> inf
+  [] p5 = 10 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p4 = 0 && (p1 + p5) = 10 && p6 = 0 && p7 > 0 -> inf
+
+rank(q0):
+  [] true -> inf
+
+rank(q2):
+  [] p5 = 9 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p6 = 0 -> 0
+  [] p5 < 9 -> inf
+  [] p5 > 9 -> inf
+  [] p5 = 9 && p0 < 5 -> inf
+  [] p5 = 9 && p0 > 5 -> inf
+  [] p5 = 9 && p0 = 5 && p2 < 0 -> inf
+  [] p5 = 9 && p0 = 5 && p2 > 0 -> inf
+  [] p5 = 9 && p0 = 5 && p2 = 0 && (p1 + p3) < 5 -> inf
+  [] p5 = 9 && p0 = 5 && p2 = 0 && (p1 + p3) > 5 -> inf
+  [] p5 = 9 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p6 < 0 -> inf
+  [] p5 = 9 && p0 = 5 && p2 = 0 && (p1 + p3) = 5 && p6 > 0 -> inf

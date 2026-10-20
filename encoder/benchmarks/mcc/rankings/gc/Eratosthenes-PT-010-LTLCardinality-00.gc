@@ -1,0 +1,52 @@
+// MCC instance Eratosthenes-PT-010
+// 9 places, 8 transitions
+// places: p0=p2, p1=p3, p2=p6, p3=p7, p4=p4, p5=p5, p6=p8, p7=p9, p8=p10
+
+init: p0 == 1 && p1 == 1 && p2 == 1 && p3 == 1 && p4 == 1 && p5 == 1 && p6 == 1 && p7 == 1 && p8 == 1
+
+// t10_2
+[] p8 >= 1 && p0 >= 1 -> p8 = p8 - 1
+// t6_2
+[] p0 >= 1 && p2 >= 1 -> p2 = p2 - 1
+// t6_3
+[] p1 >= 1 && p2 >= 1 -> p2 = p2 - 1
+// t8_2
+[] p0 >= 1 && p6 >= 1 -> p6 = p6 - 1
+// t10_5
+[] p8 >= 1 && p5 >= 1 -> p8 = p8 - 1
+// t9_3
+[] p1 >= 1 && p7 >= 1 -> p7 = p7 - 1
+// t8_4
+[] p4 >= 1 && p6 >= 1 -> p6 = p6 - 1
+// t4_2
+[] p0 >= 1 && p4 >= 1 -> p4 = p4 - 1
+// deadlock: stutter (MCC semantics)
+[] p2 <= 0 && p4 <= 0 && p6 <= 0 && p7 <= 0 && p8 <= 0 -> p0 = p0
+
+// Eratosthenes-PT-010-LTLCardinality-00
+// ap a0 := 1 <= p2
+// spec: "F(G(!(X(a0))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans!(q0, q0): 1 <= p2
+trans!(q0, q1): 1 > p2
+trans(q1, q0): 1 <= p2
+trans(q1, q1): 1 > p2
+
+rank(q0):
+  [] p2 >= 0 && p4 >= 0 && p6 >= 0 && p7 >= 0 && p8 >= 0 -> (((((1 + p2) + p4) + p6) + p7) + p8)
+  [] p2 < 0 -> inf
+  [] p2 >= 0 && p4 < 0 -> inf
+  [] p2 >= 0 && p4 >= 0 && p6 < 0 -> inf
+  [] p2 >= 0 && p4 >= 0 && p6 >= 0 && p7 < 0 -> inf
+  [] p2 >= 0 && p4 >= 0 && p6 >= 0 && p7 >= 0 && p8 < 0 -> inf
+
+rank(q1):
+  [] p2 = 0 && p4 >= 0 && p6 >= 0 && p7 >= 0 && p8 >= 0 -> (0 + p2)
+  [] p2 < 0 -> inf
+  [] p2 > 0 -> inf
+  [] p2 = 0 && p4 < 0 -> inf
+  [] p2 = 0 && p4 >= 0 && p6 < 0 -> inf
+  [] p2 = 0 && p4 >= 0 && p6 >= 0 && p7 < 0 -> inf
+  [] p2 = 0 && p4 >= 0 && p6 >= 0 && p7 >= 0 && p8 < 0 -> inf

@@ -1,0 +1,132 @@
+// MCC instance SimpleLoadBal-PT-02
+// 32 places, 45 transitions
+// places: p0=P_client_idle_1, p1=P_client_idle_2, p2=P_client_waiting_1, p3=P_client_waiting_2, p4=P_client_request_1, p5=P_client_request_2, p6=P_client_ack_1, p7=P_client_ack_2, p8=P_server_idle_1, p9=P_server_idle_2, p10=P_server_waiting_1, p11=P_server_waiting_2, p12=P_server_processed_1, p13=P_server_processed_2, p14=P_server_notification_1, p15=P_server_notification_2, p16=P_server_notification_ack_1, p17=P_server_notification_ack_2, p18=P_server_request_1_1, p19=P_server_request_1_2, p20=P_server_request_2_1, p21=P_server_request_2_2, p22=P_lb_idle_1, p23=P_lb_routing_1_1, p24=P_lb_routing_1_2, p25=P_lb_balancing_1, p26=P_lb_load_1_0, p27=P_lb_load_1_1, p28=P_lb_load_1_2, p29=P_lb_load_2_0, p30=P_lb_load_2_1, p31=P_lb_load_2_2
+
+init: p0 == 1 && p1 == 1 && p2 == 0 && p3 == 0 && p4 == 0 && p5 == 0 && p6 == 0 && p7 == 0 && p8 == 1 && p9 == 1 && p10 == 0 && p11 == 0 && p12 == 0 && p13 == 0 && p14 == 0 && p15 == 0 && p16 == 0 && p17 == 0 && p18 == 0 && p19 == 0 && p20 == 0 && p21 == 0 && p22 == 1 && p23 == 0 && p24 == 0 && p25 == 0 && p26 == 1 && p27 == 0 && p28 == 0 && p29 == 1 && p30 == 0 && p31 == 0
+
+// T_client_send_1
+[] p0 >= 1 -> p0 = p0 - 1; p2 = p2 + 1; p4 = p4 + 1
+// T_client_send_2
+[] p1 >= 1 -> p1 = p1 - 1; p3 = p3 + 1; p5 = p5 + 1
+// T_client_receive_1
+[] p6 >= 1 && p2 >= 1 -> p0 = p0 + 1; p2 = p2 - 1; p6 = p6 - 1
+// T_client_receive_2
+[] p7 >= 1 && p3 >= 1 -> p1 = p1 + 1; p3 = p3 - 1; p7 = p7 - 1
+// T_server_process_1
+[] p8 >= 1 && p18 >= 1 -> p6 = p6 + 1; p8 = p8 - 1; p12 = p12 + 1; p18 = p18 - 1
+// T_server_process_2
+[] p8 >= 1 && p20 >= 1 -> p7 = p7 + 1; p8 = p8 - 1; p12 = p12 + 1; p20 = p20 - 1
+// T_server_process_3
+[] p9 >= 1 && p19 >= 1 -> p6 = p6 + 1; p9 = p9 - 1; p13 = p13 + 1; p19 = p19 - 1
+// T_server_process_4
+[] p9 >= 1 && p21 >= 1 -> p7 = p7 + 1; p9 = p9 - 1; p13 = p13 + 1; p21 = p21 - 1
+// T_server_notify_1
+[] p12 >= 1 -> p10 = p10 + 1; p12 = p12 - 1; p14 = p14 + 1
+// T_server_notify_2
+[] p13 >= 1 -> p11 = p11 + 1; p13 = p13 - 1; p15 = p15 + 1
+// T_server_endloop_1
+[] p16 >= 1 && p10 >= 1 -> p8 = p8 + 1; p10 = p10 - 1; p16 = p16 - 1
+// T_server_endloop_2
+[] p17 >= 1 && p11 >= 1 -> p9 = p9 + 1; p11 = p11 - 1; p17 = p17 - 1
+// T_lb_receive_client_1
+[] p4 >= 1 && p22 >= 1 -> p4 = p4 - 1; p22 = p22 - 1; p23 = p23 + 1
+// T_lb_receive_client_2
+[] p5 >= 1 && p22 >= 1 -> p5 = p5 - 1; p22 = p22 - 1; p24 = p24 + 1
+// T_lb_route_to_1_1
+[] p26 >= 1 && p29 >= 1 && p23 >= 1 -> p18 = p18 + 1; p22 = p22 + 1; p23 = p23 - 1; p26 = p26 - 1; p27 = p27 + 1
+// T_lb_route_to_1_2
+[] p26 >= 1 && p30 >= 1 && p23 >= 1 -> p18 = p18 + 1; p22 = p22 + 1; p23 = p23 - 1; p26 = p26 - 1; p27 = p27 + 1
+// T_lb_route_to_1_5
+[] p27 >= 1 && p30 >= 1 && p23 >= 1 -> p18 = p18 + 1; p22 = p22 + 1; p23 = p23 - 1; p27 = p27 - 1; p28 = p28 + 1
+// T_lb_route_to_1_6
+[] p27 >= 1 && p31 >= 1 && p23 >= 1 -> p18 = p18 + 1; p22 = p22 + 1; p23 = p23 - 1; p27 = p27 - 1; p28 = p28 + 1
+// T_lb_route_to_1_10
+[] p26 >= 1 && p29 >= 1 && p24 >= 1 -> p20 = p20 + 1; p22 = p22 + 1; p24 = p24 - 1; p26 = p26 - 1; p27 = p27 + 1
+// T_lb_route_to_1_11
+[] p26 >= 1 && p30 >= 1 && p24 >= 1 -> p20 = p20 + 1; p22 = p22 + 1; p24 = p24 - 1; p26 = p26 - 1; p27 = p27 + 1
+// T_lb_route_to_1_14
+[] p27 >= 1 && p30 >= 1 && p24 >= 1 -> p20 = p20 + 1; p22 = p22 + 1; p24 = p24 - 1; p27 = p27 - 1; p28 = p28 + 1
+// T_lb_route_to_1_15
+[] p27 >= 1 && p31 >= 1 && p24 >= 1 -> p20 = p20 + 1; p22 = p22 + 1; p24 = p24 - 1; p27 = p27 - 1; p28 = p28 + 1
+// T_lb_route_to_2_4
+[] p27 >= 1 && p29 >= 1 && p23 >= 1 -> p19 = p19 + 1; p22 = p22 + 1; p23 = p23 - 1; p29 = p29 - 1; p30 = p30 + 1
+// T_lb_route_to_2_8
+[] p28 >= 1 && p30 >= 1 && p23 >= 1 -> p19 = p19 + 1; p22 = p22 + 1; p23 = p23 - 1; p30 = p30 - 1; p31 = p31 + 1
+// T_lb_route_to_2_13
+[] p27 >= 1 && p29 >= 1 && p24 >= 1 -> p21 = p21 + 1; p22 = p22 + 1; p24 = p24 - 1; p29 = p29 - 1; p30 = p30 + 1
+// T_lb_route_to_2_17
+[] p28 >= 1 && p30 >= 1 && p24 >= 1 -> p21 = p21 + 1; p22 = p22 + 1; p24 = p24 - 1; p30 = p30 - 1; p31 = p31 + 1
+// T_lb_idle_receive_notification_2
+[] p22 >= 1 && p27 >= 1 && p14 >= 1 -> p14 = p14 - 1; p16 = p16 + 1; p22 = p22 - 1; p25 = p25 + 1; p26 = p26 + 1; p27 = p27 - 1
+// T_lb_idle_receive_notification_3
+[] p22 >= 1 && p28 >= 1 && p14 >= 1 -> p14 = p14 - 1; p16 = p16 + 1; p22 = p22 - 1; p25 = p25 + 1; p27 = p27 + 1; p28 = p28 - 1
+// T_lb_idle_receive_notification_5
+[] p22 >= 1 && p30 >= 1 && p15 >= 1 -> p15 = p15 - 1; p17 = p17 + 1; p22 = p22 - 1; p25 = p25 + 1; p29 = p29 + 1; p30 = p30 - 1
+// T_lb_idle_receive_notification_6
+[] p22 >= 1 && p31 >= 1 && p15 >= 1 -> p15 = p15 - 1; p17 = p17 + 1; p22 = p22 - 1; p25 = p25 + 1; p30 = p30 + 1; p31 = p31 - 1
+// T_lb_no_balance_1
+[] p25 >= 1 && p26 >= 1 && p29 >= 1 -> p22 = p22 + 1; p25 = p25 - 1
+// T_lb_no_balance_2
+[] p25 >= 1 && p26 >= 1 && p30 >= 1 -> p22 = p22 + 1; p25 = p25 - 1
+// T_lb_no_balance_4
+[] p25 >= 1 && p27 >= 1 && p29 >= 1 -> p22 = p22 + 1; p25 = p25 - 1
+// T_lb_no_balance_5
+[] p25 >= 1 && p27 >= 1 && p30 >= 1 -> p22 = p22 + 1; p25 = p25 - 1
+// T_lb_no_balance_6
+[] p25 >= 1 && p27 >= 1 && p31 >= 1 -> p22 = p22 + 1; p25 = p25 - 1
+// T_lb_no_balance_8
+[] p25 >= 1 && p28 >= 1 && p30 >= 1 -> p22 = p22 + 1; p25 = p25 - 1
+// T_lb_no_balance_9
+[] p25 >= 1 && p28 >= 1 && p31 >= 1 -> p22 = p22 + 1; p25 = p25 - 1
+// T_lb_balance_to_1_5
+[] p25 >= 1 && p26 >= 1 && p31 >= 1 && p19 >= 1 -> p18 = p18 + 1; p19 = p19 - 1; p22 = p22 + 1; p25 = p25 - 1; p26 = p26 - 1; p27 = p27 + 1; p30 = p30 + 1; p31 = p31 - 1
+// T_lb_balance_to_1_6
+[] p25 >= 1 && p26 >= 1 && p31 >= 1 && p21 >= 1 -> p20 = p20 + 1; p21 = p21 - 1; p22 = p22 + 1; p25 = p25 - 1; p26 = p26 - 1; p27 = p27 + 1; p30 = p30 + 1; p31 = p31 - 1
+// T_lb_balance_to_2_13
+[] p25 >= 1 && p28 >= 1 && p29 >= 1 && p18 >= 1 -> p18 = p18 - 1; p19 = p19 + 1; p22 = p22 + 1; p25 = p25 - 1; p27 = p27 + 1; p28 = p28 - 1; p29 = p29 - 1; p30 = p30 + 1
+// T_lb_balance_to_2_14
+[] p25 >= 1 && p28 >= 1 && p29 >= 1 && p20 >= 1 -> p20 = p20 - 1; p21 = p21 + 1; p22 = p22 + 1; p25 = p25 - 1; p27 = p27 + 1; p28 = p28 - 1; p29 = p29 - 1; p30 = p30 + 1
+// T_lb_balancing_receive_notification_2
+[] p25 >= 1 && p27 >= 1 && p14 >= 1 -> p14 = p14 - 1; p16 = p16 + 1; p26 = p26 + 1; p27 = p27 - 1
+// T_lb_balancing_receive_notification_3
+[] p25 >= 1 && p28 >= 1 && p14 >= 1 -> p14 = p14 - 1; p16 = p16 + 1; p27 = p27 + 1; p28 = p28 - 1
+// T_lb_balancing_receive_notification_5
+[] p25 >= 1 && p30 >= 1 && p15 >= 1 -> p15 = p15 - 1; p17 = p17 + 1; p29 = p29 + 1; p30 = p30 - 1
+// T_lb_balancing_receive_notification_6
+[] p25 >= 1 && p31 >= 1 && p15 >= 1 -> p15 = p15 - 1; p17 = p17 + 1; p30 = p30 + 1; p31 = p31 - 1
+
+// SimpleLoadBal-PT-02-LTLCardinality-10
+// ap a0 := 2 <= p20
+// ap a1 := 3 <= p18
+// ap a2 := p7 <= p13
+// spec: "G(!(F(X(X(G((a0 & (a1 | a2))))))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q0): true
+trans(q0, q1): 3 <= p18 && 2 <= p20
+trans(q0, q1): p7 <= p13 && 2 <= p20
+trans!(q1, q1): 3 <= p18 && 2 <= p20
+trans!(q1, q1): p7 <= p13 && 2 <= p20
+
+rank(q0):
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 >= 0 && p7 >= 0 && (((((p12 + p14) + p18) + p20) + (2 * p26)) + p27) = 2 && (p1 + p3) = 1 && (((((p1 + p20) + p21) + p24) + p5) + p7) = 1 -> 0
+  [] p12 < 0 -> inf
+  [] p12 >= 0 && p14 < 0 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 < 0 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 < 0 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 < 0 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 < 0 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 < 0 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 > 1 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 < 0 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 >= 0 && p7 < 0 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 >= 0 && p7 >= 0 && (((((p12 + p14) + p18) + p20) + (2 * p26)) + p27) < 2 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 >= 0 && p7 >= 0 && (((((p12 + p14) + p18) + p20) + (2 * p26)) + p27) > 2 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 >= 0 && p7 >= 0 && (((((p12 + p14) + p18) + p20) + (2 * p26)) + p27) = 2 && (p1 + p3) < 1 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 >= 0 && p7 >= 0 && (((((p12 + p14) + p18) + p20) + (2 * p26)) + p27) = 2 && (p1 + p3) > 1 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 >= 0 && p7 >= 0 && (((((p12 + p14) + p18) + p20) + (2 * p26)) + p27) = 2 && (p1 + p3) = 1 && (((((p1 + p20) + p21) + p24) + p5) + p7) < 1 -> inf
+  [] p12 >= 0 && p14 >= 0 && p18 >= 0 && p21 >= 0 && p24 >= 0 && p26 >= 0 && p27 >= 0 && p3 <= 1 && p5 >= 0 && p7 >= 0 && (((((p12 + p14) + p18) + p20) + (2 * p26)) + p27) = 2 && (p1 + p3) = 1 && (((((p1 + p20) + p21) + p24) + p5) + p7) > 1 -> inf
+
+rank(q1):
+  [] true -> inf

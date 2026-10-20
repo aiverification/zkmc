@@ -1,0 +1,189 @@
+// MCC instance PhaseVariation-PT-D02CS100
+// 14 places, 65 transitions
+// places: p0=cell___1_1__A_, p1=cell___1_1__B_, p2=cell___1_2__A_, p3=cell___1_2__B_, p4=cell___2_1__A_, p5=cell___2_1__B_, p6=cell___2_2__A_, p7=cell___2_2__B_, p8=pool__1_1_, p9=pool__1_2_, p10=pool__2_1_, p11=pool__2_2_, p12=run_dot, p13=size_dot
+
+init: p0 == 1 && p1 == 0 && p2 == 0 && p3 == 0 && p4 == 0 && p5 == 0 && p6 == 0 && p7 == 0 && p8 == 25 && p9 == 26 && p10 == 26 && p11 == 26 && p12 == 1 && p13 == 1
+
+// division1_mutate_1_1_A
+[] p0 >= 1 && p8 >= 1 && p12 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division1_mutate_1_1_B
+[] p1 >= 1 && p8 >= 1 && p12 >= 1 -> p0 = p0 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division1_mutate_1_2_A
+[] p2 >= 1 && p9 >= 1 && p12 >= 1 -> p3 = p3 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division1_mutate_1_2_B
+[] p3 >= 1 && p9 >= 1 && p12 >= 1 -> p2 = p2 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division1_mutate_2_1_A
+[] p4 >= 1 && p10 >= 1 && p12 >= 1 -> p5 = p5 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division1_mutate_2_1_B
+[] p5 >= 1 && p10 >= 1 && p12 >= 1 -> p4 = p4 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division1_mutate_2_2_A
+[] p6 >= 1 && p11 >= 1 && p12 >= 1 -> p7 = p7 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division1_mutate_2_2_B
+[] p7 >= 1 && p11 >= 1 && p12 >= 1 -> p6 = p6 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division1_replicate_1_1_A
+[] p0 >= 1 && p8 >= 1 && p12 >= 1 -> p0 = p0 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division1_replicate_1_1_B
+[] p1 >= 1 && p8 >= 1 && p12 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division1_replicate_1_2_A
+[] p2 >= 1 && p9 >= 1 && p12 >= 1 -> p2 = p2 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division1_replicate_1_2_B
+[] p3 >= 1 && p9 >= 1 && p12 >= 1 -> p3 = p3 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division1_replicate_2_1_A
+[] p4 >= 1 && p10 >= 1 && p12 >= 1 -> p4 = p4 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division1_replicate_2_1_B
+[] p5 >= 1 && p10 >= 1 && p12 >= 1 -> p5 = p5 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division1_replicate_2_2_A
+[] p6 >= 1 && p11 >= 1 && p12 >= 1 -> p6 = p6 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division1_replicate_2_2_B
+[] p7 >= 1 && p11 >= 1 && p12 >= 1 -> p7 = p7 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_mutate_1_1_A_1_2
+[] p2 >= 1 && p8 >= 1 && p12 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_mutate_1_1_A_2_1
+[] p4 >= 1 && p8 >= 1 && p12 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_mutate_1_1_A_2_2
+[] p6 >= 1 && p8 >= 1 && p12 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_mutate_1_1_B_1_2
+[] p3 >= 1 && p8 >= 1 && p12 >= 1 -> p0 = p0 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_mutate_1_1_B_2_1
+[] p5 >= 1 && p8 >= 1 && p12 >= 1 -> p0 = p0 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_mutate_1_1_B_2_2
+[] p7 >= 1 && p8 >= 1 && p12 >= 1 -> p0 = p0 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_mutate_1_2_A_1_1
+[] p0 >= 1 && p9 >= 1 && p12 >= 1 -> p3 = p3 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_mutate_1_2_A_2_1
+[] p4 >= 1 && p9 >= 1 && p12 >= 1 -> p3 = p3 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_mutate_1_2_A_2_2
+[] p6 >= 1 && p9 >= 1 && p12 >= 1 -> p3 = p3 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_mutate_1_2_B_1_1
+[] p1 >= 1 && p9 >= 1 && p12 >= 1 -> p2 = p2 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_mutate_1_2_B_2_1
+[] p5 >= 1 && p9 >= 1 && p12 >= 1 -> p2 = p2 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_mutate_1_2_B_2_2
+[] p7 >= 1 && p9 >= 1 && p12 >= 1 -> p2 = p2 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_mutate_2_1_A_1_1
+[] p0 >= 1 && p10 >= 1 && p12 >= 1 -> p5 = p5 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_mutate_2_1_A_1_2
+[] p2 >= 1 && p10 >= 1 && p12 >= 1 -> p5 = p5 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_mutate_2_1_A_2_2
+[] p6 >= 1 && p10 >= 1 && p12 >= 1 -> p5 = p5 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_mutate_2_1_B_1_1
+[] p1 >= 1 && p10 >= 1 && p12 >= 1 -> p4 = p4 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_mutate_2_1_B_1_2
+[] p3 >= 1 && p10 >= 1 && p12 >= 1 -> p4 = p4 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_mutate_2_1_B_2_2
+[] p7 >= 1 && p10 >= 1 && p12 >= 1 -> p4 = p4 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_mutate_2_2_A_1_1
+[] p0 >= 1 && p11 >= 1 && p12 >= 1 -> p7 = p7 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_mutate_2_2_A_1_2
+[] p2 >= 1 && p11 >= 1 && p12 >= 1 -> p7 = p7 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_mutate_2_2_A_2_1
+[] p4 >= 1 && p11 >= 1 && p12 >= 1 -> p7 = p7 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_mutate_2_2_B_1_1
+[] p1 >= 1 && p11 >= 1 && p12 >= 1 -> p6 = p6 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_mutate_2_2_B_1_2
+[] p3 >= 1 && p11 >= 1 && p12 >= 1 -> p6 = p6 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_mutate_2_2_B_2_1
+[] p5 >= 1 && p11 >= 1 && p12 >= 1 -> p6 = p6 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_replicate_1_1_A_1_2
+[] p2 >= 1 && p8 >= 1 && p12 >= 1 -> p0 = p0 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_replicate_1_1_A_2_1
+[] p4 >= 1 && p8 >= 1 && p12 >= 1 -> p0 = p0 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_replicate_1_1_A_2_2
+[] p6 >= 1 && p8 >= 1 && p12 >= 1 -> p0 = p0 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_replicate_1_1_B_1_2
+[] p3 >= 1 && p8 >= 1 && p12 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_replicate_1_1_B_2_1
+[] p5 >= 1 && p8 >= 1 && p12 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_replicate_1_1_B_2_2
+[] p7 >= 1 && p8 >= 1 && p12 >= 1 -> p1 = p1 + 1; p8 = p8 - 1; p13 = p13 + 1
+// division2_replicate_1_2_A_1_1
+[] p0 >= 1 && p9 >= 1 && p12 >= 1 -> p2 = p2 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_replicate_1_2_A_2_1
+[] p4 >= 1 && p9 >= 1 && p12 >= 1 -> p2 = p2 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_replicate_1_2_A_2_2
+[] p6 >= 1 && p9 >= 1 && p12 >= 1 -> p2 = p2 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_replicate_1_2_B_1_1
+[] p1 >= 1 && p9 >= 1 && p12 >= 1 -> p3 = p3 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_replicate_1_2_B_2_1
+[] p5 >= 1 && p9 >= 1 && p12 >= 1 -> p3 = p3 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_replicate_1_2_B_2_2
+[] p7 >= 1 && p9 >= 1 && p12 >= 1 -> p3 = p3 + 1; p9 = p9 - 1; p13 = p13 + 1
+// division2_replicate_2_1_A_1_1
+[] p0 >= 1 && p10 >= 1 && p12 >= 1 -> p4 = p4 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_replicate_2_1_A_1_2
+[] p2 >= 1 && p10 >= 1 && p12 >= 1 -> p4 = p4 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_replicate_2_1_A_2_2
+[] p6 >= 1 && p10 >= 1 && p12 >= 1 -> p4 = p4 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_replicate_2_1_B_1_1
+[] p1 >= 1 && p10 >= 1 && p12 >= 1 -> p5 = p5 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_replicate_2_1_B_1_2
+[] p3 >= 1 && p10 >= 1 && p12 >= 1 -> p5 = p5 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_replicate_2_1_B_2_2
+[] p7 >= 1 && p10 >= 1 && p12 >= 1 -> p5 = p5 + 1; p10 = p10 - 1; p13 = p13 + 1
+// division2_replicate_2_2_A_1_1
+[] p0 >= 1 && p11 >= 1 && p12 >= 1 -> p6 = p6 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_replicate_2_2_A_1_2
+[] p2 >= 1 && p11 >= 1 && p12 >= 1 -> p6 = p6 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_replicate_2_2_A_2_1
+[] p4 >= 1 && p11 >= 1 && p12 >= 1 -> p6 = p6 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_replicate_2_2_B_1_1
+[] p1 >= 1 && p11 >= 1 && p12 >= 1 -> p7 = p7 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_replicate_2_2_B_1_2
+[] p3 >= 1 && p11 >= 1 && p12 >= 1 -> p7 = p7 + 1; p11 = p11 - 1; p13 = p13 + 1
+// division2_replicate_2_2_B_2_1
+[] p5 >= 1 && p11 >= 1 && p12 >= 1 -> p7 = p7 + 1; p11 = p11 - 1; p13 = p13 + 1
+// stop_constant
+[] p12 >= 1 && p13 >= 100 -> p12 = p12 - 1
+// deadlock: stutter (MCC semantics)
+[] p12 <= 0 -> p0 = p0
+// deadlock: stutter (MCC semantics)
+[] p0 <= 0 && p1 <= 0 && p2 <= 0 && p3 <= 0 && p4 <= 0 && p5 <= 0 && p6 <= 0 && p7 <= 0 -> p0 = p0
+
+// PhaseVariation-PT-D02CS100-LTLCardinality-07
+// ap a0 := 2 <= p5
+// ap a1 := p7 <= p11
+// ap a2 := p4 <= p7
+// spec: "(((G(a0) & ((!((a0 | G(X(a1))))) U (F(!(a1)))))) U (a2))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans!(q0, q0): p4 > p7 && 2 <= p5
+trans!(q0, q1): p4 > p7 && 2 > p5
+trans!(q0, q2): p4 > p7 && 2 <= p5
+trans!(q0, q3): p4 > p7 && 2 <= p5 && p7 <= p11
+trans!(q1, q1): true
+trans(q2, q1): 2 > p5
+trans(q2, q2): 2 <= p5
+trans!(q3, q3): p7 <= p11
+
+rank(q0):
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 = 0 && p5 = 0 && p6 = 0 && p7 = 0 -> 0
+  [] p0 < 1 -> inf
+  [] p0 > 1 -> inf
+  [] p0 = 1 && p1 < 0 -> inf
+  [] p0 = 1 && p1 > 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 < 1 -> inf
+  [] p0 = 1 && p1 = 0 && p12 > 1 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 < 1 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 > 1 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 < 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 > 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 < 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 > 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 < 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 > 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 = 0 && p5 < 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 = 0 && p5 > 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 = 0 && p5 = 0 && p6 < 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 = 0 && p5 = 0 && p6 > 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 = 0 && p5 = 0 && p6 = 0 && p7 < 0 -> inf
+  [] p0 = 1 && p1 = 0 && p12 = 1 && p13 = 1 && p2 = 0 && p3 = 0 && p4 = 0 && p5 = 0 && p6 = 0 && p7 > 0 -> inf
+
+rank(q1):
+  [] true -> inf
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] true -> inf

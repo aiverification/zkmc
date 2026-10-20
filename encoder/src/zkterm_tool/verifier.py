@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 
 from .parser import ParseResult
-from .encoder import encode_program, encode_init, TransitionEncoding
+from .encoder import encode_init, encode_transition, TransitionEncoding
 from .ranking_encoder import encode_ranking_functions, RankingFunctionEncoding
 from .automaton_encoder import encode_automaton_transitions, AutomatonTransitionEncoding
 from .verification_types import ObligationResult, VerificationResult
@@ -89,7 +89,12 @@ class Verifier:
         self.variables = sorted(all_vars)
 
         # Now encode all components with the correct variable list
-        self.trans_encs = encode_program(result.commands, nonstrict_only=True, types=result.types) if result.commands else []
+        # Encode against the full variable list: a variable that occurs in the ranking, automaton or
+        # init but in no command must still be a column of A_s (with the frame condition x' = x).
+        self.trans_encs = [
+            encode_transition(cmd, self.variables, nonstrict_only=True, types=result.types)
+            for cmd in result.commands
+        ] if result.commands else []
         self.aut_encs = encode_automaton_transitions(result.automaton_transitions) if result.automaton_transitions else []
 
         # Encode ranking functions with the full variable list

@@ -1,0 +1,92 @@
+// MCC instance Eratosthenes-PT-010
+// 9 places, 8 transitions
+// places: p0=p2, p1=p3, p2=p6, p3=p7, p4=p4, p5=p5, p6=p8, p7=p9, p8=p10
+
+init: p0 == 1 && p1 == 1 && p2 == 1 && p3 == 1 && p4 == 1 && p5 == 1 && p6 == 1 && p7 == 1 && p8 == 1
+
+// t10_2
+[] p8 >= 1 && p0 >= 1 -> p8 = p8 - 1
+// t6_2
+[] p0 >= 1 && p2 >= 1 -> p2 = p2 - 1
+// t6_3
+[] p1 >= 1 && p2 >= 1 -> p2 = p2 - 1
+// t8_2
+[] p0 >= 1 && p6 >= 1 -> p6 = p6 - 1
+// t10_5
+[] p8 >= 1 && p5 >= 1 -> p8 = p8 - 1
+// t9_3
+[] p1 >= 1 && p7 >= 1 -> p7 = p7 - 1
+// t8_4
+[] p4 >= 1 && p6 >= 1 -> p6 = p6 - 1
+// t4_2
+[] p0 >= 1 && p4 >= 1 -> p4 = p4 - 1
+// deadlock: stutter (MCC semantics)
+[] p2 <= 0 && p4 <= 0 && p6 <= 0 && p7 <= 0 && p8 <= 0 -> p0 = p0
+
+// Eratosthenes-PT-010-LTLCardinality-03
+// ap a0 := 3 <= p4
+// ap a1 := 3 <= p6
+// ap a2 := p6 <= p8
+// spec: "(X((F(a0) & !(X(X(G(X(a0))))))) | ((F(a1)) U (a2)))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q1): p6 > p8 && 3 > p6
+trans(q0, q2): p6 > p8
+trans(q1, q3): p6 <= p8 && 3 > p6 && 3 > p4
+trans(q1, q4): p6 <= p8 && 3 > p6
+trans(q2, q3): p6 > p8 && 3 > p6 && 3 > p4
+trans(q2, q4): p6 > p8 && 3 > p6
+trans(q2, q5): p6 > p8 && 3 > p4
+trans(q2, q6): p6 > p8
+trans!(q3, q3): 3 > p6 && 3 > p4
+trans(q4, q7): 3 > p6
+trans!(q5, q3): p6 > p8 && 3 > p6 && 3 > p4
+trans!(q5, q5): p6 > p8 && 3 > p4
+trans(q6, q7): p6 > p8 && 3 > p6
+trans(q6, q8): p6 > p8
+trans(q7, q9): 3 > p6
+trans(q8, q9): p6 > p8 && 3 > p6
+trans(q8, q10): p6 > p8
+trans!(q9, q9): 3 > p6 && 3 <= p4
+trans!(q10, q9): p6 > p8 && 3 > p6 && 3 <= p4
+trans!(q10, q10): p6 > p8 && 3 <= p4
+
+rank(q0):
+  [] p2 = 1 && p6 = 1 && p8 = 1 -> 0
+  [] p2 < 1 -> inf
+  [] p2 > 1 -> inf
+  [] p2 = 1 && p6 < 1 -> inf
+  [] p2 = 1 && p6 > 1 -> inf
+  [] p2 = 1 && p6 = 1 && p8 < 1 -> inf
+  [] p2 = 1 && p6 = 1 && p8 > 1 -> inf
+
+rank(q1):
+  [] true -> inf
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] true -> inf
+
+rank(q4):
+  [] true -> inf
+
+rank(q5):
+  [] true -> inf
+
+rank(q6):
+  [] true -> inf
+
+rank(q7):
+  [] true -> inf
+
+rank(q8):
+  [] true -> inf
+
+rank(q9):
+  [] true -> inf
+
+rank(q10):
+  [] true -> inf

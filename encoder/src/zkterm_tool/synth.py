@@ -126,11 +126,17 @@ def _stack(blocks: List[NDArray[np.int64]], rhss: List[NDArray[np.int64]], ncols
 def _add_farkas_implication(
     solver, P: NDArray[np.int64], q: NDArray[np.int64],
     a_coeffs: list, b_rhs, lam_prefix: str, multiplier_bound: int,
+    collect: Optional[list] = None,
 ) -> None:
-    """Assert {P y ≤ q} ⟹ (a·y ≤ b) via affine Farkas: ∃λ≥0. a = λᵀP ∧ λᵀq ≤ b."""
+    """Assert {P y ≤ q} ⟹ (a·y ≤ b) via affine Farkas: ∃λ≥0. a = λᵀP ∧ λᵀq ≤ b.
+
+    With `collect` given, the multipliers are reals (an LP) and are appended to it."""
     m, ncols = P.shape
     assert len(a_coeffs) == ncols
-    lam = [z3.Int(f"{lam_prefix}_{i}") for i in range(m)]
+    make = z3.Real if collect is not None else z3.Int
+    lam = [make(f"{lam_prefix}_{i}") for i in range(m)]
+    if collect is not None:
+        collect.extend(lam)
     for l in lam:
         solver.add(l >= 0)
         solver.add(l <= multiplier_bound)
@@ -141,9 +147,12 @@ def _add_farkas_implication(
     solver.add((z3.Sum(q_terms) if q_terms else z3.IntVal(0)) <= b_rhs)
 
 
-def _feasible(P: NDArray[np.int64], q: NDArray[np.int64], deadline: Optional[float] = None) -> bool:
+def _feasible(P: NDArray[np.int64], q: NDArray[np.int64], deadline: Optional[float] = None,
+              real: bool = False) -> bool:
     """Is {y : P y ≤ q} non-empty? Used to prune vacuous cross-region transitions.
 
+    `real` checks over the reals, matching the Farkas-based verifier (a premise that is empty
+    over the integers but not over the reals still needs its obligation proved there).
     Returns True (don't prune — always safe) when Z3 gives up within the deadline."""
     if P.shape[0] == 0:
         return True
@@ -151,7 +160,7 @@ def _feasible(P: NDArray[np.int64], q: NDArray[np.int64], deadline: Optional[flo
     ms = _remaining_ms(deadline)
     if ms is not None:
         s.set("timeout", ms)
-    y = [z3.Int(f"y{i}") for i in range(P.shape[1])]
+    y = [(z3.Real if real else z3.Int)(f"y{i}") for i in range(P.shape[1])]
     for i in range(P.shape[0]):
         terms = [int(P[i, c]) * y[c] for c in range(P.shape[1]) if int(P[i, c]) != 0]
         s.add((z3.Sum(terms) if terms else z3.IntVal(0)) <= int(q[i]))
@@ -430,30 +439,41 @@ FixedRankings = Dict[str, Tuple[List[Tuple[NDArray, NDArray, List[int], int]],
 
 def _solve_partition(
     result: ParseResult, variables: List[str], states: List[str], fixed: FixedRankings,
-    prog_encs: list, regions: List[Region], boxes: List[Box],
-    region_guards: List[Optional[List[Comparison]]],
+    prog_encs: list, regions: List[Region],
+    region_guards: Dict[str, List[Optional[List[Comparison]]]],
     coeff_bound: int, multiplier_bound: int, deadline: Optional[float] = None,
+    rational: bool = False,
 ) -> Optional[Dict[Tuple[str, int], Tuple[List[int], int]]]:
-    """Solve the affine-Farkas LP for a fixed partition. Empty regions (box None) get no piece.
+    """Solve the affine-Farkas LP for a fixed partition.
+
+    `region_guards[q][ri]` is the finite-case guard of state `q` in region `ri`, or None if that
+    region is unreachable for `q` (it gets no piece and is entirely inf).
 
     `states` are the states to synthesize for; `fixed` carries pre-existing rankings, whose cases
     enter the decrease obligations as constants so the synthesized pieces compose with them.
     Returns {(state, region_idx): (w, u)} for non-empty regions, or None if infeasible."""
     n = len(variables)
-    live = [ri for ri in range(len(regions)) if boxes[ri] is not None]
+    live = {q: [ri for ri in range(len(regions)) if region_guards[q][ri] is not None] for q in states}
 
-    region_M: Dict[int, NDArray[np.int64]] = {}
-    region_v: Dict[int, NDArray[np.int64]] = {}
-    region_x: Dict[int, NDArray[np.int64]] = {}
-    region_xp: Dict[int, NDArray[np.int64]] = {}
-    for ri in live:
-        M, v = _guard_to_matrix(region_guards[ri], variables)
-        region_M[ri], region_v[ri] = M, v
-        region_x[ri], region_xp[ri] = _embed_x(M, n), _embed_xprime(M, n)
+    region_M: Dict[Tuple[str, int], NDArray[np.int64]] = {}
+    region_v: Dict[Tuple[str, int], NDArray[np.int64]] = {}
+    region_x: Dict[Tuple[str, int], NDArray[np.int64]] = {}
+    region_xp: Dict[Tuple[str, int], NDArray[np.int64]] = {}
+    for q in states:
+        for ri in live[q]:
+            M, v = _guard_to_matrix(region_guards[q][ri], variables)
+            region_M[(q, ri)], region_v[(q, ri)] = M, v
+            region_x[(q, ri)], region_xp[(q, ri)] = _embed_x(M, n), _embed_xprime(M, n)
 
+    # rational=True solves the real LP (much faster than integer arithmetic) and scales the
+    # solution by the common denominator of all values (coefficients and Farkas multipliers):
+    # the obligations are invariant under scaling the ranking by k >= 1 (decreases only grow),
+    # and the scaled multipliers are integral, so integer certificates exist for the verifier.
+    lams: Optional[list] = [] if rational else None
+    make = z3.Real if rational else z3.Int
     solver = z3.Solver()
-    w = {(q, ri): [z3.Int(f"w_{q}_{ri}_{i}") for i in range(n)] for q in states for ri in live}
-    u = {(q, ri): z3.Int(f"u_{q}_{ri}") for q in states for ri in live}
+    w = {(q, ri): [make(f"w_{q}_{ri}_{i}") for i in range(n)] for q in states for ri in live[q]}
+    u = {(q, ri): make(f"u_{q}_{ri}") for q in states for ri in live[q]}
     for key in w:
         for c in w[key]:
             solver.add(c >= -coeff_bound, c <= coeff_bound)
@@ -461,22 +481,23 @@ def _solve_partition(
 
     # Non-negativity: region(x) ⟹ w·x + u ≥ 0
     for q in states:
-        for ri in live:
+        for ri in live[q]:
             a = [-w[(q, ri)][c] for c in range(n)]
-            _add_farkas_implication(solver, region_M[ri], region_v[ri], a, u[(q, ri)],
-                                    lam_prefix=f"nn_{q}_{ri}", multiplier_bound=multiplier_bound)
+            _add_farkas_implication(solver, region_M[(q, ri)], region_v[(q, ri)], a, u[(q, ri)],
+                                    lam_prefix=f"nn_{q}_{ri}", multiplier_bound=multiplier_bound,
+                                    collect=lams)
 
     # A "side option" is one candidate case of a state's ranking: (premise rows, rhs, w, u), where
     # w/u are Z3 unknowns for synthesized states and plain ints for fixed ones.
     def src_options(q):
         if q in fixed:
             return [(_embed_x(M, n), v, wv, uc) for (M, v, wv, uc) in fixed[q][0]]
-        return [(region_x[ri], region_v[ri], w[(q, ri)], u[(q, ri)]) for ri in live]
+        return [(region_x[(q, ri)], region_v[(q, ri)], w[(q, ri)], u[(q, ri)]) for ri in live[q]]
 
     def tgt_options(q):
         if q in fixed:
             return [(_embed_xprime(M, n), v, wv, uc) for (M, v, wv, uc) in fixed[q][0]]
-        return [(region_xp[ri], region_v[ri], w[(q, ri)], u[(q, ri)]) for ri in live]
+        return [(region_xp[(q, ri)], region_v[(q, ri)], w[(q, ri)], u[(q, ri)]) for ri in live[q]]
 
     def tgt_inf_options(q):
         if q in fixed:
@@ -498,13 +519,13 @@ def _solve_partition(
             for si, (S_M, S_v, w_s, u_s) in enumerate(src_options(qf)):
                 for ti, (T_M, T_v, w_t, u_t) in enumerate(tgt_options(qt)):
                     P, qv = _stack([A, aut_x, S_M, T_M], [b, r_aut, S_v, T_v], 2 * n)
-                    if not _feasible(P, qv, deadline):
+                    if not _feasible(P, qv, deadline, real=rational):
                         continue
                     a_coeffs = [-w_s[c] for c in range(n)] + [w_t[c] for c in range(n)]
                     b_rhs = u_s - u_t - zeta
                     _add_farkas_implication(solver, P, qv, a_coeffs, b_rhs,
                                             lam_prefix=f"dec_{p_idx}_{a_idx}_{si}_{ti}",
-                                            multiplier_bound=multiplier_bound)
+                                            multiplier_bound=multiplier_bound, collect=lams)
                 # A finite source case that can reach an inf case of a fixed target ranking would
                 # fail the transition_non_infinity obligation no matter what we synthesize.
                 for T_M, T_v in tgt_inf_options(qt):
@@ -520,8 +541,25 @@ def _solve_partition(
         return None
     model = solver.model()
     pieces: Dict[Tuple[str, int], Tuple[List[int], int]] = {}
+    if rational:
+        from fractions import Fraction
+        from math import lcm
+
+        def frac(v) -> Fraction:
+            return Fraction(model.eval(v, model_completion=True).as_fraction())
+
+        vals = {key: ([frac(c) for c in w[key]], frac(u[key])) for key in w}
+        scale = 1
+        for ws, uv in vals.values():
+            for f in ws + [uv]:
+                scale = lcm(scale, f.denominator)
+        for lam in lams or []:
+            scale = lcm(scale, frac(lam).denominator)
+        for key, (ws, uv) in vals.items():
+            pieces[key] = ([int(f * scale) for f in ws], int(uv * scale))
+        return pieces
     for q in states:
-        for ri in live:
+        for ri in live[q]:
             w_vals = [model.eval(w[(q, ri)][c], model_completion=True).as_long() for c in range(n)]
             pieces[(q, ri)] = (w_vals, model.eval(u[(q, ri)], model_completion=True).as_long())
     return pieces
@@ -530,6 +568,41 @@ def _solve_partition(
 # --------------------------------------------------------------------------------------
 # Assembly (+ merging of equal contiguous pieces for single-variable partitions)
 # --------------------------------------------------------------------------------------
+
+def _comparison_ladder(prefix: List[Comparison], conj: List[Comparison]) -> List[RankingCase]:
+    """Disjoint `inf` cases covering `prefix ∧ ¬(conj)`."""
+    from .ltl import negate_comparison
+
+    cases: List[RankingCase] = []
+    running = list(prefix)
+    for c in conj:
+        for neg in negate_comparison(c):
+            cases.append(RankingCase(running + [neg], None, True))
+        running = running + [c]
+    return cases
+
+
+def _assemble_invariant(
+    regions: List[Region], pieces: Dict[Tuple[str, int], Tuple[List[int], int]],
+    states: List[str], variables: List[str], invariants: Dict[str, List[Comparison]],
+) -> Dict[str, RankingFunction]:
+    """Per state: one finite case per live region (region ∧ invariant), inf on the rest."""
+    rankings: Dict[str, RankingFunction] = {}
+    for q in states:
+        cases: List[RankingCase] = []
+        for ri, region in enumerate(regions):
+            mode_comps = _region_mode_comparisons(region)
+            piece = pieces.get((q, ri))
+            if piece is None:
+                cases.append(RankingCase(mode_comps, None, True))
+                continue
+            w_vals, u_val = piece
+            cases.append(RankingCase(mode_comps + list(invariants[q]),
+                                     _linear_expr(w_vals, u_val, variables), False))
+            cases.extend(_comparison_ladder(mode_comps, invariants[q]))
+        rankings[q] = RankingFunction(state=q, cases=cases)
+    return rankings
+
 
 def _assemble(
     subset: List[str], regions: List[Region], boxes: List[Box],
@@ -597,6 +670,8 @@ def synthesize_rankings(
     multiplier_bound: int = DEFAULT_MULTIPLIER_BOUND,
     reach_budget: int = DEFAULT_REACH_BUDGET,
     time_budget: Optional[float] = None,
+    invariants: Optional[Dict[str, List[Comparison]]] = None,
+    rational: bool = False,
 ) -> Dict[str, RankingFunction]:
     """Synthesize a (piecewise) linear ranking for each automaton state that lacks one,
     coarsest-first (fewest cases). Pre-existing rankings are treated as fixed constraints so the
@@ -605,6 +680,11 @@ def synthesize_rankings(
     `mode_vars`, if given, forces the partition variables (skipping auto-detection). `time_budget`
     (seconds) bounds the whole search wall-clock (Z3 has no internal limits otherwise). Raises
     SynthesisError if nothing in the search space works or the budget runs out.
+
+    `invariants`, if given, maps every automaton state to an inductive invariant of the product
+    (a conjunction of comparisons). Each state's finite cases are then restricted to its invariant
+    and everything outside it is inf, instead of using reachable-state bounding boxes. Inductiveness
+    is the caller's responsibility; the verifier rejects the ranking otherwise.
     """
     if not result.automaton_transitions:
         raise SynthesisError(
@@ -638,7 +718,7 @@ def synthesize_rankings(
         encode_transition(cmd, variables, nonstrict_only=True, types=types)
         for cmd in (result.commands or [])
     ]
-    reachable = _reachable_states(result, variables, types, reach_budget)
+    reachable = None if invariants is not None else _reachable_states(result, variables, types, reach_budget)
 
     # Nondeterministic inputs (havoc'd in some command) are not state — the ranking is independent of
     # them (their next value is free), so they must not be partition ("mode") variables.
@@ -680,15 +760,31 @@ def synthesize_rankings(
     for subset in candidate_subsets:
         _check_deadline(deadline)
         regions = _regions_of(subset, var_intervals)
+        if invariants is not None:
+            region_guards: Dict[str, List[Optional[List[Comparison]]]] = {}
+            for q in unknown_states:
+                guards_q: List[Optional[List[Comparison]]] = []
+                for r in regions:
+                    g = _region_mode_comparisons(r) + list(invariants[q])
+                    M, v = _guard_to_matrix(g, variables)
+                    guards_q.append(g if _feasible(M, v, deadline) else None)
+                region_guards[q] = guards_q
+            pieces = _solve_partition(result, variables, unknown_states, fixed, prog_encs, regions,
+                                      region_guards, coeff_bound, multiplier_bound, deadline,
+                                      rational=rational)
+            if pieces is not None:
+                return _assemble_invariant(regions, pieces, unknown_states, variables, invariants)
+            continue
         boxes = [_region_box(r, subset, variables, types, reachable) for r in regions]
         if all(b is None for b in boxes):
             continue  # no reachable states in any region (shouldn't happen for a real program)
-        region_guards: List[Optional[List[Comparison]]] = [
+        shared: List[Optional[List[Comparison]]] = [
             _finite_guard(regions[ri], boxes[ri], variables) if boxes[ri] is not None else None
             for ri in range(len(regions))
         ]
         pieces = _solve_partition(result, variables, unknown_states, fixed, prog_encs, regions,
-                                  boxes, region_guards, coeff_bound, multiplier_bound, deadline)
+                                  {q: shared for q in unknown_states}, coeff_bound,
+                                  multiplier_bound, deadline)
         if pieces is not None:
             return _assemble(subset, regions, boxes, pieces, unknown_states, variables, types)
 
