@@ -163,7 +163,8 @@ def translate_model(task: dict) -> dict:
             base = {"model": task["id"], "kind": kind, "property": name}
             signal.alarm(int(task["prop_timeout"]))  # one slow or huge property must not lose the model
             try:
-                props = [tla2gc.invariant_property(tr, name)] if kind == "inv" else tla2gc.temporal_property(tr, name)
+                props = ([tla2gc.invariant_property(tr, name)] if kind == "inv" else
+                         tla2gc.temporal_property(tr, name, holds=explicit_holds if task.get("min_fairness") else None))
             except tla2gc.Tautology:
                 instances.append({**base, "instance": f"{task['id']}__{name}", "status": "tautology"})
                 continue
@@ -180,11 +181,22 @@ def translate_model(task: dict) -> dict:
             for prop in props:
                 inst = {**base, "instance": f"{task['id']}__{_file_safe(prop.name)}", "part": prop.name,
                         "status": "ok", "preds": len(prop.preds), "aut_trans": len(prop.transitions),
-                        "fairness": len(tr.fairness) if kind == "prop" else 0}
+                        "fairness": getattr(prop, "fairness_used", 0) if kind == "prop" else 0,
+                        "spec_fairness": len(tr.fairness) if kind == "prop" else 0}
                 (gc_dir / f"{inst['instance']}.gc").write_text(tr.render(prop))
                 instances.append(inst)
     row["instances"] = instances
     return row
+
+
+def explicit_holds(gc: str, budget: int = 2_000_000):
+    """Does the property of a `.gc` instance hold (explicit product search)? None if too large."""
+    from explicit_check import TooLarge, check
+    from zkterm_tool.parser import parse_with_constants
+    try:
+        return check(parse_with_constants(gc), budget=budget).holds
+    except TooLarge:
+        return None
 
 
 def _file_safe(name: str) -> str:
@@ -355,7 +367,7 @@ def write_csv(path: Path, rows: list, keys: list):
 MODEL_KEYS = ["model", "spec", "status", "detail", "manifest_states", "tlc_states", "gc_states", "tlc_edges", "tlc_initial",
               "init_states", "boot", "variables", "slots", "commands", "fairness", "tlc_s", "translate_s", "check_s"]
 INSTANCE_KEYS = ["instance", "model", "kind", "property", "part", "status", "detail", "preds", "aut_trans",
-                 "fairness"]
+                 "fairness", "spec_fairness"]
 PROVE_KEYS = ["instance", "kind", "status", "detail", "commands", "aut_states", "aut_trans", "explicit",
               "product_states", "inv_atoms", "inv_atoms_min", "cases", "inf_cases", "obligations", "method",
               "ltl_s", "explicit_s", "houdini_s", "synth_s", "minimize_s", "cegis_s", "verify_s", "minimize_detail"]
@@ -378,6 +390,9 @@ def main(argv=None) -> int:
     ap.add_argument("--timeout", type=float, default=600.0)
     ap.add_argument("--tlc-timeout", type=float, default=900.0)
     ap.add_argument("--prop-timeout", type=float, default=300.0, help="Per property, when translating.")
+    ap.add_argument("--all-fairness", action="store_true",
+                    help="Assume all of the spec's fairness conditions (default: a minimal subset under which "
+                         "the property holds, found by explicit search).")
     ap.add_argument("--mem-limit-mb", type=int, default=2500)
     ap.add_argument("--retry-status", default="error")
     ap.add_argument("--explicit", action="store_true", help="Explicit product check before proving.")
@@ -409,7 +424,7 @@ def main(argv=None) -> int:
         models = discover(args.examples, args.max_states, results=tuple(args.results.split(",")), specs=specs)
         print(f"{len(models)} models selected", flush=True)
         tasks = [dict(m, work=str(args.work), tlc_timeout=args.tlc_timeout, mem_limit_mb=args.mem_limit_mb,
-                      prop_timeout=args.prop_timeout) for m in models]
+                      prop_timeout=args.prop_timeout, min_fairness=not args.all_fairness) for m in models]
         rows = run_pool("translate_model", tasks, "id", args.jobs, args.timeout + args.tlc_timeout,
                         args.work / "translate.jsonl", retry)
         for r in rows:

@@ -128,3 +128,13 @@ def test_properties_agree_with_explicit_check(translation):
         verdicts[prop.name] = check(res).holds
     assert verdicts == {"Mutex": True, "Live[p=1]": True, "Live[p=2]": True,
                         "NotLive[0]": True, "NotLive[1]": False, "Ticks": True}
+
+
+@pytest.mark.skipif(not _spot_available(), reason="needs Spot's ltl2tgba")
+def test_minimal_fairness_keeps_the_property(translation):
+    from run_tlaplus import explicit_holds
+
+    tr = translation
+    for prop in tla2gc.temporal_property(tr, "Live", holds=explicit_holds):
+        assert 0 < prop.fairness_used <= len(tr.fairness)  # stuttering refutes Live without fairness
+        assert explicit_holds(tr.render(prop)) is True
