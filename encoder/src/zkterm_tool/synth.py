@@ -583,10 +583,13 @@ def _comparison_ladder(prefix: List[Comparison], conj: List[Comparison]) -> List
 
 
 def _assemble_invariant(
-    regions: List[Region], pieces: Dict[Tuple[str, int], Tuple[List[int], int]],
+    subset: List[str], regions: List[Region], pieces: Dict[Tuple[str, int], Tuple[List[int], int]],
     states: List[str], variables: List[str], invariants: Dict[str, List[Comparison]],
+    types: Dict[str, TypeDef],
 ) -> Dict[str, RankingFunction]:
     """Per state: one finite case per live region (region ∧ invariant), inf on the rest."""
+    mode_typed = [v for v in subset if v in types]
+    mode_type_bounds = {v: (types[v].min_value, types[v].max_value) for v in mode_typed}
     rankings: Dict[str, RankingFunction] = {}
     for q in states:
         cases: List[RankingCase] = []
@@ -600,6 +603,8 @@ def _assemble_invariant(
             cases.append(RankingCase(mode_comps + list(invariants[q]),
                                      _linear_expr(w_vals, u_val, variables), False))
             cases.extend(_comparison_ladder(mode_comps, invariants[q]))
+        # Mode variables out of their type range.
+        cases.extend(_box_ladder([], mode_typed, mode_type_bounds))
         rankings[q] = RankingFunction(state=q, cases=cases)
     return rankings
 
@@ -773,7 +778,8 @@ def synthesize_rankings(
                                       region_guards, coeff_bound, multiplier_bound, deadline,
                                       rational=rational)
             if pieces is not None:
-                return _assemble_invariant(regions, pieces, unknown_states, variables, invariants)
+                return _assemble_invariant(subset, regions, pieces, unknown_states, variables, invariants,
+                                           types)
             continue
         boxes = [_region_box(r, subset, variables, types, reachable) for r in regions]
         if all(b is None for b in boxes):
