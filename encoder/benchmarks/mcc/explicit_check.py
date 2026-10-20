@@ -16,6 +16,7 @@ that agreement with MCC verdicts checks the translation and the product semantic
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
 
 from zkterm_tool.ast_types import BinOp, Comparison, CompOp, Expr, Neg, Num, Var
@@ -101,17 +102,36 @@ def _product(result: ParseResult):
                                               for _v in _vars(c)})
     idx = {v: i for i, v in enumerate(variables)}
 
-    # Initial state: MCC init conditions fix every variable with an equality.
-    init = [0] * len(variables)
-    fixed = set()
+    # Initial states: the init condition bounds every variable (`var == c`, or a box of
+    # `var <= c` / `var >= c` together with the variable's type); all points of the box that
+    # satisfy the remaining init constraints are enumerated.
+    lo = [None] * len(variables)
+    hi = [None] * len(variables)
+    for v, t in (result.types or {}).items():
+        if v in idx:
+            lo[idx[v]], hi[idx[v]] = t.min_value, t.max_value
+    others = []  # multi-variable init constraints filter the box's points
     for c in result.init_condition or []:
-        if c.op != CompOp.EQ or not isinstance(c.left, Var) or not isinstance(c.right, Num):
-            raise ValueError("explicit check expects `var == const` init conditions")
-        init[idx[c.left.name]] = c.right.value
-        fixed.add(c.left.name)
-    if fixed != set(variables):
-        raise ValueError("init condition does not fix every variable")
-    x0 = tuple(init)
+        coeffs, const, op = _compile_comparison(c, idx)
+        if len(coeffs) != 1 or abs(coeffs[0][1]) != 1:
+            others.append((coeffs, const, op))
+            continue
+        (i, a), = coeffs
+        if a < 0:  # -x + k op 0  <=>  x - k (flipped op) 0
+            const = -const
+            op = {CompOp.LE: CompOp.GE, CompOp.GE: CompOp.LE, CompOp.LT: CompOp.GT,
+                  CompOp.GT: CompOp.LT}.get(op, op)
+        v = -const  # x op v
+        if op in (CompOp.EQ, CompOp.LE, CompOp.LT):
+            b = v if op != CompOp.LT else v - 1
+            hi[i] = b if hi[i] is None else min(hi[i], b)
+        if op in (CompOp.EQ, CompOp.GE, CompOp.GT):
+            b = v if op != CompOp.GT else v + 1
+            lo[i] = b if lo[i] is None else max(lo[i], b)
+    if any(x is None for x in lo + hi):
+        raise ValueError("init condition does not bound every variable")
+    x0s = [tuple(p) for p in itertools.product(*(range(a, b + 1) for a, b in zip(lo, hi)))
+           if _holds(others, p)]
 
     commands = []
     for cmd in result.commands:
@@ -134,7 +154,7 @@ def _product(result: ParseResult):
                 y[i] = const + sum(v * x[j] for j, v in coeffs.items())
             yield (ci, tuple(y)) if with_index else tuple(y)
 
-    return variables, x0, program_successors, by_state
+    return variables, x0s, program_successors, by_state
 
 
 def sample_markings(result: ParseResult, budget: int = 100_000, walk_share: float = 0.5,
@@ -147,13 +167,14 @@ def sample_markings(result: ParseResult, budget: int = 100_000, walk_share: floa
     that fired at least once, complete)."""
     from collections import deque
 
-    variables, x0, program_successors, by_state = _product(result)
+    variables, x0s, program_successors, by_state = _product(result)
     seen = set()
     per_state: dict[str, set] = {}
     queue = deque()
     for q in result.automaton_initial_states or []:
-        seen.add((q, x0))
-        queue.append((q, x0))
+        for x0 in x0s:
+            seen.add((q, x0))
+            queue.append((q, x0))
     complete = True
     fired = set()
     bfs_budget = budget
@@ -178,7 +199,7 @@ def sample_markings(result: ParseResult, budget: int = 100_000, walk_share: floa
         import random
 
         rng = random.Random(seed)
-        starts = [(q, x0) for q in result.automaton_initial_states or []]
+        starts = [(q, x0) for q in result.automaton_initial_states or [] for x0 in x0s]
         while len(seen) < bfs_budget and starts:
             q, x = rng.choice(starts)
             for _ in range(walk_length):
@@ -197,7 +218,7 @@ def sample_markings(result: ParseResult, budget: int = 100_000, walk_share: floa
 
 
 def check(result: ParseResult, budget: int = 2_000_000, keep_rank: bool = False) -> ExplicitResult:
-    variables, x0, program_successors, by_state = _product(result)
+    variables, x0s, program_successors, by_state = _product(result)
 
     # Explore the product; nodes are numbered in discovery order.
     node_id: dict[tuple[str, tuple[int, ...]], int] = {}
@@ -218,7 +239,8 @@ def check(result: ParseResult, budget: int = 2_000_000, keep_rank: bool = False)
 
     stack: list[int] = []
     for q in result.automaton_initial_states or []:
-        intern((q, x0))
+        for x0 in x0s:
+            intern((q, x0))
     while stack:
         i = stack.pop()
         q, x = nodes[i]

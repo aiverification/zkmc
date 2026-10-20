@@ -38,3 +38,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-benchmark>=5.1.0",
 ]
+tlaplus = [
+    "tree-sitter>=0.26.0",
+    "tree-sitter-tlaplus>=1.5.0",
+]

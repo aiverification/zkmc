@@ -1,0 +1,98 @@
+// TLA+ model byihive__VoucherLifeCycle
+// 2 variables, 6 slots, 9 commands, 1 initial states
+//   vState: vState_v1 vState_v2 vState_v3
+//   vlcState: vlcState_v1 vlcState_v2 vlcState_v3
+//   vState_v1: 0="phantom", 1="valid", 2="redeemed", 3="cancelled"
+//   vState_v2: 0="phantom", 1="valid", 2="redeemed", 3="cancelled"
+//   vState_v3: 0="phantom", 1="valid", 2="redeemed", 3="cancelled"
+//   vlcState_v1: 0="init", 1="working", 2="done"
+//   vlcState_v2: 0="init", 1="working", 2="done"
+//   vlcState_v3: 0="init", 1="working", 2="done"
+
+type vState_v1: 0..3
+type vState_v2: 0..3
+type vState_v3: 0..3
+type vlcState_v1: 0..2
+type vlcState_v2: 0..2
+type vlcState_v3: 0..2
+
+init: vState_v1 == 0 && vState_v2 == 0 && vState_v3 == 0 && vlcState_v1 == 0 && vlcState_v2 == 0 && vlcState_v3 == 0
+
+// VNext
+[] vState_v1 == 0 && vlcState_v1 == 0 -> vState_v1 = 1; vlcState_v1 = 1
+// VNext
+[] vState_v1 == 1 && vlcState_v1 == 1 -> vState_v1 = 2; vlcState_v1 = 2
+// VNext
+[] vState_v1 == 1 && vlcState_v1 == 1 -> vState_v1 = 3; vlcState_v1 = 2
+// VNext
+[] vState_v2 == 0 && vlcState_v2 == 0 -> vState_v2 = 1; vlcState_v2 = 1
+// VNext
+[] vState_v2 == 1 && vlcState_v2 == 1 -> vState_v2 = 2; vlcState_v2 = 2
+// VNext
+[] vState_v2 == 1 && vlcState_v2 == 1 -> vState_v2 = 3; vlcState_v2 = 2
+// VNext
+[] vState_v3 == 0 && vlcState_v3 == 0 -> vState_v3 = 1; vlcState_v3 = 1
+// VNext
+[] vState_v3 == 1 && vlcState_v3 == 1 -> vState_v3 = 2; vlcState_v3 = 2
+// VNext
+[] vState_v3 == 1 && vlcState_v3 == 1 -> vState_v3 = 3; vlcState_v3 = 2
+// stuttering
+[] true -> vState_v1 = vState_v1
+
+// VConsistent: invariant VConsistent
+// LTL: G(p0)
+//   p0 := (vState_v1 >= 2 && vState_v2 >= 2 && vState_v3 >= 2 && vlcState_v1 == 2 && vlcState_v2 == 2 && vlcState_v3 == 2) || (vState_v1 >= 2 && vState_v2 >= 2 && vState_v3 == 0 && vlcState_v1 == 2 && vlcState_v2 == 2 && vlcState_v3 == 0) || (vState_v1 >= 2 && vState_v2 >= 2 && vState_v3 == 1 && vlcState_v1 = ...
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q1
+trans!(q0, q0): true
+trans(q1, q0): vState_v1 == 0 && vlcState_v1 >= 1
+trans(q1, q0): vState_v1 >= 2 && vlcState_v1 <= 1
+trans(q1, q0): vState_v1 >= 1 && vlcState_v1 == 0
+trans(q1, q0): vState_v1 <= 1 && vlcState_v1 == 2
+trans(q1, q0): vState_v2 == 0 && vlcState_v2 >= 1
+trans(q1, q0): vState_v2 >= 2 && vlcState_v2 <= 1
+trans(q1, q0): vState_v2 >= 1 && vlcState_v2 == 0
+trans(q1, q0): vState_v2 <= 1 && vlcState_v2 == 2
+trans(q1, q0): vState_v3 == 0 && vlcState_v3 >= 1
+trans(q1, q0): vState_v3 >= 2 && vlcState_v3 <= 1
+trans(q1, q0): vState_v3 >= 1 && vlcState_v3 == 0
+trans(q1, q0): vState_v3 <= 1 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 >= 2 && vState_v2 >= 2 && vState_v3 >= 2 && vlcState_v1 == 2 && vlcState_v2 == 2 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 >= 2 && vState_v2 >= 2 && vState_v3 == 0 && vlcState_v1 == 2 && vlcState_v2 == 2 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 >= 2 && vState_v2 >= 2 && vState_v3 == 1 && vlcState_v1 == 2 && vlcState_v2 == 2 && vlcState_v3 == 1
+trans(q1, q1): vState_v1 >= 2 && vState_v2 == 0 && vState_v3 >= 2 && vlcState_v1 == 2 && vlcState_v2 == 0 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 >= 2 && vState_v2 == 1 && vState_v3 >= 2 && vlcState_v1 == 2 && vlcState_v2 == 1 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 == 0 && vState_v2 >= 2 && vState_v3 >= 2 && vlcState_v1 == 0 && vlcState_v2 == 2 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 == 1 && vState_v2 >= 2 && vState_v3 >= 2 && vlcState_v1 == 1 && vlcState_v2 == 2 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 >= 2 && vState_v2 == 0 && vState_v3 == 0 && vlcState_v1 == 2 && vlcState_v2 == 0 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 >= 2 && vState_v2 == 0 && vState_v3 == 1 && vlcState_v1 == 2 && vlcState_v2 == 0 && vlcState_v3 == 1
+trans(q1, q1): vState_v1 >= 2 && vState_v2 == 1 && vState_v3 == 0 && vlcState_v1 == 2 && vlcState_v2 == 1 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 >= 2 && vState_v2 == 1 && vState_v3 == 1 && vlcState_v1 == 2 && vlcState_v2 == 1 && vlcState_v3 == 1
+trans(q1, q1): vState_v1 == 0 && vState_v2 >= 2 && vState_v3 == 0 && vlcState_v1 == 0 && vlcState_v2 == 2 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 == 0 && vState_v2 >= 2 && vState_v3 == 1 && vlcState_v1 == 0 && vlcState_v2 == 2 && vlcState_v3 == 1
+trans(q1, q1): vState_v1 == 0 && vState_v2 == 0 && vState_v3 >= 2 && vlcState_v1 == 0 && vlcState_v2 == 0 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 == 0 && vState_v2 == 1 && vState_v3 >= 2 && vlcState_v1 == 0 && vlcState_v2 == 1 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 == 1 && vState_v2 >= 2 && vState_v3 == 0 && vlcState_v1 == 1 && vlcState_v2 == 2 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 == 1 && vState_v2 >= 2 && vState_v3 == 1 && vlcState_v1 == 1 && vlcState_v2 == 2 && vlcState_v3 == 1
+trans(q1, q1): vState_v1 == 1 && vState_v2 == 0 && vState_v3 >= 2 && vlcState_v1 == 1 && vlcState_v2 == 0 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 == 1 && vState_v2 == 1 && vState_v3 >= 2 && vlcState_v1 == 1 && vlcState_v2 == 1 && vlcState_v3 == 2
+trans(q1, q1): vState_v1 == 0 && vState_v2 == 0 && vState_v3 == 0 && vlcState_v1 == 0 && vlcState_v2 == 0 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 == 0 && vState_v2 == 0 && vState_v3 == 1 && vlcState_v1 == 0 && vlcState_v2 == 0 && vlcState_v3 == 1
+trans(q1, q1): vState_v1 == 0 && vState_v2 == 1 && vState_v3 == 0 && vlcState_v1 == 0 && vlcState_v2 == 1 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 == 0 && vState_v2 == 1 && vState_v3 == 1 && vlcState_v1 == 0 && vlcState_v2 == 1 && vlcState_v3 == 1
+trans(q1, q1): vState_v1 == 1 && vState_v2 == 0 && vState_v3 == 0 && vlcState_v1 == 1 && vlcState_v2 == 0 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 == 1 && vState_v2 == 0 && vState_v3 == 1 && vlcState_v1 == 1 && vlcState_v2 == 0 && vlcState_v3 == 1
+trans(q1, q1): vState_v1 == 1 && vState_v2 == 1 && vState_v3 == 0 && vlcState_v1 == 1 && vlcState_v2 == 1 && vlcState_v3 == 0
+trans(q1, q1): vState_v1 == 1 && vState_v2 == 1 && vState_v3 == 1 && vlcState_v1 == 1 && vlcState_v2 == 1 && vlcState_v3 == 1
+
+rank(q1):
+  [] ((2 * vState_v1) + (-3 * vlcState_v1)) <= 0 && ((-1 * vState_v1) + vlcState_v1) <= 0 && ((2 * vState_v2) + (-3 * vlcState_v2)) <= 0 && ((-1 * vState_v2) + vlcState_v2) <= 0 && ((2 * vState_v3) + (-3 * vlcState_v3)) <= 0 && ((-1 * vState_v3) + vlcState_v3) <= 0 -> 0
+  [] ((2 * vState_v1) + (-3 * vlcState_v1)) > 0 -> inf
+  [] ((2 * vState_v1) + (-3 * vlcState_v1)) <= 0 && ((-1 * vState_v1) + vlcState_v1) > 0 -> inf
+  [] ((2 * vState_v1) + (-3 * vlcState_v1)) <= 0 && ((-1 * vState_v1) + vlcState_v1) <= 0 && ((2 * vState_v2) + (-3 * vlcState_v2)) > 0 -> inf
+  [] ((2 * vState_v1) + (-3 * vlcState_v1)) <= 0 && ((-1 * vState_v1) + vlcState_v1) <= 0 && ((2 * vState_v2) + (-3 * vlcState_v2)) <= 0 && ((-1 * vState_v2) + vlcState_v2) > 0 -> inf
+  [] ((2 * vState_v1) + (-3 * vlcState_v1)) <= 0 && ((-1 * vState_v1) + vlcState_v1) <= 0 && ((2 * vState_v2) + (-3 * vlcState_v2)) <= 0 && ((-1 * vState_v2) + vlcState_v2) <= 0 && ((2 * vState_v3) + (-3 * vlcState_v3)) > 0 -> inf
+  [] ((2 * vState_v1) + (-3 * vlcState_v1)) <= 0 && ((-1 * vState_v1) + vlcState_v1) <= 0 && ((2 * vState_v2) + (-3 * vlcState_v2)) <= 0 && ((-1 * vState_v2) + vlcState_v2) <= 0 && ((2 * vState_v3) + (-3 * vlcState_v3)) <= 0 && ((-1 * vState_v3) + vlcState_v3) > 0 -> inf
+
+rank(q0):
+  [] true -> inf

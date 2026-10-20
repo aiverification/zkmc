@@ -111,94 +111,103 @@ def _run_one(task: dict) -> dict:
         row["explicit_s"] = round(time.time() - t0, 2)
 
     if task["synth"] and (task["oracle"] == "TRUE" or task["synth_all"]):
-        from zkterm_tool import validate_ranking_function, verify_termination
-        from zkterm_tool.ranking_encoder import encode_ranking_functions
-        from zkterm_tool.synth import SynthesisError, synthesize_into
-        invariants = None
-        if task["houdini"]:
-            from invariants import houdini
-            phase("houdini")
-            t0 = time.time()
-            try:
-                invariants = houdini(result, time_budget=task["synth_budget"],
-                                     sample_budget=task["samples"])
-            except TimeoutError:
-                row["status"] = "timeout"
-                row["detail"] = "houdini"
-                return row
-            row["houdini_s"] = round(time.time() - t0, 2)
-            row["inv_atoms"] = max(len(cs) for cs in invariants.values())
-        phase("synth")
-        t0 = time.time()
-        try:
-            synthesize_into(result, max_mode_vars=task["max_mode_vars"],
-                            time_budget=task["synth_budget"], invariants=invariants,
-                            rational=task.get("rational", False))
-        except SynthesisError as e:
-            row["synth_s"] = round(time.time() - t0, 2)
-            if invariants is not None and task.get("cegis"):
-                # Fallback: guess-and-check a linear piece per automaton state from samples and
-                # counterexamples (scales to large automata where the Farkas LP does not).
-                from cegis import CegisFailure, cegis_rankings
-                phase("cegis")
-                t0 = time.time()
-                try:
-                    result.ranking_functions = cegis_rankings(result, invariants,
-                                                              time_budget=task["synth_budget"])
-                    row["cegis_s"] = round(time.time() - t0, 2)
-                    row["method"] = "cegis"
-                except CegisFailure as ce:
-                    row["status"] = "timeout" if "budget" in str(ce) else "no-ranking"
-                    row["detail"] = f"cegis: {ce}"[:80]
-                    return row
-            else:
-                row["status"] = "timeout" if "budget" in str(e) else "no-ranking"
-                return row
-        except ValueError as e:
-            row["status"] = "error"
-            row["detail"] = str(e).splitlines()[0][:80]
-            return row
-        row["synth_s"] = round(time.time() - t0, 2)
-        if invariants is not None and task.get("minimize"):
-            # Keep only the invariant atoms the ranking's proof uses (smaller inf ladders, so far
-            # fewer obligations); fall back to the full invariants if anything goes wrong.
-            from invariants import needed_atoms
-            from zkterm_tool.synth import synthesize_rankings
-            phase("minimize")
-            t0 = time.time()
-            try:
-                small = needed_atoms(result, invariants, result.ranking_functions,
-                                     time_budget=task.get("minimize_budget", 60))
-                import dataclasses
-                rankings = synthesize_rankings(dataclasses.replace(result, ranking_functions={}),
-                                               max_mode_vars=task["max_mode_vars"],
-                                               time_budget=task.get("minimize_budget", 60),
-                                               invariants=small,
-                                               rational=task.get("rational", False))
-                result.ranking_functions = rankings
-                row["inv_atoms_min"] = max(len(cs) for cs in small.values())
-            except (TimeoutError, SynthesisError, RuntimeError) as e:
-                row["minimize_detail"] = f"{type(e).__name__}: {str(e)[:60]}"
-            row["minimize_s"] = round(time.time() - t0, 2)
-        for state, enc in encode_ranking_functions(result.ranking_functions).items():
-            ok, errors = validate_ranking_function(enc.finite_cases, enc.infinity_cases, enc.variables)
-            if not ok:
-                row["status"] = "verify-fail"
-                row["detail"] = f"invalid ranking ({state}): {errors[0][:50]}"
-                return row
-        phase("verify")
-        t0 = time.time()
-        v = verify_termination(result)
-        row["verify_s"] = round(time.time() - t0, 2)
-        row["cases"] = sum(1 for rf in result.ranking_functions.values()
-                           for c in rf.cases if not c.is_infinity)
-        row["inf_cases"] = sum(1 for rf in result.ranking_functions.values()
-                               for c in rf.cases if c.is_infinity)
-        row["obligations"] = len(v.obligations)
-        row["status"] = "pass" if v.passed else "verify-fail"
-        if v.passed and task["emit"]:
+        prove(result, task, row, phase)
+        if row.get("status") == "pass" and task["emit"]:
             out = Path(task["emit"]) / f"{prop.id}.gc"
             out.write_text(gc + "\n" + _render_rankings(result))
+    return row
+
+
+def prove(result, task: dict, row: dict, phase) -> dict:
+    """Synthesize a ranking for `result` (optionally with Houdini invariants, minimization and
+    the CEGIS fallback, as configured in `task`), validate and verify it. Sets `row["status"]`
+    (`pass` iff verified) and timing/size columns; leaves the ranking in `result`."""
+    from zkterm_tool import validate_ranking_function, verify_termination
+    from zkterm_tool.ranking_encoder import encode_ranking_functions
+    from zkterm_tool.synth import SynthesisError, synthesize_into
+    invariants = None
+    if task["houdini"]:
+        from invariants import houdini
+        phase("houdini")
+        t0 = time.time()
+        try:
+            invariants = houdini(result, time_budget=task["synth_budget"],
+                                 sample_budget=task["samples"], relational=task.get("relational", False),
+                                 groups=task.get("groups"))
+        except TimeoutError:
+            row["status"] = "timeout"
+            row["detail"] = "houdini"
+            return row
+        row["houdini_s"] = round(time.time() - t0, 2)
+        row["inv_atoms"] = max(len(cs) for cs in invariants.values())
+    phase("synth")
+    t0 = time.time()
+    try:
+        synthesize_into(result, max_mode_vars=task["max_mode_vars"],
+                        time_budget=task["synth_budget"], invariants=invariants,
+                        rational=task.get("rational", False))
+    except SynthesisError as e:
+        row["synth_s"] = round(time.time() - t0, 2)
+        if invariants is not None and task.get("cegis"):
+            # Fallback: guess-and-check a linear piece per automaton state from samples and
+            # counterexamples (scales to large automata where the Farkas LP does not).
+            from cegis import CegisFailure, cegis_rankings
+            phase("cegis")
+            t0 = time.time()
+            try:
+                result.ranking_functions = cegis_rankings(result, invariants,
+                                                          time_budget=task["synth_budget"])
+                row["cegis_s"] = round(time.time() - t0, 2)
+                row["method"] = "cegis"
+            except CegisFailure as ce:
+                row["status"] = "timeout" if "budget" in str(ce) else "no-ranking"
+                row["detail"] = f"cegis: {ce}"[:80]
+                return row
+        else:
+            row["status"] = "timeout" if "budget" in str(e) else "no-ranking"
+            return row
+    except ValueError as e:
+        row["status"] = "error"
+        row["detail"] = str(e).splitlines()[0][:80]
+        return row
+    row["synth_s"] = round(time.time() - t0, 2)
+    if invariants is not None and task.get("minimize"):
+        # Keep only the invariant atoms the ranking's proof uses (smaller inf ladders, so far
+        # fewer obligations); fall back to the full invariants if anything goes wrong.
+        from invariants import needed_atoms
+        from zkterm_tool.synth import synthesize_rankings
+        phase("minimize")
+        t0 = time.time()
+        try:
+            small = needed_atoms(result, invariants, result.ranking_functions,
+                                 time_budget=task.get("minimize_budget", 60))
+            import dataclasses
+            rankings = synthesize_rankings(dataclasses.replace(result, ranking_functions={}),
+                                           max_mode_vars=task["max_mode_vars"],
+                                           time_budget=task.get("minimize_budget", 60),
+                                           invariants=small,
+                                           rational=task.get("rational", False))
+            result.ranking_functions = rankings
+            row["inv_atoms_min"] = max(len(cs) for cs in small.values())
+        except (TimeoutError, SynthesisError, RuntimeError) as e:
+            row["minimize_detail"] = f"{type(e).__name__}: {str(e)[:60]}"
+        row["minimize_s"] = round(time.time() - t0, 2)
+    for state, enc in encode_ranking_functions(result.ranking_functions).items():
+        ok, errors = validate_ranking_function(enc.finite_cases, enc.infinity_cases, enc.variables)
+        if not ok:
+            row["status"] = "verify-fail"
+            row["detail"] = f"invalid ranking ({state}): {errors[0][:50]}"
+            return row
+    phase("verify")
+    t0 = time.time()
+    v = verify_termination(result)
+    row["verify_s"] = round(time.time() - t0, 2)
+    row["cases"] = sum(1 for rf in result.ranking_functions.values()
+                       for c in rf.cases if not c.is_infinity)
+    row["inf_cases"] = sum(1 for rf in result.ranking_functions.values()
+                           for c in rf.cases if c.is_infinity)
+    row["obligations"] = len(v.obligations)
+    row["status"] = "pass" if v.passed else "verify-fail"
     return row
 
 

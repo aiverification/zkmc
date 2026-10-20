@@ -1,0 +1,151 @@
+// TLA+ model GermanProtocol__MCGermanData
+// 11 variables, 23 slots, 34 commands, 2 initial states
+//   cache: cache_n1_data cache_n1_state cache_n2_data cache_n2_state
+//   chan1: chan1_n1_cmd chan1_n2_cmd
+//   chan2: chan2_n1_cmd chan2_n1_data chan2_n2_cmd chan2_n2_data
+//   chan3: chan3_n1_cmd chan3_n1_data chan3_n2_cmd chan3_n2_data
+//   invSet: invSet_n1 invSet_n2
+//   shrSet: shrSet_n1 shrSet_n2
+//   exGntd: exGntd
+//   curCmd: curCmd
+//   curPtr: curPtr
+//   memData: memData
+//   auxData: auxData
+//   cache_n1_data: 0=noData, 1=d1, 2=d2
+//   cache_n1_state: 0="I", 1="S", 2="E"
+//   cache_n2_data: 0=noData, 1=d1, 2=d2
+//   cache_n2_state: 0="I", 1="S", 2="E"
+//   chan1_n1_cmd: 0="Empty", 1="ReqS", 2="ReqE"
+//   chan1_n2_cmd: 0="Empty", 1="ReqS", 2="ReqE"
+//   chan2_n1_cmd: 0="Empty", 3="GntS", 4="GntE", 5="Inv"
+//   chan2_n1_data: 0=noData, 1=d1, 2=d2
+//   chan2_n2_cmd: 0="Empty", 3="GntS", 4="GntE", 5="Inv"
+//   chan2_n2_data: 0=noData, 1=d1, 2=d2
+//   chan3_n1_cmd: 0="Empty", 6="InvAck"
+//   chan3_n1_data: 0=noData, 1=d1, 2=d2
+//   chan3_n2_cmd: 0="Empty", 6="InvAck"
+//   chan3_n2_data: 0=noData, 1=d1, 2=d2
+//   invSet_n1: n1 in set
+//   invSet_n2: n2 in set
+//   shrSet_n1: n1 in set
+//   shrSet_n2: n2 in set
+//   curCmd: 0="Empty", 1="ReqS", 2="ReqE"
+//   curPtr: 0=noNode, 1=n1, 2=n2
+//   memData: 1=d1, 2=d2
+//   auxData: 1=d1, 2=d2
+
+type cache_n1_data: 0..2
+type cache_n1_state: 0..2
+type cache_n2_data: 0..2
+type cache_n2_state: 0..2
+type chan1_n1_cmd: 0..2
+type chan1_n2_cmd: 0..2
+type chan2_n1_cmd: 0..5
+type chan2_n1_data: 0..2
+type chan2_n2_cmd: 0..5
+type chan2_n2_data: 0..2
+type chan3_n1_cmd: 0..6
+type chan3_n1_data: 0..2
+type chan3_n2_cmd: 0..6
+type chan3_n2_data: 0..2
+type invSet_n1: 0..1
+type invSet_n2: 0..1
+type shrSet_n1: 0..1
+type shrSet_n2: 0..1
+type exGntd: 0..1
+type curCmd: 0..2
+type curPtr: 0..2
+type memData: 1..2
+type auxData: 1..2
+
+init: cache_n1_data == 0 && cache_n1_state == 0 && cache_n2_data == 0 && cache_n2_state == 0 && chan1_n1_cmd == 0 && chan1_n2_cmd == 0 && chan2_n1_cmd == 0 && chan2_n1_data == 0 && chan2_n2_cmd == 0 && chan2_n2_data == 0 && chan3_n1_cmd == 0 && chan3_n1_data == 0 && chan3_n2_cmd == 0 && chan3_n2_data == 0 && invSet_n1 == 0 && invSet_n2 == 0 && shrSet_n1 == 0 && shrSet_n2 == 0 && exGntd == 0 && curCmd == 0 && curPtr == 0 && memData >= 1 && memData <= 2 && auxData >= 1 && auxData <= 2 && -memData + auxData == 0 && memData - auxData <= 0 && -memData + auxData <= 0
+
+// Store(n1, d1)
+[] cache_n1_state == 2 -> cache_n1_data = 1; auxData = 1
+// Store(n1, d2)
+[] cache_n1_state == 2 -> cache_n1_data = 2; auxData = 2
+// Store(n2, d1)
+[] cache_n2_state == 2 -> cache_n2_data = 1; auxData = 1
+// Store(n2, d2)
+[] cache_n2_state == 2 -> cache_n2_data = 2; auxData = 2
+// SendReq(n1)
+[] cache_n1_state <= 1 && chan1_n1_cmd == 0 -> chan1_n1_cmd = 2
+// SendReq(n1)
+[] cache_n1_state == 0 && chan1_n1_cmd == 0 -> chan1_n1_cmd = 1
+// RecvReq(n1)
+[] chan1_n1_cmd >= 1 && curCmd == 0 -> chan1_n1_cmd = 0; invSet_n1 = shrSet_n1; invSet_n2 = shrSet_n2; curCmd = chan1_n1_cmd; curPtr = 1
+// SendInv(n1)
+[] chan2_n1_cmd == 0 && curCmd == 2 && invSet_n1 == 1 -> chan2_n1_cmd = 5; invSet_n1 = 0
+// SendInv(n1)
+[] chan2_n1_cmd == 0 && curCmd == 1 && exGntd == 1 && invSet_n1 == 1 -> chan2_n1_cmd = 5; invSet_n1 = 0
+// SendInvAck(n1)
+[] cache_n1_data == 0 && cache_n1_state == 2 && chan2_n1_cmd == 5 && chan3_n1_cmd == 0 -> cache_n1_state = 0; chan2_n1_cmd = 0; chan2_n1_data = 0; chan3_n1_cmd = 6; chan3_n1_data = 0
+// SendInvAck(n1)
+[] cache_n1_data == 1 && cache_n1_state == 2 && chan2_n1_cmd == 5 && chan3_n1_cmd == 0 -> cache_n1_data = 0; cache_n1_state = 0; chan2_n1_cmd = 0; chan2_n1_data = 0; chan3_n1_cmd = 6; chan3_n1_data = 1
+// SendInvAck(n1)
+[] cache_n1_data == 2 && cache_n1_state == 2 && chan2_n1_cmd == 5 && chan3_n1_cmd == 0 -> cache_n1_data = 0; cache_n1_state = 0; chan2_n1_cmd = 0; chan2_n1_data = 0; chan3_n1_cmd = 6; chan3_n1_data = 2
+// SendInvAck(n1)
+[] cache_n1_state <= 1 && chan2_n1_cmd == 5 && chan3_n1_cmd == 0 -> cache_n1_data = 0; cache_n1_state = 0; chan2_n1_cmd = 0; chan2_n1_data = 0; chan3_n1_cmd = 6; chan3_n1_data = 0
+// RecvInvAck(n1)
+[] chan3_n1_cmd == 6 && curCmd >= 1 && exGntd == 1 -> chan3_n1_cmd = 0; chan3_n1_data = 0; shrSet_n1 = 0; exGntd = 0; memData = chan3_n1_data
+// RecvInvAck(n1)
+[] chan3_n1_cmd == 6 && curCmd >= 1 && exGntd == 0 -> chan3_n1_cmd = 0; shrSet_n1 = 0
+// SendGnt(n1)
+[] chan2_n1_cmd == 0 && curCmd == 1 && curPtr == 1 && exGntd == 0 -> chan2_n1_cmd = 3; chan2_n1_data = memData; shrSet_n1 = 1; curCmd = 0; curPtr = 0
+// SendGnt(n1)
+[] chan2_n1_cmd == 0 && curCmd == 2 && curPtr == 1 && exGntd == 0 && shrSet_n1 == 0 && shrSet_n2 == 0 -> chan2_n1_cmd = 4; chan2_n1_data = memData; shrSet_n1 = 1; exGntd = 1; curCmd = 0; curPtr = 0
+// RecvGnt(n1)
+[] chan2_n1_cmd == 3 -> cache_n1_data = chan2_n1_data; cache_n1_state = 1; chan2_n1_cmd = 0; chan2_n1_data = 0
+// RecvGnt(n1)
+[] chan2_n1_cmd == 4 -> cache_n1_data = chan2_n1_data; cache_n1_state = 2; chan2_n1_cmd = 0; chan2_n1_data = 0
+// SendReq(n2)
+[] cache_n2_state <= 1 && chan1_n2_cmd == 0 -> chan1_n2_cmd = 2
+// SendReq(n2)
+[] cache_n2_state == 0 && chan1_n2_cmd == 0 -> chan1_n2_cmd = 1
+// RecvReq(n2)
+[] chan1_n2_cmd >= 1 && curCmd == 0 -> chan1_n2_cmd = 0; invSet_n1 = shrSet_n1; invSet_n2 = shrSet_n2; curCmd = chan1_n2_cmd; curPtr = 2
+// SendInv(n2)
+[] chan2_n2_cmd == 0 && curCmd == 2 && invSet_n2 == 1 -> chan2_n2_cmd = 5; invSet_n2 = 0
+// SendInv(n2)
+[] chan2_n2_cmd == 0 && curCmd == 1 && exGntd == 1 && invSet_n2 == 1 -> chan2_n2_cmd = 5; invSet_n2 = 0
+// SendInvAck(n2)
+[] cache_n2_data == 0 && cache_n2_state == 2 && chan2_n2_cmd == 5 && chan3_n2_cmd == 0 -> cache_n2_state = 0; chan2_n2_cmd = 0; chan2_n2_data = 0; chan3_n2_cmd = 6; chan3_n2_data = 0
+// SendInvAck(n2)
+[] cache_n2_data == 1 && cache_n2_state == 2 && chan2_n2_cmd == 5 && chan3_n2_cmd == 0 -> cache_n2_data = 0; cache_n2_state = 0; chan2_n2_cmd = 0; chan2_n2_data = 0; chan3_n2_cmd = 6; chan3_n2_data = 1
+// SendInvAck(n2)
+[] cache_n2_data == 2 && cache_n2_state == 2 && chan2_n2_cmd == 5 && chan3_n2_cmd == 0 -> cache_n2_data = 0; cache_n2_state = 0; chan2_n2_cmd = 0; chan2_n2_data = 0; chan3_n2_cmd = 6; chan3_n2_data = 2
+// SendInvAck(n2)
+[] cache_n2_state <= 1 && chan2_n2_cmd == 5 && chan3_n2_cmd == 0 -> cache_n2_data = 0; cache_n2_state = 0; chan2_n2_cmd = 0; chan2_n2_data = 0; chan3_n2_cmd = 6; chan3_n2_data = 0
+// RecvInvAck(n2)
+[] chan3_n2_cmd == 6 && curCmd >= 1 && exGntd == 1 -> chan3_n2_cmd = 0; chan3_n2_data = 0; shrSet_n2 = 0; exGntd = 0; memData = chan3_n2_data
+// RecvInvAck(n2)
+[] chan3_n2_cmd == 6 && curCmd >= 1 && exGntd == 0 -> chan3_n2_cmd = 0; shrSet_n2 = 0
+// SendGnt(n2)
+[] chan2_n2_cmd == 0 && curCmd == 1 && curPtr == 2 && exGntd == 0 -> chan2_n2_cmd = 3; chan2_n2_data = memData; shrSet_n2 = 1; curCmd = 0; curPtr = 0
+// SendGnt(n2)
+[] chan2_n2_cmd == 0 && curCmd == 2 && curPtr == 2 && exGntd == 0 && shrSet_n1 == 0 && shrSet_n2 == 0 -> chan2_n2_cmd = 4; chan2_n2_data = memData; shrSet_n2 = 1; exGntd = 1; curCmd = 0; curPtr = 0
+// RecvGnt(n2)
+[] chan2_n2_cmd == 3 -> cache_n2_data = chan2_n2_data; cache_n2_state = 1; chan2_n2_cmd = 0; chan2_n2_data = 0
+// RecvGnt(n2)
+[] chan2_n2_cmd == 4 -> cache_n2_data = chan2_n2_data; cache_n2_state = 2; chan2_n2_cmd = 0; chan2_n2_data = 0
+// stuttering
+[] true -> cache_n1_data = cache_n1_data
+
+// TransactionConsistency: invariant TransactionConsistency
+// LTL: G(p0)
+//   p0 := (curCmd == 0 && curPtr == 0) || (curCmd >= 1 && curPtr >= 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q1
+trans!(q0, q0): true
+trans(q1, q0): curCmd >= 1 && curPtr == 0
+trans(q1, q0): curCmd == 0 && curPtr >= 1
+trans(q1, q1): curCmd == 0 && curPtr == 0
+trans(q1, q1): curCmd >= 1 && curPtr >= 1
+
+rank(q1):
+  [] (curCmd + (-2 * curPtr)) <= 0 && ((-2 * curCmd) + curPtr) <= 0 -> 0
+  [] (curCmd + (-2 * curPtr)) > 0 -> inf
+  [] (curCmd + (-2 * curPtr)) <= 0 && ((-2 * curCmd) + curPtr) > 0 -> inf
+
+rank(q0):
+  [] true -> inf

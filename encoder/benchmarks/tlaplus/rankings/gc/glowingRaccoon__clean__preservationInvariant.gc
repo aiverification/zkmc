@@ -1,0 +1,63 @@
+// TLA+ model glowingRaccoon__clean
+// 5 variables, 5 slots, 13 commands, 1 initial states
+//   tee: tee
+//   primer: primer
+//   dna: dna
+//   template: template
+//   hybrid: hybrid
+//   tee: 0="Hot", 1="TooHot", 2="Warm"
+
+type tee: 0..2
+type primer: 0..5
+type dna: 0..5
+type template: 0..15
+type hybrid: 0..5
+
+init: tee == 0 && primer == 5 && dna == 5 && template == 0 && hybrid == 0
+
+// heat
+[] tee == 0 -> tee = 1; primer = hybrid + primer; dna = 0; template = 2*dna + hybrid + template; hybrid = 0
+// cool
+[] tee == 1 -> tee = 0
+// anneal
+[] primer >= 1 && tee == 0 && primer <= template - 1 -> tee = 2; primer = primer - 1; template = template - 1; hybrid = hybrid + 1
+// anneal
+[] tee == 0 && template == 5 && template <= primer -> tee = 2; primer = primer - 1; template = template - 1; hybrid = hybrid + 1
+// anneal
+[] primer >= 2 && tee == 0 && primer <= template - 1 -> tee = 2; primer = primer - 2; template = template - 2; hybrid = hybrid + 2
+// anneal
+[] tee == 0 && template == 5 && template <= primer -> tee = 2; primer = primer - 2; template = template - 2; hybrid = hybrid + 2
+// anneal
+[] primer >= 3 && tee == 0 && primer <= template - 1 -> tee = 2; primer = primer - 3; template = template - 3; hybrid = hybrid + 3
+// anneal
+[] tee == 0 && template == 5 && template <= primer -> tee = 2; primer = primer - 3; template = template - 3; hybrid = hybrid + 3
+// anneal
+[] primer >= 4 && tee == 0 && primer <= template - 1 -> tee = 2; primer = primer - 4; template = template - 4; hybrid = hybrid + 4
+// anneal
+[] tee == 0 && template == 5 && template <= primer -> tee = 2; primer = primer - 4; template = template - 4; hybrid = hybrid + 4
+// anneal
+[] primer == 5 && tee == 0 && primer <= template - 1 -> tee = 2; primer = primer - 5; template = template - 5; hybrid = hybrid + 5
+// anneal
+[] tee == 0 && template == 5 && template <= primer -> tee = 2; primer = primer - 5; template = template - 5; hybrid = hybrid + 5
+// extend
+[] tee == 2 -> tee = 0; dna = dna + hybrid; hybrid = 0
+// stuttering
+[] true -> tee = tee
+
+// preservationInvariant: invariant preservationInvariant
+// LTL: G(p0)
+//   p0 := (2*dna + 2*hybrid + primer + template == 15)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q1
+trans!(q0, q0): true
+trans(q1, q0): 2*dna + 2*hybrid + primer + template <= 14
+trans(q1, q0): 2*dna + 2*hybrid + primer + template - 16 >= 0
+trans(q1, q1): 2*dna + 2*hybrid + primer + template == 15
+
+rank(q1):
+  [] ((((-2 * dna) + (-2 * hybrid)) + (-1 * primer)) + (-1 * template)) = -15 -> 0
+  [] ((((-2 * dna) + (-2 * hybrid)) + (-1 * primer)) + (-1 * template)) < -15 -> inf
+  [] ((((-2 * dna) + (-2 * hybrid)) + (-1 * primer)) + (-1 * template)) > -15 -> inf
+
+rank(q0):
+  [] true -> inf

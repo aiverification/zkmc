@@ -1,0 +1,185 @@
+// TLA+ model ewd998__AsyncTerminationDetection
+// 3 variables, 9 slots, 57 commands, 17 initial states
+//   active: active_0 active_1 active_2 active_3
+//   pending: pending_0 pending_1 pending_2 pending_3
+//   terminationDetected: terminationDetected
+
+type active_0: 0..1
+type active_1: 0..1
+type active_2: 0..1
+type active_3: 0..1
+type pending_0: 0..3
+type pending_1: 0..3
+type pending_2: 0..3
+type pending_3: 0..3
+type terminationDetected: 0..1
+
+init: active_0 >= 0 && active_0 <= 1 && active_1 >= 0 && active_1 <= 1 && active_2 >= 0 && active_2 <= 1 && active_3 >= 0 && active_3 <= 1 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0 && terminationDetected >= 0 && terminationDetected <= 1 && active_0 + terminationDetected <= 1 && active_1 + terminationDetected <= 1 && active_2 + terminationDetected <= 1 && active_3 + terminationDetected <= 1 && active_0 + active_1 + active_2 + active_3 + terminationDetected <= 4
+
+// RcvMsg(0)
+[] pending_0 >= 1 -> active_0 = 1; pending_0 = pending_0 - 1
+// Terminate(0)
+[] active_0 == 1 -> active_0 = 0
+// Terminate(0)
+[] active_0 == 1 && pending_0 >= 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_1 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && pending_1 >= 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_2 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && pending_2 >= 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_3 == 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && pending_3 >= 1 -> active_0 = 0; terminationDetected = 0
+// Terminate(0)
+[] active_0 == 1 && active_1 == 0 && active_2 == 0 && active_3 == 0 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0 -> active_0 = 0; terminationDetected = 1
+// RcvMsg(1)
+[] pending_1 >= 1 -> active_1 = 1; pending_1 = pending_1 - 1
+// Terminate(1)
+[] active_1 == 1 -> active_1 = 0
+// Terminate(1)
+[] active_0 == 1 && active_1 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && pending_0 >= 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && pending_1 >= 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && active_2 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && pending_2 >= 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && active_3 == 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_1 == 1 && pending_3 >= 1 -> active_1 = 0; terminationDetected = 0
+// Terminate(1)
+[] active_0 == 0 && active_1 == 1 && active_2 == 0 && active_3 == 0 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0 -> active_1 = 0; terminationDetected = 1
+// RcvMsg(2)
+[] pending_2 >= 1 -> active_2 = 1; pending_2 = pending_2 - 1
+// Terminate(2)
+[] active_2 == 1 -> active_2 = 0
+// Terminate(2)
+[] active_0 == 1 && active_2 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && pending_0 >= 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_1 == 1 && active_2 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && pending_1 >= 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && pending_2 >= 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && active_3 == 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_2 == 1 && pending_3 >= 1 -> active_2 = 0; terminationDetected = 0
+// Terminate(2)
+[] active_0 == 0 && active_1 == 0 && active_2 == 1 && active_3 == 0 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0 -> active_2 = 0; terminationDetected = 1
+// RcvMsg(3)
+[] pending_3 >= 1 -> active_3 = 1; pending_3 = pending_3 - 1
+// Terminate(3)
+[] active_3 == 1 -> active_3 = 0
+// Terminate(3)
+[] active_0 == 1 && active_3 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_3 == 1 && pending_0 >= 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_1 == 1 && active_3 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_3 == 1 && pending_1 >= 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_2 == 1 && active_3 == 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_3 == 1 && pending_2 >= 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_3 == 1 && pending_3 >= 1 -> active_3 = 0; terminationDetected = 0
+// Terminate(3)
+[] active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 1 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0 -> active_3 = 0; terminationDetected = 1
+// SendMsg(0, 0), SendMsg(1, 0), SendMsg(2, 0) ...
+[] active_0 == 1 && pending_0 <= 2 -> pending_0 = pending_0 + 1
+// SendMsg(0, 0), SendMsg(1, 0), SendMsg(2, 0) ...
+[] active_1 == 1 && pending_0 <= 2 -> pending_0 = pending_0 + 1
+// SendMsg(0, 0), SendMsg(1, 0), SendMsg(2, 0) ...
+[] active_2 == 1 && pending_0 <= 2 -> pending_0 = pending_0 + 1
+// SendMsg(0, 0), SendMsg(1, 0), SendMsg(2, 0) ...
+[] active_3 == 1 && pending_0 <= 2 -> pending_0 = pending_0 + 1
+// SendMsg(0, 1), SendMsg(1, 1), SendMsg(2, 1) ...
+[] active_0 == 1 && pending_1 <= 2 -> pending_1 = pending_1 + 1
+// SendMsg(0, 1), SendMsg(1, 1), SendMsg(2, 1) ...
+[] active_1 == 1 && pending_1 <= 2 -> pending_1 = pending_1 + 1
+// SendMsg(0, 1), SendMsg(1, 1), SendMsg(2, 1) ...
+[] active_2 == 1 && pending_1 <= 2 -> pending_1 = pending_1 + 1
+// SendMsg(0, 1), SendMsg(1, 1), SendMsg(2, 1) ...
+[] active_3 == 1 && pending_1 <= 2 -> pending_1 = pending_1 + 1
+// SendMsg(0, 2), SendMsg(1, 2), SendMsg(2, 2) ...
+[] active_0 == 1 && pending_2 <= 2 -> pending_2 = pending_2 + 1
+// SendMsg(0, 2), SendMsg(1, 2), SendMsg(2, 2) ...
+[] active_1 == 1 && pending_2 <= 2 -> pending_2 = pending_2 + 1
+// SendMsg(0, 2), SendMsg(1, 2), SendMsg(2, 2) ...
+[] active_2 == 1 && pending_2 <= 2 -> pending_2 = pending_2 + 1
+// SendMsg(0, 2), SendMsg(1, 2), SendMsg(2, 2) ...
+[] active_3 == 1 && pending_2 <= 2 -> pending_2 = pending_2 + 1
+// SendMsg(0, 3), SendMsg(1, 3), SendMsg(2, 3) ...
+[] active_0 == 1 && pending_3 <= 2 -> pending_3 = pending_3 + 1
+// SendMsg(0, 3), SendMsg(1, 3), SendMsg(2, 3) ...
+[] active_1 == 1 && pending_3 <= 2 -> pending_3 = pending_3 + 1
+// SendMsg(0, 3), SendMsg(1, 3), SendMsg(2, 3) ...
+[] active_2 == 1 && pending_3 <= 2 -> pending_3 = pending_3 + 1
+// SendMsg(0, 3), SendMsg(1, 3), SendMsg(2, 3) ...
+[] active_3 == 1 && pending_3 <= 2 -> pending_3 = pending_3 + 1
+// DetectTermination
+[] active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0 -> terminationDetected = 1
+// stuttering
+[] true -> active_0 = active_0
+
+// Quiescence: property Quiescence under 0 of the 1 fairness conditions
+// LTL: !(F((p0 & F(p1))))
+//   p0 := (active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0)
+//   p1 := (active_0 == 1) || (pending_0 >= 1) || (active_1 == 1) || (pending_1 >= 1) || (active_2 == 1) || (pending_2 >= 1) || (active_3 == 1) || (pending_3 >= 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q2
+trans!(q0, q0): true
+trans(q1, q0): active_0 == 1
+trans(q1, q0): pending_0 >= 1
+trans(q1, q0): active_1 == 1
+trans(q1, q0): pending_1 >= 1
+trans(q1, q0): active_2 == 1
+trans(q1, q0): pending_2 >= 1
+trans(q1, q0): active_3 == 1
+trans(q1, q0): pending_3 >= 1
+trans(q1, q1): active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0
+trans(q2, q1): active_0 == 0 && active_1 == 0 && active_2 == 0 && active_3 == 0 && pending_0 == 0 && pending_1 == 0 && pending_2 == 0 && pending_3 == 0
+trans(q2, q2): active_0 == 1
+trans(q2, q2): pending_0 >= 1
+trans(q2, q2): active_1 == 1
+trans(q2, q2): pending_1 >= 1
+trans(q2, q2): active_2 == 1
+trans(q2, q2): pending_2 >= 1
+trans(q2, q2): active_3 == 1
+trans(q2, q2): pending_3 >= 1
+
+rank(q2):
+  [] true -> 0
+
+rank(q0):
+  [] true -> inf
+
+rank(q1):
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 = 0 && pending_1 = 0 && pending_2 = 0 && pending_3 = 0 -> 0
+  [] active_0 < 0 -> inf
+  [] active_0 > 0 -> inf
+  [] active_0 = 0 && active_1 < 0 -> inf
+  [] active_0 = 0 && active_1 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 = 0 && pending_1 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 = 0 && pending_1 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 = 0 && pending_1 = 0 && pending_2 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 = 0 && pending_1 = 0 && pending_2 > 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 = 0 && pending_1 = 0 && pending_2 = 0 && pending_3 < 0 -> inf
+  [] active_0 = 0 && active_1 = 0 && active_2 = 0 && active_3 = 0 && pending_0 = 0 && pending_1 = 0 && pending_2 = 0 && pending_3 > 0 -> inf
