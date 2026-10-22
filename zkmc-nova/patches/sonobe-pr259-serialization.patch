@@ -1,0 +1,102 @@
+diff --git a/crates/fs/src/nova/instances/mod.rs b/crates/fs/src/nova/instances/mod.rs
+index e47264a..36ce7f3 100644
+--- a/crates/fs/src/nova/instances/mod.rs
++++ b/crates/fs/src/nova/instances/mod.rs
+@@ -2,6 +2,7 @@
+ //! instances.
+ 
+ use ark_ff::PrimeField;
++use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+ use sonobe_primitives::{
+     arithmetizations::ArithConfig, commitments::CommitmentDef, transcripts::Absorbable,
+     utils::dummy::Dummy,
+@@ -12,7 +13,7 @@ use crate::FoldingInstance;
+ pub mod circuits;
+ 
+ /// [`RunningInstance`] defines Nova's running instance.
+-#[derive(Clone, Debug, Eq, PartialEq)]
++#[derive(Clone, Debug, Eq, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
+ pub struct RunningInstance<CM: CommitmentDef> {
+     /// [`RunningInstance::cm_e`] is the error term commitment.
+     pub cm_e: CM::Commitment,
+@@ -55,7 +56,7 @@ impl<CM: CommitmentDef> Absorbable for RunningInstance<CM> {
+ }
+ 
+ /// [`IncomingInstance`] defines Nova's incoming instance.
+-#[derive(Clone, Debug, Eq, PartialEq)]
++#[derive(Clone, Debug, Eq, PartialEq, CanonicalSerialize, CanonicalDeserialize)]
+ pub struct IncomingInstance<CM: CommitmentDef> {
+     /// [`IncomingInstance::cm_w`] is the witness commitment.
+     pub cm_w: CM::Commitment,
+diff --git a/crates/primitives/src/commitments/mod.rs b/crates/primitives/src/commitments/mod.rs
+index 7970901..4abe043 100644
+--- a/crates/primitives/src/commitments/mod.rs
++++ b/crates/primitives/src/commitments/mod.rs
+@@ -65,13 +65,31 @@ pub trait CommitmentDef: 'static + Clone + Debug + PartialEq + Eq {
+     ///
+     /// For generality, we do not restrict this to field elements and instead
+     /// only bound it by necessary traits.
+-    type Scalar: Clone + Copy + Default + Debug + PartialEq + Eq + Sync + Absorbable + UniformRand;
++    type Scalar: CanonicalSerialize
++        + CanonicalDeserialize
++        + Clone
++        + Copy
++        + Default
++        + Debug
++        + PartialEq
++        + Eq
++        + Sync
++        + Absorbable
++        + UniformRand;
+     /// [`CommitmentDef::Commitment`] is the type of the commitment.
+     ///
+     /// In the future we may introduce other commitment schemes such as those
+     /// based on hash functions or lattices, so we do not restrict this to be
+     /// group elements.
+-    type Commitment: Clone + Default + Debug + PartialEq + Eq + Sync + Absorbable;
++    type Commitment: CanonicalSerialize
++        + CanonicalDeserialize
++        + Clone
++        + Default
++        + Debug
++        + PartialEq
++        + Eq
++        + Sync
++        + Absorbable;
+     /// [`CommitmentDef::Randomness`] is the type of the randomness used in
+     /// the commitment.
+     ///
+diff --git a/crates/snarks/src/cp/legogroth16/mod.rs b/crates/snarks/src/cp/legogroth16/mod.rs
+index 698bf62..f5ebe0b 100644
+--- a/crates/snarks/src/cp/legogroth16/mod.rs
++++ b/crates/snarks/src/cp/legogroth16/mod.rs
+@@ -10,6 +10,7 @@ use ark_groth16::{
+ };
+ use ark_poly::{EvaluationDomain, GeneralEvaluationDomain};
+ use ark_relations::gr1cs::SynthesisError;
++use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+ use ark_std::{
+     borrow::Borrow, cfg_into_iter, cfg_iter, cfg_iter_mut, end_timer, hash::BuildHasherDefault,
+     marker::PhantomData, rand::RngCore, start_timer,
+@@ -66,6 +67,7 @@ pub struct CCGroth16ProverKey<E: Pairing> {
+     pub gamma_abc_g1_cm: Vec<E::G1Affine>,
+ }
+ 
++#[derive(CanonicalSerialize, CanonicalDeserialize)]
+ pub struct CCGroth16VerifierKey<E: Pairing> {
+     #[cfg(feature = "evm")]
+     pub alpha_g1: E::G1Affine,
+@@ -94,11 +96,13 @@ pub struct ProverKey<E: Pairing> {
+     pub link_ek: LinearSubspacePK<E>,
+ }
+ 
++#[derive(CanonicalSerialize, CanonicalDeserialize)]
+ pub struct VerifierKey<E: Pairing> {
+     pub cc_vk: CCGroth16VerifierKey<E>,
+     pub link_vk: LinearSubspaceVK<E>,
+ }
+ 
++#[derive(CanonicalSerialize, CanonicalDeserialize)]
+ pub struct Proof<E: Pairing> {
+     pub groth16_proof: Groth16Proof<E>,
+     /// The `D` element in `G1`. Commits to a subset of private inputs of the
