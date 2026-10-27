@@ -10,23 +10,30 @@ from z3 import Int, Solver, sat
 
 from .farkas import FarkasDual
 
+# Range-check bound of the ZK provers (`big_M` in zkmc-symbolic). They prove
+# λ_s, μ_s ∈ [0, BIG_M] and v = -(b_s^T λ_s + h_p^T μ_s) - 1 ∈ [0, BIG_M]
+# with 32-bit range proofs, so a witness outside these ranges cannot be proved.
+BIG_M = 2**31 - 1
+
 
 def solve_farkas_dual(
     dual: FarkasDual,
-    max_value: int = 2**32 - 1,
+    max_value: int = BIG_M,
 ) -> tuple[bool, dict[str, int] | None]:
     """Solve Farkas dual formulation using Z3.
 
     Given a FarkasDual formulation, finds integer values for Farkas multipliers
     (λ_s, μ_s) that satisfy:
         1. A_eq @ multipliers = b_eq  (equality constraints)
-        2. const_coeffs @ multipliers ≤ -1  (constant inequality)
+        2. -1 - max_value ≤ const_coeffs @ multipliers ≤ -1  (constant inequality;
+           the lower bound keeps v = -(const_coeffs @ multipliers) - 1 ≤ max_value)
         3. multipliers[i] ≥ 0 for i in lambda_s_indices, mu_s_indices
-        4. 0 ≤ multipliers[i] < max_value (bounded for finite field proofs)
+        4. 0 ≤ multipliers[i] ≤ max_value (bounded for finite field proofs)
 
     Args:
         dual: FarkasDual object containing the dual formulation
-        max_value: Upper bound for multipliers (default: 2^32 - 1)
+        max_value: Inclusive upper bound for multipliers and for v
+                   (default: BIG_M, the provers' range-check bound)
 
     Returns:
         (satisfiable, witness) where:
@@ -60,22 +67,27 @@ def solve_farkas_dual(
         rhs = int(dual.b_eq[row_idx])
         solver.add(lhs == rhs)
 
-    # Add constant inequality: const_coeffs @ multipliers ≤ -1
+    # Add constant inequality: -1 - max_value ≤ const_coeffs @ multipliers ≤ -1
     const_terms = []
     for idx in range(len(dual.const_coeffs)):
         coeff = int(dual.const_coeffs[idx])
         if coeff != 0:
             const_terms.append(coeff * z3_vars[idx])
 
+    # All-zero coefficients leave 0 ≤ -1, which must stay UNSAT: y = 0 then
+    # satisfies the homogeneous primal system, so the implication does not hold.
     if const_terms:
         const_lhs = sum(const_terms[1:], const_terms[0]) if len(const_terms) > 1 else const_terms[0]
-        solver.add(const_lhs <= -1)
+    else:
+        const_lhs = 0
+    solver.add(const_lhs <= -1)
+    solver.add(const_lhs >= -1 - max_value)
 
     # Add non-negativity and bounds for all multipliers
     all_nonneg_indices = dual.lambda_s_indices + dual.mu_s_indices
     for idx in all_nonneg_indices:
         solver.add(z3_vars[idx] >= 0)
-        solver.add(z3_vars[idx] < max_value)
+        solver.add(z3_vars[idx] <= max_value)
 
     # Check satisfiability
     result = solver.check()
