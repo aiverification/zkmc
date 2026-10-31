@@ -773,7 +773,7 @@ pub fn construct_zkp_srs_cached(
     }
     let mut alpha_vec: Vec<bls::ZpElement> =
         std::iter::successors(Some(alpha), |&x| Some(x * alpha))
-            .take(2 * ((q.pow(2)) - 1))
+            .take((2 * (q.pow(2))) - 1)
             .collect();
     alpha_vec.insert(0, bls::ZpElement::from(1u64));
     let g_i_vec: Vec<bls::G1Element> = alpha_vec.par_iter().map(|&x| x * g_bls).collect();
