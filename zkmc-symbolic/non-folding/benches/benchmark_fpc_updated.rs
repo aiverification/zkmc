@@ -94,7 +94,7 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
     let sample_size: usize = 1;
     let path_to_file_g = "input/".to_string();
     let mut candidate_files: Vec<String> = match std::env::var("ZKMC_BENCH_FILES") {
-        Ok(list) => list.split(',').map(|f| f.trim().to_string()).filter(|f| !f.is_empty()).collect,
+        Ok(list) => list.split(',').map(|f| f.trim().to_string()).filter(|f| !f.is_empty()).collect(),
         Err(_) => vec![
             "test.json".to_string(),
             "exb_i4a2.json".to_string(),
