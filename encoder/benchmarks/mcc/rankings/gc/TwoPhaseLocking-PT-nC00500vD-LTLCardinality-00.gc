@@ -1,0 +1,61 @@
+// MCC instance TwoPhaseLocking-PT-nC00500vD
+// 8 places, 6 transitions
+// places: p0=resB, p1=haveA, p2=haveA2, p3=resA, p4=haveB, p5=Clients, p6=haveAandB, p7=haveA2andB
+
+init: p0 == 250 && p1 == 0 && p2 == 0 && p3 == 250 && p4 == 0 && p5 == 500 && p6 == 0 && p7 == 0
+
+// relB
+[] p7 >= 1 -> p0 = p0 + 1; p2 = p2 + 1; p7 = p7 - 1
+// lockB
+[] p1 >= 1 && p0 >= 1 -> p0 = p0 - 1; p1 = p1 - 1; p6 = p6 + 1
+// lockA
+[] p5 >= 1 && p3 >= 1 -> p1 = p1 + 1; p3 = p3 - 1; p5 = p5 - 1
+// relA2
+[] p2 >= 1 -> p2 = p2 - 1; p3 = p3 + 1; p5 = p5 + 1
+// relA
+[] p6 >= 1 -> p3 = p3 + 1; p4 = p4 + 1; p6 = p6 - 1
+// lockA2
+[] p4 >= 1 && p3 >= 1 -> p3 = p3 - 1; p4 = p4 - 1; p7 = p7 + 1
+// deadlock: stutter (MCC semantics)
+[] p0 <= 0 && p2 <= 0 && p3 <= 0 && p6 <= 0 && p7 <= 0 -> p0 = p0
+
+// TwoPhaseLocking-PT-nC00500vD-LTLCardinality-00
+// ap a0 := 3 <= p2
+// ap a1 := p1 <= p0
+// ap a2 := 1 <= p7
+// ap a3 := 3 <= p7
+// spec: "((F(!(((X(a0)) U (!(a1)))))) U (G((a2 | !(a3)))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans!(q0, q0): 1 > p7 && 3 <= p7
+trans!(q0, q1): 1 <= p7
+trans!(q0, q1): 3 > p7
+trans!(q0, q2): 1 > p7 && 3 <= p7 && p1 > p0
+trans!(q0, q3): 1 > p7 && 3 <= p7 && p1 <= p0
+trans(q1, q0): 1 > p7 && 3 <= p7
+trans(q1, q1): 1 <= p7
+trans(q1, q1): 3 > p7
+trans(q1, q2): 1 > p7 && 3 <= p7 && p1 > p0
+trans(q1, q3): 1 > p7 && 3 <= p7 && p1 <= p0
+trans!(q2, q2): p1 > p0
+trans!(q2, q4): p1 <= p0
+trans(q3, q2): p1 > p0 && 3 <= p2
+trans(q3, q3): p1 <= p0 && 3 <= p2
+trans!(q4, q2): p1 > p0 && 3 <= p2
+trans!(q4, q3): p1 <= p0 && 3 <= p2
+
+rank(q0):
+  [] true -> 1
+
+rank(q1):
+  [] true -> 0
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] true -> inf
+
+rank(q4):
+  [] true -> inf

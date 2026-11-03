@@ -1,0 +1,63 @@
+// MCC instance CryptoMiner-PT-D03N000
+// 8 places, 8 transitions
+// places: p0=resource_c0, p1=resource_c1, p2=resource_c2, p3=resource_c3, p4=state_c0, p5=state_c1, p6=state_c2, p7=state_c3
+
+init: p0 == 0 && p1 == 0 && p2 == 0 && p3 == 0 && p4 == 1 && p5 == 0 && p6 == 0 && p7 == 0
+
+// Compute_0
+[] p1 >= 1 && p5 >= 1 -> p1 = p1 - 1; p2 = p2 + 1
+// Compute_1
+[] p2 >= 1 && p6 >= 1 -> p2 = p2 - 1; p3 = p3 + 1
+// Compute_2
+[] p3 >= 1 && p7 >= 1 -> p0 = p0 + 1; p3 = p3 - 1
+// ComputeFirst_3
+[] p4 >= 1 -> p1 = p1 + 1
+// Exit_4
+[] p7 >= 1 -> p7 = p7 - 1
+// Go_5
+[] p4 >= 1 -> p4 = p4 - 1; p5 = p5 + 1
+// Go_6
+[] p5 >= 1 -> p5 = p5 - 1; p6 = p6 + 1
+// Go_7
+[] p6 >= 1 -> p6 = p6 - 1; p7 = p7 + 1
+// deadlock: stutter (MCC semantics)
+[] p4 <= 0 && p5 <= 0 && p6 <= 0 && p7 <= 0 -> p0 = p0
+
+// CryptoMiner-PT-D03N000-LTLCardinality-10
+// ap a0 := 3 <= p3
+// ap a1 := p0 <= p5
+// spec: "((F(!(G((!(a0) | G(a0)))))) U ((a1 | G(a1))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans!(q0, q0): p0 > p5
+trans!(q0, q1): p0 > p5 && 3 > p3
+trans!(q0, q2): p0 > p5 && 3 <= p3
+trans!(q1, q1): 3 > p3
+trans!(q1, q2): 3 <= p3
+trans!(q2, q2): 3 <= p3
+
+rank(q0):
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 = 1 && p5 = 0 && p6 = 0 && p7 = 0 -> 0
+  [] p0 < 0 -> inf
+  [] p0 > 0 -> inf
+  [] p0 = 0 && p1 < 0 -> inf
+  [] p0 = 0 && p1 > 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 < 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 > 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 < 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 > 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 < 1 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 > 1 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 = 1 && p5 < 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 = 1 && p5 > 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 = 1 && p5 = 0 && p6 < 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 = 1 && p5 = 0 && p6 > 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 = 1 && p5 = 0 && p6 = 0 && p7 < 0 -> inf
+  [] p0 = 0 && p1 = 0 && p2 = 0 && p3 = 0 && p4 = 1 && p5 = 0 && p6 = 0 && p7 > 0 -> inf
+
+rank(q1):
+  [] true -> inf
+
+rank(q2):
+  [] true -> inf

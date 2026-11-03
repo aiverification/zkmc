@@ -3,7 +3,7 @@ use rayon::prelude::*;
 use serde::Deserialize;
 use std::fs;
 use criterion::{Criterion, criterion_group, criterion_main};
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use std::collections::HashMap;
 use std::io::Write;
 use blstrs;
@@ -13,10 +13,12 @@ use zkmc_symbolic_folding::utils::curve_utils::*;
 use zkmc_symbolic_folding::utils::public_exponent_schedule::*;
 use zkmc_symbolic_folding::zkrp;
 use zkmc_symbolic_folding::zkp;
+use zkmc_symbolic_folding::zkp::ProveError;
 
 const INPUT_DIR: &str = "input/";
 const OUTPUT_DIR: &str = "outputs/";
 const NUM_LOOPS: usize = 1;
+const TIME_LIMIT: u64 = 1000*60*60*2; // 2h in ms
 
 // Files to benchmark (read from INPUT_DIR); each gets OUTPUT_DIR/bench_<name>.log.
 const CANDIDATE_FILES: [&str; 3] = [
@@ -29,6 +31,7 @@ const CANDIDATE_FILES: [&str; 3] = [
 struct FullZkpData {
     obligations: Vec<Obligation>,
     count: usize,
+    #[serde(default)]
     constants: HashMap<String, i64>,
 }
 
@@ -93,8 +96,12 @@ struct ComputedValues {
 fn full_prove_and_verify(_c: &mut Criterion) {
     fs::create_dir_all(OUTPUT_DIR).unwrap();
 
-    for input_file in CANDIDATE_FILES {
-        let log_path = format!("{OUTPUT_DIR}bench_{input_file}.log");
+    // ZKMC_BENCH_FILES (comma-separated, relative to INPUT_DIR or absolute) overrides the defaults.
+    let (files, file_offset, file_total) = resolve_files();
+    for (fi, input_file) in files.iter().enumerate() {
+        let global_idx = file_offset + fi;   // 0-based index in the full sorted list, matches `-- a..b`
+        let log_name = std::path::Path::new(input_file).file_name().unwrap().to_string_lossy().to_string();
+        let log_path = format!("{OUTPUT_DIR}bench_{log_name}.log");
         let mut log_file = fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -102,7 +109,11 @@ fn full_prove_and_verify(_c: &mut Criterion) {
             .unwrap();
 
         for loop_idx in 0..NUM_LOOPS {
-            let file_path = format!("{INPUT_DIR}{input_file}");
+            let file_path = if input_file.starts_with('/') {
+                input_file.clone()
+            } else {
+                format!("{INPUT_DIR}{input_file}")
+            };
             let read_timer = Instant::now();
             let json = fs::read_to_string(&file_path)
                 .expect("failed to read full ZKP test data");
@@ -113,239 +124,303 @@ fn full_prove_and_verify(_c: &mut Criterion) {
             let obligations = data.obligations;
             let read_time = read_timer.elapsed().as_millis();
             let N = obligations.len();
+            assert!(N >= 2); // To avoid error in verification of bulletproof aggregated proofs
             let schedule = salem_spencer_schedule(N);
 
             println!(
-                "Loaded {} obligations from {}",
+                "Loaded {} obligations from {} (benchmark file {} of {})",
                 obligations.len(),
-                file_path
+                file_path, global_idx, file_total
             );
 
-        // Now pad + transpose matrices
-        // A^T is mxn, lambda is nx1, b^T is 1xn, G^T is mxn', mu is n'x1, h^T is 1xn' - consider for max_n we need max(n, n')
-        let max_calc_timer = Instant::now();
-        let mut max_m = obligations[0].matrices.A_s.len();
-        let mut max_n = obligations[0].matrices.A_s[0].len();
-        for obl in obligations.iter(){
-            // Since we find max_m, max_n before transposing, they're flipped here
-            max_m = max_m.max(obl.matrices.A_s[0].len());
-            max_m = max_m.max(obl.matrices.G_p[0].len());
-            max_n = max_n.max(obl.matrices.A_s.len());
-            max_n = max_n.max(obl.matrices.G_p.len());
-        }
-        max_m = max_m.next_power_of_two();
-        max_n = max_n.next_power_of_two();
-        let max_calc_time = max_calc_timer.elapsed().as_millis();
-        println!("Calculated max m, n: {}, {}", max_m, max_n);
+            // Now pad + transpose matrices
+            // A^T is mxn, lambda is nx1, b^T is 1xn, G^T is mxn', mu is n'x1, h^T is 1xn' - consider for max_n we need max(n, n')
+            let max_calc_timer = Instant::now();
+            let mut max_m = obligations[0].matrices.A_s.len();
+            let mut max_n = obligations[0].matrices.A_s[0].len();
+            for obl in obligations.iter(){
+                // Since we find max_m, max_n before transposing, they're flipped here
+                max_m = max_m.max(obl.matrices.A_s[0].len());
+                max_m = max_m.max(obl.matrices.G_p[0].len());
+                max_n = max_n.max(obl.matrices.A_s.len());
+                max_n = max_n.max(obl.matrices.G_p.len());
+            }
+            max_m = max_m.next_power_of_two();
+            max_n = max_n.next_power_of_two();
+            let max_calc_time = max_calc_timer.elapsed().as_millis();
+            println!("Calculated max m, n: {}, {}", max_m, max_n);
 
-        let matrix_prep_timer = Instant::now();
-        let mut A_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| obl.matrices.A_s.clone()).collect();
-        let mut neg_b_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| negate_matrix(&obl.matrices.b_s)).collect();
-        let mut lambda_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| obl.witness.lambda_s.clone()).collect();
-        let mut neg_G_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| negate_matrix(&obl.matrices.G_p)).collect();
-        let mut neg_h_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| negate_matrix(&obl.matrices.h_p)).collect();
-        let mut mu_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| obl.witness.mu_s.clone()).collect();
-        let mut e_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| obl.computed_values.A_s_T_lambda_s.clone()).collect();
+            let matrix_prep_timer = Instant::now();
+            let mut A_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| obl.matrices.A_s.clone()).collect();
+            let mut neg_b_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| negate_matrix(&obl.matrices.b_s)).collect();
+            let mut lambda_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| obl.witness.lambda_s.clone()).collect();
+            let mut neg_G_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| negate_matrix(&obl.matrices.G_p)).collect();
+            let mut neg_h_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| negate_matrix(&obl.matrices.h_p)).collect();
+            let mut mu_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| obl.witness.mu_s.clone()).collect();
+            let mut e_i: Vec<Vec<Vec<i64>>> = obligations.par_iter().map(|obl| obl.computed_values.A_s_T_lambda_s.clone()).collect();
 
-        A_i.par_iter_mut().for_each(|mut A| transpose_matrix_in_place(&mut A));
-        neg_b_i.par_iter_mut().for_each(|mut neg_b| transpose_matrix_in_place(&mut neg_b));
-        neg_G_i.par_iter_mut().for_each(|mut neg_G| transpose_matrix_in_place(&mut neg_G));
-        neg_h_i.par_iter_mut().for_each(|mut neg_h| transpose_matrix_in_place(&mut neg_h));
+            A_i.par_iter_mut().for_each(|mut A| transpose_matrix_in_place(&mut A));
+            neg_b_i.par_iter_mut().for_each(|mut neg_b| transpose_matrix_in_place(&mut neg_b));
+            neg_G_i.par_iter_mut().for_each(|mut neg_G| transpose_matrix_in_place(&mut neg_G));
+            neg_h_i.par_iter_mut().for_each(|mut neg_h| transpose_matrix_in_place(&mut neg_h));
 
-        pad_matrices_par_to_size(&mut A_i, max_m, max_n);
-        pad_matrices_par_to_size(&mut neg_b_i, 1, max_n);
-        pad_matrices_par_to_size(&mut lambda_i, max_n, 1);
-        pad_matrices_par_to_size(&mut neg_G_i, max_m, max_n);
-        pad_matrices_par_to_size(&mut neg_h_i, 1, max_n);
-        pad_matrices_par_to_size(&mut mu_i, max_n, 1);
-        pad_matrices_par_to_size(&mut e_i, max_m, 1);
-        let matrix_prep_time = matrix_prep_timer.elapsed().as_millis();
-        println!("Prepared matrices");
+            pad_matrices_par_to_size(&mut A_i, max_m, max_n);
+            pad_matrices_par_to_size(&mut neg_b_i, 1, max_n);
+            pad_matrices_par_to_size(&mut lambda_i, max_n, 1);
+            pad_matrices_par_to_size(&mut neg_G_i, max_m, max_n);
+            pad_matrices_par_to_size(&mut neg_h_i, 1, max_n);
+            pad_matrices_par_to_size(&mut mu_i, max_n, 1);
+            pad_matrices_par_to_size(&mut e_i, max_m, 1);
+            let matrix_prep_time = matrix_prep_timer.elapsed().as_millis();
+            println!("Prepared matrices");
 
-        // Sanity-check that A_s^T . lambda_s == e_A and G_p^T . mu_s == e_G.
-        for i in 0..obligations.len(){
-                let mut e_A = obligations[i].computed_values.A_s_T_lambda_s.clone();
-                e_A = pad_matrix_to_size(&e_A, max_m, 1);
-                let product_A = multiply_matrices_naive_par(&A_i[i], &lambda_i[i]);
-                if product_A != e_A{
-                    println!("A_s^T . lambda_s != e_A for i = {i}");
-                    println!("A_s^T: {:?}", A_i[i]);
-                    println!("lambda: {:?}", lambda_i[i]);
-                    println!("e_A: {:?}", e_A);
-                    println!("calculated e_A: {:?}", product_A);
+            // Sanity-check that A_s^T . lambda_s == e_A and G_p^T . mu_s == e_G.
+            for i in 0..obligations.len(){
+                    let mut e_A = obligations[i].computed_values.A_s_T_lambda_s.clone();
+                    e_A = pad_matrix_to_size(&e_A, max_m, 1);
+                    let product_A = multiply_matrices_naive_par(&A_i[i], &lambda_i[i]);
+                    if product_A != e_A{
+                        println!("A_s^T . lambda_s != e_A for i = {i}");
+                        println!("A_s^T: {:?}", A_i[i]);
+                        println!("lambda: {:?}", lambda_i[i]);
+                        println!("e_A: {:?}", e_A);
+                        println!("calculated e_A: {:?}", product_A);
+                    }
+
+                    let mut e_G = obligations[i].computed_values.G_p_T_mu_s.clone();
+                    e_G = pad_matrix_to_size(&e_G, max_m, 1);
+                    let neg_e_G = negate_matrix(&e_G);
+                    let product_G = multiply_matrices_naive_par(&neg_G_i[i], &mu_i[i]);
+                    if product_G != neg_e_G{
+                        println!("G_p^T . mu_s != e_G for i = {i}");
+                        println!("G_p^T: {:?}", neg_G_i[i]);
+                        println!("mu: {:?}", mu_i[i]);
+                        println!("neg_e_G: {:?}", neg_e_G);
+                        println!("calculated e_G: {:?}", product_G);
+                    }
+
+                    if e_A != neg_e_G{
+                        println!("e_A != -e_G for i = {i}");
+                        println!("e_A: {:?}", e_A);
+                        println!("-e_G: {:?}", e_G);
+                    }
+            }
+
+            // Now we calculate alpha_i, beta_i
+            let alpha_beta_calc_timer = Instant::now();
+            let mut alpha_i: Vec<Vec<Vec<i64>>> = vec![vec![vec![]]; A_i.len()];
+            let mut beta_i: Vec<Vec<Vec<i64>>> = vec![vec![vec![]]; A_i.len()];
+            alpha_i.par_iter_mut()
+            .zip(neg_b_i.par_iter())
+            .zip(lambda_i.par_iter())
+            .for_each(|((alpha, neg_b), lambda)| {
+                *alpha = multiply_matrices_naive_par(&neg_b, &lambda);
+            });
+
+            beta_i.par_iter_mut()
+            .zip(neg_h_i.par_iter())
+            .zip(mu_i.par_iter())
+            .for_each(|((beta, neg_h), mu)| {
+                *beta = multiply_matrices_naive_par(&neg_h, &mu);
+            });
+            let alpha_beta_calc_time = alpha_beta_calc_timer.elapsed().as_millis();
+            println!("Calculated alpha, beta matrices");
+
+            // Setup: public ZKP parameters (SRS, Pedersen/Bulletproof gens, ZKRP params)
+            let setup_timer = Instant::now();
+            let mut pc_gens = PedersenGens::default();
+            let g_blstrs: blstrs::G1Affine = pc_gens.B.into();
+            let g_bls = blstrs_affine_to_bls_g1(&g_blstrs);
+            let aggregation_size = N.next_power_of_two();
+            println!("RP aggregation size: {aggregation_size}");
+            // Shared 32-bit BulletproofGens for all five range-proof types (v_i, lambda, mu, A, -b).
+            // Party capacity must cover the largest single proof: A_i has max_m*max_n values.
+            let bp_gens = BulletproofGens::new(32, (max_m * max_n).max(aggregation_size));
+            let q = max_m.max(max_n) + 1;
+            let (srs, s_hat) = zkmatrix::setup::SRS::new_with_chosen_g_return_s_hat(q, g_bls);
+            let blind_factor_zp = s_hat.pow((q * q) as u64);
+            let blind_factor_blstrs = bls_field_elem_to_blstrs_scalar(&blind_factor_zp);
+            pc_gens.B_blinding = pc_gens.B * blind_factor_blstrs;
+
+            // ZKRP params shared by lambda and mu range proofs (both padded to max_n x 1)
+            let g_prime = srs.h_hat;
+            let g_prime_alpha = g_prime * s_hat;
+            let h = blstrs_proj_to_bls_g1(&pc_gens.B_blinding);
+            let h_prime = g_prime * blind_factor_zp;
+            let lambda_mu_zkrp_pp = zkrp::ZKRPParams {
+                l: max_n,
+                m: max_n,
+                n: 1,
+                g_blstrs: g_blstrs,
+                g_bls,
+                g_prime,
+                g_prime_alpha,
+                g_i: vec![],
+                h,
+                h_prime,
+                zk_matrix_srs: srs.clone(),
+                pc_gens: pc_gens.clone(),
+                bp_gens: bp_gens.clone(),
+            };
+
+            // ZKRP params for per-obligation A_i range proofs (max_m x max_n matrix)
+            let A_zkrp_pp = zkrp::ZKRPParams {
+                l: max_m * max_n,
+                m: max_m,
+                n: max_n,
+                g_blstrs: g_blstrs,
+                g_bls,
+                g_prime,
+                g_prime_alpha,
+                g_i: vec![],
+                h,
+                h_prime,
+                zk_matrix_srs: srs.clone(),
+                pc_gens: pc_gens.clone(),
+                bp_gens: bp_gens.clone(),
+            };
+
+            // ZKRP params for per-obligation -b_i range proofs (1 x max_n row)
+            let b_zkrp_pp = zkrp::ZKRPParams {
+                l: max_n,
+                m: 1,
+                n: max_n,
+                g_blstrs: g_blstrs,
+                g_bls,
+                g_prime,
+                g_prime_alpha,
+                g_i: vec![],
+                h,
+                h_prime,
+                zk_matrix_srs: srs.clone(),
+                pc_gens: pc_gens.clone(),
+                bp_gens: bp_gens.clone(),
+            };
+
+            let (pairs, committer) = zkp::ZKPParams::derive(&srs, &schedule, max_m, max_n);
+            let params = zkp::ZKPParams {
+                srs: srs.clone(),
+                schedule,
+                pairs,
+                committer,
+                pc_gens: pc_gens.clone(),
+                bp_gens: bp_gens.clone(),
+                big_M: 2u32.pow(31) - 1,
+                max_m,
+                max_n,
+                N,
+                aggregation_size,
+                lambda_mu_zkrp_pp,
+                A_zkrp_pp,
+                b_zkrp_pp,
+            };
+            let setup_time = setup_timer.elapsed().as_millis();
+            println!("Done SRS setup");
+            let total_setup_time = read_time + max_calc_time + matrix_prep_time + alpha_beta_calc_time + setup_time;
+
+            let input = zkp::ZKPInput {
+                A_i,
+                neg_b_i,
+                lambda_i,
+                neg_G_i,
+                neg_h_i,
+                mu_i,
+                e_i,
+                alpha_i,
+                beta_i,
+            };
+            let statement = zkp::ZKPStatement {
+                neg_G_i: input.neg_G_i.clone(),
+                neg_h_i: input.neg_h_i.clone(),
+            };
+
+            // Prover + Verifier (full ZKP)
+            let (proof, prover_total) = match zkp::prove(&params, s_hat, &input, Some(Duration::from_millis(TIME_LIMIT))){
+                Err(ProveError::TimedOut { elapsed_ms }) => {
+                    println!("Proof generation for {input_file} failed: OOT");
+                    writeln!(
+                        log_file,
+                        "Loop {loop_idx} - setup: {total_setup_time}ms, prove: OOT ({elapsed_ms}ms) - TIMED_OUT (benchmark file {global_idx} of {file_total})",
+                    ).unwrap();
+                    break
                 }
+                Err(ProveError::Failed { details }) => {
+                    println!("Proof generation for {input_file} failed: {:?}", details);
+                    writeln!(
+                        log_file,
+                        "Loop {loop_idx} - setup: {total_setup_time}ms, prove: FAILED - FAILED (benchmark file {global_idx} of {file_total})",
+                    ).unwrap();
+                    break
+                },
+                Ok((proof, time)) => (proof, time),
+            };
+            let (ok, out_of_time, verifier_total) = proof.verify(&params, &statement, Some(Duration::from_millis(TIME_LIMIT)));
+            if out_of_time{
+                writeln!(
+                    log_file,
+                    "Loop {loop_idx} - setup: {total_setup_time}ms, prove: {prover_total}ms, verify: OOT ({verifier_total}ms) - TIMED_OUT (benchmark file {global_idx} of {file_total})",
+                ).unwrap();
+                break
+            }
+            println!("Loop {loop_idx} of {input_file}: ZKP verified: {ok}");
 
-                let mut e_G = obligations[i].computed_values.G_p_T_mu_s.clone();
-                e_G = pad_matrix_to_size(&e_G, max_m, 1);
-                let neg_e_G = negate_matrix(&e_G);
-                let product_G = multiply_matrices_naive_par(&neg_G_i[i], &mu_i[i]);
-                if product_G != neg_e_G{
-                    println!("G_p^T . mu_s != e_G for i = {i}");
-                    println!("G_p^T: {:?}", neg_G_i[i]);
-                    println!("mu: {:?}", mu_i[i]);
-                    println!("neg_e_G: {:?}", neg_e_G);
-                    println!("calculated e_G: {:?}", product_G);
-                }
+            let total_time = total_setup_time + prover_total + verifier_total;
+            println!("");
+            zkp::print_timing("Total time:", total_time);
+            zkp::print_timing("--Total setup time:", total_setup_time);
+            zkp::print_timing("----Read time:", read_time);
+            zkp::print_timing("----Max m,n calc time:", max_calc_time);
+            zkp::print_timing("----Matrix prep time:", matrix_prep_time);
+            zkp::print_timing("----alpha, beta calc time:", alpha_beta_calc_time);
+            zkp::print_timing("----SRS setup time:", setup_time);
+            println!("");
 
-                if e_A != neg_e_G{
-                    println!("e_A != -e_G for i = {i}");
-                    println!("e_A: {:?}", e_A);
-                    println!("-e_G: {:?}", e_G);
-                }
-        }
-
-        // Now we calculate alpha_i, beta_i
-        let alpha_beta_calc_timer = Instant::now();
-        let mut alpha_i: Vec<Vec<Vec<i64>>> = vec![vec![vec![]]; A_i.len()];
-        let mut beta_i: Vec<Vec<Vec<i64>>> = vec![vec![vec![]]; A_i.len()];
-        alpha_i.par_iter_mut()
-        .zip(neg_b_i.par_iter())
-        .zip(lambda_i.par_iter())
-        .for_each(|((alpha, neg_b), lambda)| {
-            *alpha = multiply_matrices_naive_par(&neg_b, &lambda);
-        });
-
-        beta_i.par_iter_mut()
-        .zip(neg_h_i.par_iter())
-        .zip(mu_i.par_iter())
-        .for_each(|((beta, neg_h), mu)| {
-            *beta = multiply_matrices_naive_par(&neg_h, &mu);
-        });
-        let alpha_beta_calc_time = alpha_beta_calc_timer.elapsed().as_millis();
-        println!("Calculated alpha, beta matrices");
-
-        // Setup: public ZKP parameters (SRS, Pedersen/Bulletproof gens, ZKRP params)
-        let setup_timer = Instant::now();
-        let mut pc_gens = PedersenGens::default();
-        let g_blstrs: blstrs::G1Affine = pc_gens.B.into();
-        let g_bls = blstrs_affine_to_bls_g1(&g_blstrs);
-        let aggregation_size = N.next_power_of_two();
-        println!("RP aggregation size: {aggregation_size}");
-        // Shared 32-bit BulletproofGens for all five range-proof types (v_i, lambda, mu, A, -b).
-        // Party capacity must cover the largest single proof: A_i has max_m*max_n values.
-        let bp_gens = BulletproofGens::new(32, (max_m * max_n).max(aggregation_size));
-        let q = max_m.max(max_n) + 1;
-        let (srs, s_hat) = zkmatrix::setup::SRS::new_with_chosen_g_return_s_hat(q, g_bls);
-        let blind_factor_zp = s_hat.pow((q * q) as u64);
-        let blind_factor_blstrs = bls_field_elem_to_blstrs_scalar(&blind_factor_zp);
-        pc_gens.B_blinding = pc_gens.B * blind_factor_blstrs;
-
-        // ZKRP params shared by lambda and mu range proofs (both padded to max_n x 1)
-        let g_prime = srs.h_hat;
-        let g_prime_alpha = g_prime * s_hat;
-        let h = blstrs_proj_to_bls_g1(&pc_gens.B_blinding);
-        let h_prime = g_prime * blind_factor_zp;
-        assert!(max_n < N); // So that bp_gens works
-        let lambda_mu_zkrp_pp = zkrp::ZKRPParams {
-            l: max_n,
-            m: max_n,
-            n: 1,
-            g_blstrs: g_blstrs,
-            g_bls,
-            g_prime,
-            g_prime_alpha,
-            g_i: vec![],
-            h,
-            h_prime,
-            zk_matrix_srs: srs.clone(),
-            pc_gens: pc_gens.clone(),
-            bp_gens: bp_gens.clone(),
-        };
-
-        // ZKRP params for per-obligation A_i range proofs (max_m x max_n matrix)
-        let A_zkrp_pp = zkrp::ZKRPParams {
-            l: max_m * max_n,
-            m: max_m,
-            n: max_n,
-            g_blstrs: g_blstrs,
-            g_bls,
-            g_prime,
-            g_prime_alpha,
-            g_i: vec![],
-            h,
-            h_prime,
-            zk_matrix_srs: srs.clone(),
-            pc_gens: pc_gens.clone(),
-            bp_gens: bp_gens.clone(),
-        };
-
-        // ZKRP params for per-obligation -b_i range proofs (1 x max_n row)
-        let b_zkrp_pp = zkrp::ZKRPParams {
-            l: max_n,
-            m: 1,
-            n: max_n,
-            g_blstrs: g_blstrs,
-            g_bls,
-            g_prime,
-            g_prime_alpha,
-            g_i: vec![],
-            h,
-            h_prime,
-            zk_matrix_srs: srs.clone(),
-            pc_gens: pc_gens.clone(),
-            bp_gens: bp_gens.clone(),
-        };
-
-        let (pairs, committer) = zkp::ZKPParams::derive(&srs, &schedule, max_m, max_n);
-        let params = zkp::ZKPParams {
-            srs: srs.clone(),
-            schedule,
-            pairs,
-            committer,
-            pc_gens: pc_gens.clone(),
-            bp_gens: bp_gens.clone(),
-            big_M: 2u32.pow(31) - 1,
-            max_m,
-            max_n,
-            N,
-            aggregation_size,
-            lambda_mu_zkrp_pp,
-            A_zkrp_pp,
-            b_zkrp_pp,
-        };
-        let setup_time = setup_timer.elapsed().as_millis();
-        println!("Done SRS setup");
-        let total_setup_time = read_time + max_calc_time + matrix_prep_time + alpha_beta_calc_time + setup_time;
-
-        let input = zkp::ZKPInput {
-            A_i,
-            neg_b_i,
-            lambda_i,
-            neg_G_i,
-            neg_h_i,
-            mu_i,
-            e_i,
-            alpha_i,
-            beta_i,
-        };
-        let statement = zkp::ZKPStatement {
-            neg_G_i: input.neg_G_i.clone(),
-            neg_h_i: input.neg_h_i.clone(),
-        };
-
-        // Prover + Verifier (full ZKP)
-        let (proof, prover_total) = zkp::prove(&params, s_hat, &input);
-        let (ok, verifier_total) = proof.verify(&params, &statement);
-        println!("Loop {loop_idx} of {input_file}: ZKP verified: {ok}");
-
-        let total_time = total_setup_time + prover_total + verifier_total;
-        println!("");
-        zkp::print_timing("Total time:", total_time);
-        zkp::print_timing("--Total setup time:", total_setup_time);
-        zkp::print_timing("----Read time:", read_time);
-        zkp::print_timing("----Max m,n calc time:", max_calc_time);
-        zkp::print_timing("----Matrix prep time:", matrix_prep_time);
-        zkp::print_timing("----alpha, beta calc time:", alpha_beta_calc_time);
-        zkp::print_timing("----SRS setup time:", setup_time);
-        println!("");
-
-        writeln!(
-            log_file,
-            "Loop {loop_idx} - setup: {total_setup_time}ms, prove: {prover_total}ms, verify: {verifier_total}ms, total: {total_time}ms - {}",
-            if ok { "SUCCESS" } else { "VERIFICATION_FAILED" }
-        ).unwrap();
+            writeln!(
+                log_file,
+                "Loop {loop_idx} - setup: {total_setup_time}ms, prove: {prover_total}ms, verify: {verifier_total}ms, total: {total_time}ms - {} (benchmark file {global_idx} of {file_total})",
+                if ok { "SUCCESS" } else { "VERIFICATION_FAILED" }
+            ).unwrap();
         }
     }
+}
+
+// Allows user to enter a range as an argument when running this benchmark to only run a subset of input files.
+// Inclusive lower bound, exclusive upper bound, using Rust syntax
+// Example: `cargo bench --bench prove_and_verify_full -- 0..100` would filter to run only the first 100 files (0..=99)
+// Omitted lower end begins at 0; omitted upper end ends at final file
+// Omitting the argument outright runs on all files
+// The argument *only* applies when `ZKMC_BENCH_FILES` environment variable is set
+// Returns (selected files, 0-based offset into the full sorted list, full-list total) so each
+// result's stdout/log line can state which file of the benchmark set it was.
+fn resolve_files() -> (Vec<String>, usize, usize) {
+    let mut files: Vec<String> = match std::env::var("ZKMC_BENCH_FILES") {
+        Ok(list) => list
+            .split(',')
+            .map(|f| f.trim().to_string())
+            .filter(|f| !f.is_empty())
+            .collect(),
+        Err(_) => {
+            let defaults: Vec<String> = CANDIDATE_FILES.iter().map(|f| f.to_string()).collect();
+            let n = defaults.len();
+            return (defaults, 0, n);
+        }
+    };
+    files.sort();
+    let total = files.len();
+    let Some(spec) = std::env::args().skip(1).find(|a| a.contains("..")) else {
+        return (files, 0, total);
+    };
+    let bad = |what: &str| -> ! {
+        eprintln!("bad range selector '{spec}' ({what}): expected START..END, START.. or ..END");
+        std::process::exit(2)
+    };
+    let (s, e) = spec.split_once("..").unwrap_or_else(|| bad("missing '..'"));
+    let start = if s.is_empty() { 0 } else { s.parse::<usize>().unwrap_or_else(|_| bad("START not a number")) };
+    let end = if e.is_empty() { total } else { e.parse::<usize>().unwrap_or_else(|_| bad("END not a number")) };
+    if start > end { bad("START > END") }
+    let (start, end) = (start.min(total), end.min(total));
+    println!("range {start}..{end} of {total} files ({} selected)", end - start);
+    (files[start..end].to_vec(), start, total)
 }
 
 criterion_group!(benches, full_prove_and_verify);

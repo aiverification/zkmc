@@ -1,0 +1,92 @@
+// MCC instance CryptoMiner-PT-D03N100
+// 12 places, 12 transitions
+// places: p0=capacity_c0, p1=capacity_c1, p2=capacity_c2, p3=capacity_c3, p4=resource_c0, p5=resource_c1, p6=resource_c2, p7=resource_c3, p8=state_c0, p9=state_c1, p10=state_c2, p11=state_c3
+
+init: p0 == 100 && p1 == 0 && p2 == 0 && p3 == 0 && p4 == 0 && p5 == 0 && p6 == 0 && p7 == 0 && p8 == 1 && p9 == 0 && p10 == 0 && p11 == 0
+
+// Compute_0
+[] p1 >= 1 && p5 >= 1 && p9 >= 1 -> p1 = p1 - 1; p5 = p5 - 1; p6 = p6 + 1
+// Compute_1
+[] p2 >= 1 && p6 >= 1 && p10 >= 1 -> p2 = p2 - 1; p6 = p6 - 1; p7 = p7 + 1
+// Compute_2
+[] p3 >= 1 && p7 >= 1 && p11 >= 1 -> p3 = p3 - 1; p4 = p4 + 1; p7 = p7 - 1
+// ComputeFirst_3
+[] p0 >= 1 && p8 >= 1 -> p0 = p0 - 1; p5 = p5 + 1
+// Exit_4
+[] p11 >= 1 -> p11 = p11 - 1
+// Go_5
+[] p8 >= 1 -> p8 = p8 - 1; p9 = p9 + 1
+// Go_6
+[] p9 >= 1 -> p9 = p9 - 1; p10 = p10 + 1
+// Go_7
+[] p10 >= 1 -> p10 = p10 - 1; p11 = p11 + 1
+// Transfer_8
+[] p0 >= 1 -> p0 = p0 - 1; p1 = p1 + 1
+// Transfer_9
+[] p1 >= 1 -> p1 = p1 - 1; p2 = p2 + 1
+// Transfer_10
+[] p2 >= 1 -> p2 = p2 - 1; p3 = p3 + 1
+// Transfer_11
+[] p3 >= 1 -> p0 = p0 + 1; p3 = p3 - 1
+// deadlock: stutter (MCC semantics)
+[] p0 <= 0 && p1 <= 0 && p2 <= 0 && p3 <= 0 && p8 <= 0 && p9 <= 0 && p10 <= 0 && p11 <= 0 -> p0 = p0
+
+// CryptoMiner-PT-D03N100-LTLFireability-13
+// ap e0 := p10 >= 1
+// ap e1 := p11 >= 1
+// ap e2 := p3 >= 1
+// spec: "!((((e0)) U ((X((e1)) | X(X((e2)))))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q0): p10 >= 1
+trans(q0, q1): true
+trans(q1, q2): p11 >= 1
+trans(q1, q3): p11 < 1
+trans!(q2, q2): true
+trans(q3, q2): p3 >= 1
+
+rank(q0):
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 = 0 && p3 = 0 && (((p0 + p1) + p2) + p5) = 100 && ((p10 + p8) + p9) = 1 -> 0
+  [] p1 < 0 -> inf
+  [] p1 > 0 -> inf
+  [] p1 = 0 && p2 < 0 -> inf
+  [] p1 = 0 && p2 > 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 < 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 > 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 < 1 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 > 1 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 < 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 > 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 < 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 > 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 = 0 && p3 < 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 = 0 && p3 > 0 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 = 0 && p3 = 0 && (((p0 + p1) + p2) + p5) < 100 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 = 0 && p3 = 0 && (((p0 + p1) + p2) + p5) > 100 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 = 0 && p3 = 0 && (((p0 + p1) + p2) + p5) = 100 && ((p10 + p8) + p9) < 1 -> inf
+  [] p1 = 0 && p2 = 0 && p5 = 0 && p8 = 1 && p9 = 0 && p11 = 0 && p3 = 0 && (((p0 + p1) + p2) + p5) = 100 && ((p10 + p8) + p9) > 1 -> inf
+
+rank(q1):
+  [] p0 >= 99 && p10 = 0 && p2 = 0 && p11 = 0 && p3 = 0 && (((p0 + p1) + p2) + p5) = 100 -> 0
+  [] p0 < 99 -> inf
+  [] p0 >= 99 && p10 < 0 -> inf
+  [] p0 >= 99 && p10 > 0 -> inf
+  [] p0 >= 99 && p10 = 0 && p2 < 0 -> inf
+  [] p0 >= 99 && p10 = 0 && p2 > 0 -> inf
+  [] p0 >= 99 && p10 = 0 && p2 = 0 && p11 < 0 -> inf
+  [] p0 >= 99 && p10 = 0 && p2 = 0 && p11 > 0 -> inf
+  [] p0 >= 99 && p10 = 0 && p2 = 0 && p11 = 0 && p3 < 0 -> inf
+  [] p0 >= 99 && p10 = 0 && p2 = 0 && p11 = 0 && p3 > 0 -> inf
+  [] p0 >= 99 && p10 = 0 && p2 = 0 && p11 = 0 && p3 = 0 && (((p0 + p1) + p2) + p5) < 100 -> inf
+  [] p0 >= 99 && p10 = 0 && p2 = 0 && p11 = 0 && p3 = 0 && (((p0 + p1) + p2) + p5) > 100 -> inf
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] p11 = 0 && p3 = 0 -> 0
+  [] p11 < 0 -> inf
+  [] p11 > 0 -> inf
+  [] p11 = 0 && p3 < 0 -> inf
+  [] p11 = 0 && p3 > 0 -> inf

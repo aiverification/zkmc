@@ -93,12 +93,16 @@ fn prove_and_verify_benchmarks_full_cache(c: &mut Criterion) {
     let chunk_size = 200;
     let sample_size: usize = 1;
     let path_to_file_g = "input/".to_string();
-    let candidate_files = vec![
-        "test.json".to_string(),
-        "exb_i4a2.json".to_string(),
-        "rr_2.json".to_string(),
-        "dhcp_noOFF_7_2_7.json".to_string(),
-    ];
+    let mut candidate_files: Vec<String> = match std::env::var("ZKMC_BENCH_FILES") {
+        Ok(list) => list.split(',').map(|f| f.trim().to_string()).filter(|f| !f.is_empty()).collect(),
+        Err(_) => vec![
+            "test.json".to_string(),
+            "exb_i4a2.json".to_string(),
+            "rr_2.json".to_string(),
+            "dhcp_noOFF_7_2_7.json".to_string(),
+        ]
+    };
+    candidate_files.sort();
 
     for input_file in candidate_files {
         let log_string = "output/bench_".to_string() + &input_file.clone() + ".log";
@@ -773,7 +777,7 @@ pub fn construct_zkp_srs_cached(
     }
     let mut alpha_vec: Vec<bls::ZpElement> =
         std::iter::successors(Some(alpha), |&x| Some(x * alpha))
-            .take(2 * ((q.pow(2)) - 1))
+            .take((2 * (q.pow(2))) - 1)
             .collect();
     alpha_vec.insert(0, bls::ZpElement::from(1u64));
     let g_i_vec: Vec<bls::G1Element> = alpha_vec.par_iter().map(|&x| x * g_bls).collect();

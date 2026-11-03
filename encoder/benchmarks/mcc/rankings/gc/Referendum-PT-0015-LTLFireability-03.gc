@@ -1,0 +1,98 @@
+// MCC instance Referendum-PT-0015
+// 46 places, 31 transitions
+// places: p0=ready, p1=voting_1, p2=voting_2, p3=voting_3, p4=voting_4, p5=voting_5, p6=voting_6, p7=voting_7, p8=voting_8, p9=voting_9, p10=voting_10, p11=voting_11, p12=voting_12, p13=voting_13, p14=voting_14, p15=voting_15, p16=voted_yes_1, p17=voted_yes_2, p18=voted_yes_3, p19=voted_yes_4, p20=voted_yes_5, p21=voted_yes_6, p22=voted_yes_7, p23=voted_yes_8, p24=voted_yes_9, p25=voted_yes_10, p26=voted_yes_11, p27=voted_yes_12, p28=voted_yes_13, p29=voted_yes_14, p30=voted_yes_15, p31=voted_no_1, p32=voted_no_2, p33=voted_no_3, p34=voted_no_4, p35=voted_no_5, p36=voted_no_6, p37=voted_no_7, p38=voted_no_8, p39=voted_no_9, p40=voted_no_10, p41=voted_no_11, p42=voted_no_12, p43=voted_no_13, p44=voted_no_14, p45=voted_no_15
+
+init: p0 == 1 && p1 == 0 && p2 == 0 && p3 == 0 && p4 == 0 && p5 == 0 && p6 == 0 && p7 == 0 && p8 == 0 && p9 == 0 && p10 == 0 && p11 == 0 && p12 == 0 && p13 == 0 && p14 == 0 && p15 == 0 && p16 == 0 && p17 == 0 && p18 == 0 && p19 == 0 && p20 == 0 && p21 == 0 && p22 == 0 && p23 == 0 && p24 == 0 && p25 == 0 && p26 == 0 && p27 == 0 && p28 == 0 && p29 == 0 && p30 == 0 && p31 == 0 && p32 == 0 && p33 == 0 && p34 == 0 && p35 == 0 && p36 == 0 && p37 == 0 && p38 == 0 && p39 == 0 && p40 == 0 && p41 == 0 && p42 == 0 && p43 == 0 && p44 == 0 && p45 == 0
+
+// yes_0
+[] p1 >= 1 -> p1 = p1 - 1; p16 = p16 + 1
+// yes_1
+[] p2 >= 1 -> p2 = p2 - 1; p17 = p17 + 1
+// yes_2
+[] p3 >= 1 -> p3 = p3 - 1; p18 = p18 + 1
+// yes_3
+[] p4 >= 1 -> p4 = p4 - 1; p19 = p19 + 1
+// yes_4
+[] p5 >= 1 -> p5 = p5 - 1; p20 = p20 + 1
+// yes_5
+[] p6 >= 1 -> p6 = p6 - 1; p21 = p21 + 1
+// yes_6
+[] p7 >= 1 -> p7 = p7 - 1; p22 = p22 + 1
+// yes_7
+[] p8 >= 1 -> p8 = p8 - 1; p23 = p23 + 1
+// yes_8
+[] p9 >= 1 -> p9 = p9 - 1; p24 = p24 + 1
+// yes_9
+[] p10 >= 1 -> p10 = p10 - 1; p25 = p25 + 1
+// yes_10
+[] p11 >= 1 -> p11 = p11 - 1; p26 = p26 + 1
+// yes_11
+[] p12 >= 1 -> p12 = p12 - 1; p27 = p27 + 1
+// yes_12
+[] p13 >= 1 -> p13 = p13 - 1; p28 = p28 + 1
+// yes_13
+[] p14 >= 1 -> p14 = p14 - 1; p29 = p29 + 1
+// yes_14
+[] p15 >= 1 -> p15 = p15 - 1; p30 = p30 + 1
+// no_0
+[] p1 >= 1 -> p1 = p1 - 1; p31 = p31 + 1
+// no_1
+[] p2 >= 1 -> p2 = p2 - 1; p32 = p32 + 1
+// no_2
+[] p3 >= 1 -> p3 = p3 - 1; p33 = p33 + 1
+// no_3
+[] p4 >= 1 -> p4 = p4 - 1; p34 = p34 + 1
+// no_4
+[] p5 >= 1 -> p5 = p5 - 1; p35 = p35 + 1
+// no_5
+[] p6 >= 1 -> p6 = p6 - 1; p36 = p36 + 1
+// no_6
+[] p7 >= 1 -> p7 = p7 - 1; p37 = p37 + 1
+// no_7
+[] p8 >= 1 -> p8 = p8 - 1; p38 = p38 + 1
+// no_8
+[] p9 >= 1 -> p9 = p9 - 1; p39 = p39 + 1
+// no_9
+[] p10 >= 1 -> p10 = p10 - 1; p40 = p40 + 1
+// no_10
+[] p11 >= 1 -> p11 = p11 - 1; p41 = p41 + 1
+// no_11
+[] p12 >= 1 -> p12 = p12 - 1; p42 = p42 + 1
+// no_12
+[] p13 >= 1 -> p13 = p13 - 1; p43 = p43 + 1
+// no_13
+[] p14 >= 1 -> p14 = p14 - 1; p44 = p44 + 1
+// no_14
+[] p15 >= 1 -> p15 = p15 - 1; p45 = p45 + 1
+// start_0
+[] p0 >= 1 -> p0 = p0 - 1; p1 = p1 + 1; p2 = p2 + 1; p3 = p3 + 1; p4 = p4 + 1; p5 = p5 + 1; p6 = p6 + 1; p7 = p7 + 1; p8 = p8 + 1; p9 = p9 + 1; p10 = p10 + 1; p11 = p11 + 1; p12 = p12 + 1; p13 = p13 + 1; p14 = p14 + 1; p15 = p15 + 1
+// deadlock: stutter (MCC semantics)
+[] p0 <= 0 && p1 <= 0 && p2 <= 0 && p3 <= 0 && p4 <= 0 && p5 <= 0 && p6 <= 0 && p7 <= 0 && p8 <= 0 && p9 <= 0 && p10 <= 0 && p11 <= 0 && p12 <= 0 && p13 <= 0 && p14 <= 0 && p15 <= 0 -> p0 = p0
+
+// Referendum-PT-0015-LTLFireability-03
+// ap e0 := p1 >= 1
+// ap e1 := p2 >= 1
+// ap e2 := p3 >= 1
+// ap e3 := p4 >= 1
+// ap e4 := p5 >= 1
+// ap e5 := p6 >= 1
+// ap e6 := p7 >= 1
+// ap e7 := p8 >= 1
+// ap e8 := p9 >= 1
+// ap e9 := p10 >= 1
+// ap e10 := p11 >= 1
+// ap e11 := p12 >= 1
+// ap e12 := p13 >= 1
+// ap e13 := p14 >= 1
+// ap e14 := p15 >= 1
+// spec: "F(((e0 | e1 | e2 | e3 | e4 | e5 | e6 | e7 | e8 | e9 | e10 | e11 | e12 | e13 | e14) | G(((e0 | e1 | e2 | e3 | e4 | e5 | e6 | e7 | e8 | e9 | e10 | e11 | e12 | e13 | e14) & (e0 | e1 | e2 | e3 | e4 | e5 | e6 | e7 | e8 | e9 | e10 | e11 | e12 | e13 | e14)))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans!(q0, q0): p1 < 1 && p2 < 1 && p3 < 1 && p4 < 1 && p5 < 1 && p6 < 1 && p7 < 1 && p8 < 1 && p9 < 1 && p10 < 1 && p11 < 1 && p12 < 1 && p13 < 1 && p14 < 1 && p15 < 1
+
+rank(q0):
+  [] p9 <= 1 && (p0 + p1) = 1 -> (1 + (-1 * p9))
+  [] p9 > 1 -> inf
+  [] p9 <= 1 && (p0 + p1) < 1 -> inf
+  [] p9 <= 1 && (p0 + p1) > 1 -> inf

@@ -1,0 +1,43 @@
+// MCC instance Sudoku-PT-AN01
+// 4 places, 1 transitions
+// places: p0=Rows_0_0, p1=Board_0_0_0, p2=Cells_0_0, p3=Columns_0_0
+
+init: p0 == 1 && p1 == 0 && p2 == 1 && p3 == 1
+
+// select_0_0_0
+[] p2 >= 1 && p3 >= 1 && p0 >= 1 -> p0 = p0 - 1; p1 = p1 + 1; p2 = p2 - 1; p3 = p3 - 1
+// deadlock: stutter (MCC semantics)
+[] p3 <= 0 -> p0 = p0
+
+// Sudoku-PT-AN01-LTLCardinality-12
+// ap a0 := p2 <= p1
+// ap a1 := 2 <= p0
+// spec: "F(!(G((((a0 & a1)) U (G(!(a0)))))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q1
+trans!(q0, q0): p2 > p1
+trans(q1, q0): p2 > p1
+trans(q1, q1): p2 <= p1 && 2 <= p0
+
+rank(q1):
+  [] p3 = 1 && (p0 + p1) = 1 && ((-1 * p0) + p2) = 0 && ((-1 * p0) + p3) = 0 -> 0
+  [] p3 < 1 -> inf
+  [] p3 > 1 -> inf
+  [] p3 = 1 && (p0 + p1) < 1 -> inf
+  [] p3 = 1 && (p0 + p1) > 1 -> inf
+  [] p3 = 1 && (p0 + p1) = 1 && ((-1 * p0) + p2) < 0 -> inf
+  [] p3 = 1 && (p0 + p1) = 1 && ((-1 * p0) + p2) > 0 -> inf
+  [] p3 = 1 && (p0 + p1) = 1 && ((-1 * p0) + p2) = 0 && ((-1 * p0) + p3) < 0 -> inf
+  [] p3 = 1 && (p0 + p1) = 1 && ((-1 * p0) + p2) = 0 && ((-1 * p0) + p3) > 0 -> inf
+
+rank(q0):
+  [] p3 = 0 && (p0 + p1) = 1 && ((-1 * p0) + p2) = 0 && ((-1 * p0) + p3) = 0 -> 0
+  [] p3 < 0 -> inf
+  [] p3 > 0 -> inf
+  [] p3 = 0 && (p0 + p1) < 1 -> inf
+  [] p3 = 0 && (p0 + p1) > 1 -> inf
+  [] p3 = 0 && (p0 + p1) = 1 && ((-1 * p0) + p2) < 0 -> inf
+  [] p3 = 0 && (p0 + p1) = 1 && ((-1 * p0) + p2) > 0 -> inf
+  [] p3 = 0 && (p0 + p1) = 1 && ((-1 * p0) + p2) = 0 && ((-1 * p0) + p3) < 0 -> inf
+  [] p3 = 0 && (p0 + p1) = 1 && ((-1 * p0) + p2) = 0 && ((-1 * p0) + p3) > 0 -> inf

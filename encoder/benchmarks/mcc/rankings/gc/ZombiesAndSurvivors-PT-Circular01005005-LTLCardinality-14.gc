@@ -1,0 +1,105 @@
+// MCC instance ZombiesAndSurvivors-PT-Circular01005005
+// 8 places, 24 transitions
+// places: p0=pl_survivor_n1, p1=pl_undead_n1, p2=pl_survivor_n2, p3=pl_undead_n2, p4=pl_survivor_n3, p5=pl_undead_n3, p6=pl_survivor_n4, p7=pl_undead_n4
+
+init: p0 == 0 && p1 == 5 && p2 == 0 && p3 == 0 && p4 == 5 && p5 == 0 && p6 == 0 && p7 == 0
+
+// tr_kill_n1
+[] p0 >= 1 && p1 >= 1 -> p1 = p1 - 1
+// tr_bite_n1
+[] p0 >= 1 && p1 >= 1 -> p0 = p0 - 1; p1 = p1 + 1
+// tr_kill_n2
+[] p2 >= 1 && p3 >= 1 -> p3 = p3 - 1
+// tr_bite_n2
+[] p2 >= 1 && p3 >= 1 -> p2 = p2 - 1; p3 = p3 + 1
+// tr_kill_n3
+[] p4 >= 1 && p5 >= 1 -> p5 = p5 - 1
+// tr_bite_n3
+[] p4 >= 1 && p5 >= 1 -> p4 = p4 - 1; p5 = p5 + 1
+// tr_kill_n4
+[] p6 >= 1 && p7 >= 1 -> p7 = p7 - 1
+// tr_bite_n4
+[] p6 >= 1 && p7 >= 1 -> p6 = p6 - 1; p7 = p7 + 1
+// tr_undead_move_n1_n2
+[] p1 >= 1 -> p1 = p1 - 1; p3 = p3 + 1
+// tr_survivor_move_n1_n2
+[] p0 >= 1 -> p0 = p0 - 1; p2 = p2 + 1
+// tr_undead_move_n2_n1
+[] p3 >= 1 -> p1 = p1 + 1; p3 = p3 - 1
+// tr_survivor_move_n2_n1
+[] p2 >= 1 -> p0 = p0 + 1; p2 = p2 - 1
+// tr_undead_move_n2_n3
+[] p3 >= 1 -> p3 = p3 - 1; p5 = p5 + 1
+// tr_survivor_move_n2_n3
+[] p2 >= 1 -> p2 = p2 - 1; p4 = p4 + 1
+// tr_undead_move_n3_n2
+[] p5 >= 1 -> p3 = p3 + 1; p5 = p5 - 1
+// tr_survivor_move_n3_n2
+[] p4 >= 1 -> p2 = p2 + 1; p4 = p4 - 1
+// tr_undead_move_n3_n4
+[] p5 >= 1 -> p5 = p5 - 1; p7 = p7 + 1
+// tr_survivor_move_n3_n4
+[] p4 >= 1 -> p4 = p4 - 1; p6 = p6 + 1
+// tr_undead_move_n4_n3
+[] p7 >= 1 -> p5 = p5 + 1; p7 = p7 - 1
+// tr_survivor_move_n4_n3
+[] p6 >= 1 -> p4 = p4 + 1; p6 = p6 - 1
+// tr_undead_move_n4_n1
+[] p7 >= 1 -> p1 = p1 + 1; p7 = p7 - 1
+// tr_survivor_move_n4_n1
+[] p6 >= 1 -> p0 = p0 + 1; p6 = p6 - 1
+// tr_undead_move_n1_n4
+[] p1 >= 1 -> p1 = p1 - 1; p7 = p7 + 1
+// tr_survivor_move_n1_n4
+[] p0 >= 1 -> p0 = p0 - 1; p6 = p6 + 1
+
+// ZombiesAndSurvivors-PT-Circular01005005-LTLCardinality-14
+// ap a0 := 2 <= p4
+// ap a1 := p1 <= p6
+// spec: "X((X(!(a0)) | F(!((!(a0) | (a0 & a1))))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q2): true
+trans(q1, q3): p1 <= p6 && 2 <= p4
+trans(q2, q1): p1 <= p6
+trans(q2, q1): 2 > p4
+trans!(q3, q3): p1 <= p6
+trans!(q3, q3): 2 > p4
+
+rank(q0):
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 = 0 && p5 = 0 && ((p2 + p4) + p6) = 5 && ((p1 + p3) + p7) = 5 -> 0
+  [] p3 < 0 -> inf
+  [] p3 > 0 -> inf
+  [] p3 = 0 && p4 < 5 -> inf
+  [] p3 = 0 && p4 > 5 -> inf
+  [] p3 = 0 && p4 = 5 && p6 < 0 -> inf
+  [] p3 = 0 && p4 = 5 && p6 > 0 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 < 0 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 > 0 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 < 0 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 > 0 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 = 0 && p5 < 0 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 = 0 && p5 > 0 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 = 0 && p5 = 0 && ((p2 + p4) + p6) < 5 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 = 0 && p5 = 0 && ((p2 + p4) + p6) > 5 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 = 0 && p5 = 0 && ((p2 + p4) + p6) = 5 && ((p1 + p3) + p7) < 5 -> inf
+  [] p3 = 0 && p4 = 5 && p6 = 0 && p7 = 0 && p0 = 0 && p5 = 0 && ((p2 + p4) + p6) = 5 && ((p1 + p3) + p7) > 5 -> inf
+
+rank(q2):
+  [] p1 >= 4 && p2 >= 0 && p4 >= 4 && p0 = 0 && p5 = 0 && ((p2 + p4) + p6) = 5 -> 0
+  [] p1 < 4 -> inf
+  [] p1 >= 4 && p2 < 0 -> inf
+  [] p1 >= 4 && p2 >= 0 && p4 < 4 -> inf
+  [] p1 >= 4 && p2 >= 0 && p4 >= 4 && p0 < 0 -> inf
+  [] p1 >= 4 && p2 >= 0 && p4 >= 4 && p0 > 0 -> inf
+  [] p1 >= 4 && p2 >= 0 && p4 >= 4 && p0 = 0 && p5 < 0 -> inf
+  [] p1 >= 4 && p2 >= 0 && p4 >= 4 && p0 = 0 && p5 > 0 -> inf
+  [] p1 >= 4 && p2 >= 0 && p4 >= 4 && p0 = 0 && p5 = 0 && ((p2 + p4) + p6) < 5 -> inf
+  [] p1 >= 4 && p2 >= 0 && p4 >= 4 && p0 = 0 && p5 = 0 && ((p2 + p4) + p6) > 5 -> inf
+
+rank(q1):
+  [] true -> inf
+
+rank(q3):
+  [] true -> inf

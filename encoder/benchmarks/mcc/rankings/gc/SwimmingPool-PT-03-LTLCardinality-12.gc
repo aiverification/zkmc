@@ -1,0 +1,128 @@
+// MCC instance SwimmingPool-PT-03
+// 9 places, 7 transitions
+// places: p0=Entered, p1=WaitBag, p2=Undress, p3=InBath, p4=Dress, p5=Dressed, p6=Out, p7=Cabins, p8=Bags
+
+init: p0 == 0 && p1 == 0 && p2 == 0 && p3 == 0 && p4 == 0 && p5 == 0 && p6 == 60 && p7 == 30 && p8 == 45
+
+// GetK
+[] p7 >= 1 && p0 >= 1 -> p0 = p0 - 1; p1 = p1 + 1; p7 = p7 - 1
+// GetB
+[] p8 >= 1 && p1 >= 1 -> p1 = p1 - 1; p2 = p2 + 1; p8 = p8 - 1
+// RelK
+[] p2 >= 1 -> p2 = p2 - 1; p3 = p3 + 1; p7 = p7 + 1
+// GetK2
+[] p7 >= 1 && p3 >= 1 -> p3 = p3 - 1; p4 = p4 + 1; p7 = p7 - 1
+// RBag
+[] p4 >= 1 -> p4 = p4 - 1; p5 = p5 + 1; p8 = p8 + 1
+// RKey
+[] p5 >= 1 -> p5 = p5 - 1; p6 = p6 + 1; p7 = p7 + 1
+// Enter
+[] p6 >= 1 -> p0 = p0 + 1; p6 = p6 - 1
+
+// SwimmingPool-PT-03-LTLCardinality-12
+// ap a0 := p2 <= p6
+// ap a1 := p4 <= p7
+// ap a2 := p2 <= p3
+// ap a3 := 2 <= p2
+// spec: "(((G(a0)) U ((((a1 | a2)) U (a1)))) | X(X(G(a3))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q1): p4 > p7 && p2 > p3 && p2 > p6
+trans(q0, q2): p4 > p7 && p2 > p3 && p2 <= p6
+trans(q0, q3): p4 > p7 && p2 <= p6
+trans(q0, q4): p4 > p7 && p2 <= p3 && p2 > p6
+trans(q1, q5): true
+trans(q2, q5): p4 <= p7 && p2 > p6
+trans(q2, q5): p2 <= p3 && p2 > p6
+trans(q2, q7): p4 <= p7 && p2 <= p6
+trans(q2, q7): p2 <= p3 && p2 <= p6
+trans(q3, q5): p4 > p7 && p2 > p3 && p2 > p6
+trans(q3, q7): p4 > p7 && p2 > p3 && p2 <= p6
+trans(q3, q8): p4 > p7 && p2 <= p6
+trans(q3, q9): p4 > p7 && p2 <= p3 && p2 > p6
+trans(q4, q5): p4 > p7 && p2 > p3
+trans(q4, q9): p4 > p7 && p2 <= p3
+trans(q5, q5): 2 <= p2
+trans(q5, q6): 2 > p2
+trans!(q6, q6): true
+trans(q7, q5): p2 > p6 && 2 <= p2
+trans(q7, q6): p2 > p6 && 2 > p2
+trans(q7, q7): p2 <= p6 && 2 <= p2
+trans(q7, q10): p2 <= p6 && 2 > p2
+trans(q8, q5): p4 > p7 && p2 > p3 && p2 > p6 && 2 <= p2
+trans(q8, q6): p4 > p7 && p2 > p3 && p2 > p6 && 2 > p2
+trans(q8, q7): p4 > p7 && p2 > p3 && p2 <= p6 && 2 <= p2
+trans(q8, q8): p4 > p7 && p2 <= p6 && 2 <= p2
+trans(q8, q9): p4 > p7 && p2 <= p3 && p2 > p6 && 2 <= p2
+trans(q8, q10): p4 > p7 && p2 > p3 && p2 <= p6 && 2 > p2
+trans(q8, q11): p4 > p7 && p2 <= p3 && p2 > p6 && 2 > p2
+trans(q8, q12): p4 > p7 && p2 <= p6 && 2 > p2
+trans(q9, q5): p4 > p7 && p2 > p3 && 2 <= p2
+trans(q9, q6): p4 > p7 && p2 > p3 && 2 > p2
+trans(q9, q9): p4 > p7 && p2 <= p3 && 2 <= p2
+trans(q9, q11): p4 > p7 && p2 <= p3 && 2 > p2
+trans(q10, q6): p2 > p6
+trans(q10, q10): p2 <= p6
+trans!(q11, q6): p4 > p7 && p2 > p3
+trans!(q11, q11): p4 > p7 && p2 <= p3
+trans!(q12, q6): p4 > p7 && p2 > p3 && p2 > p6
+trans!(q12, q10): p4 > p7 && p2 > p3 && p2 <= p6
+trans!(q12, q11): p4 > p7 && p2 <= p3 && p2 > p6
+trans!(q12, q12): p4 > p7 && p2 <= p6
+
+rank(q0):
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 >= 0 && p5 >= 0 && p0 < 1 && p1 < 1 && p3 < 1 && p4 < 1 && p5 < 1 && p2 <= p3 -> 0
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) < 60 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) > 60 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) < 30 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) > 30 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) < 45 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) > 45 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 < 0 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 < 0 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 < 0 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 < 0 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 >= 0 && p5 < 0 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 >= 0 && p5 >= 0 && p0 >= 1 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 >= 0 && p5 >= 0 && p0 < 1 && p1 >= 1 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 >= 0 && p5 >= 0 && p0 < 1 && p1 < 1 && p3 >= 1 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 >= 0 && p5 >= 0 && p0 < 1 && p1 < 1 && p3 < 1 && p4 >= 1 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 >= 0 && p5 >= 0 && p0 < 1 && p1 < 1 && p3 < 1 && p4 < 1 && p5 >= 1 -> inf
+  [] ((((((p0 + p1) + p2) + p3) + p4) + p5) + p6) = 60 && ((((p1 + p2) + p4) + p5) + p7) = 30 && (((p2 + p3) + p4) + p8) = 45 && p0 >= 0 && p1 >= 0 && p2 >= 0 && p4 >= 0 && p5 >= 0 && p0 < 1 && p1 < 1 && p3 < 1 && p4 < 1 && p5 < 1 && p2 > p3 -> inf
+
+rank(q1):
+  [] true -> inf
+
+rank(q2):
+  [] true -> inf
+
+rank(q3):
+  [] true -> inf
+
+rank(q4):
+  [] true -> inf
+
+rank(q5):
+  [] true -> inf
+
+rank(q7):
+  [] true -> inf
+
+rank(q8):
+  [] true -> inf
+
+rank(q9):
+  [] true -> inf
+
+rank(q6):
+  [] true -> inf
+
+rank(q10):
+  [] true -> inf
+
+rank(q11):
+  [] true -> inf
+
+rank(q12):
+  [] true -> inf

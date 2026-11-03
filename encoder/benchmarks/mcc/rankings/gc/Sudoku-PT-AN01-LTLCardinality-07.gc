@@ -1,0 +1,46 @@
+// MCC instance Sudoku-PT-AN01
+// 4 places, 1 transitions
+// places: p0=Rows_0_0, p1=Board_0_0_0, p2=Cells_0_0, p3=Columns_0_0
+
+init: p0 == 1 && p1 == 0 && p2 == 1 && p3 == 1
+
+// select_0_0_0
+[] p2 >= 1 && p3 >= 1 && p0 >= 1 -> p0 = p0 - 1; p1 = p1 + 1; p2 = p2 - 1; p3 = p3 - 1
+// deadlock: stutter (MCC semantics)
+[] p3 <= 0 -> p0 = p0
+
+// Sudoku-PT-AN01-LTLCardinality-07
+// ap a0 := p3 <= p1
+// ap a1 := p1 <= p3
+// ap a2 := p0 <= p1
+// spec: "X(X((((F(a0)) U (a1)) | ((F(((a1) U (a2)))) U (a0)))))"
+
+// Büchi automaton of !(spec) from ltl2tgba (spot) 2.16, ltl2tgba -B
+automaton_init: q0
+trans(q0, q1): true
+trans(q1, q2): true
+trans!(q2, q2): p1 > p3 && p3 > p1
+trans!(q2, q3): p1 > p3 && p3 > p1 && p0 > p1
+trans!(q2, q4): p1 > p3 && p3 > p1
+trans!(q3, q3): p1 > p3 && p0 > p1
+trans!(q3, q5): p1 > p3 && p3 > p1 && p0 > p1
+trans!(q4, q4): p3 > p1
+trans!(q5, q5): p3 > p1 && p0 > p1
+
+rank(q0):
+  [] true -> 0
+
+rank(q1):
+  [] true -> 0
+
+rank(q2):
+  [] true -> 0
+
+rank(q3):
+  [] true -> inf
+
+rank(q4):
+  [] true -> inf
+
+rank(q5):
+  [] true -> inf
