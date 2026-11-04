@@ -1,0 +1,65 @@
+// TLA+ model CoffeeCan__CoffeeCan100Beans
+// 1 variables, 2 slots, 3 commands, 5150 initial states
+//   can: can_black can_white
+
+type can_black: 0..100
+type can_white: 0..100
+type act: 0..1
+
+init: can_black >= 0 && can_black <= 100 && can_white >= 0 && can_white <= 100 && can_black + can_white <= 100 && -can_black - can_white <= -1 && act == 0
+
+// PickSameColorWhite
+[] can_white >= 2 -> act = 1; can_black = can_black + 1; can_white = can_white - 2
+// PickSameColorBlack, PickDifferentColor
+[] can_black >= 2 -> act = 1; can_black = can_black - 1
+// PickSameColorBlack, PickDifferentColor
+[] can_black >= 1 && can_white >= 1 -> act = 1; can_black = can_black - 1
+// stuttering
+[] true -> act = 0
+
+// EventuallyTerminates: property EventuallyTerminates under 1 of the 1 fairness conditions
+// LTL: !(((G(F(p1)) | G(F(p2))) & G(p0)))
+//   p0 := (can_black + can_white <= 0) || (can_black + can_white - 2 >= 0)
+//   p1 := (can_black + can_white <= 1) || (can_black == 0 && can_white <= 1) || (can_black <= 1 && can_white == 0)
+//   p2 := (act == 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q0
+trans!(q0, q0): can_black + can_white <= 1 && can_black + can_white <= 0
+trans!(q0, q0): can_black == 0 && can_white <= 1 && can_black + can_white <= 0
+trans!(q0, q0): can_black <= 1 && can_white == 0 && can_black + can_white <= 0
+trans!(q0, q0): can_black + can_white - 2 >= 0 && can_black + can_white <= 1
+trans!(q0, q0): can_black == 0 && can_white <= 1 && can_black + can_white - 2 >= 0
+trans!(q0, q0): can_black <= 1 && can_white == 0 && can_black + can_white - 2 >= 0
+trans!(q0, q0): act == 1 && can_black + can_white <= 0
+trans!(q0, q0): act == 1 && can_black + can_white - 2 >= 0
+trans!(q0, q1): act == 0 && can_white >= 2 && can_black + can_white <= 0
+trans!(q0, q1): act == 0 && can_black >= 2 && can_black + can_white <= 0
+trans!(q0, q1): act == 0 && can_black >= 1 && can_white >= 1 && can_black + can_white <= 0
+trans!(q0, q1): act == 0 && can_white >= 2 && can_black + can_white - 2 >= 0
+trans!(q0, q1): act == 0 && can_black >= 2 && can_black + can_white - 2 >= 0
+trans!(q0, q1): act == 0 && can_black >= 1 && can_white >= 1 && can_black + can_white - 2 >= 0
+trans(q1, q0): can_black + can_white <= 1 && can_black + can_white <= 0
+trans(q1, q0): can_black == 0 && can_white <= 1 && can_black + can_white <= 0
+trans(q1, q0): can_black <= 1 && can_white == 0 && can_black + can_white <= 0
+trans(q1, q0): can_black + can_white - 2 >= 0 && can_black + can_white <= 1
+trans(q1, q0): can_black == 0 && can_white <= 1 && can_black + can_white - 2 >= 0
+trans(q1, q0): can_black <= 1 && can_white == 0 && can_black + can_white - 2 >= 0
+trans(q1, q0): act == 1 && can_black + can_white <= 0
+trans(q1, q0): act == 1 && can_black + can_white - 2 >= 0
+trans(q1, q1): act == 0 && can_white >= 2 && can_black + can_white <= 0
+trans(q1, q1): act == 0 && can_black >= 2 && can_black + can_white <= 0
+trans(q1, q1): act == 0 && can_black >= 1 && can_white >= 1 && can_black + can_white <= 0
+trans(q1, q1): act == 0 && can_white >= 2 && can_black + can_white - 2 >= 0
+trans(q1, q1): act == 0 && can_black >= 2 && can_black + can_white - 2 >= 0
+trans(q1, q1): act == 0 && can_black >= 1 && can_white >= 1 && can_black + can_white - 2 >= 0
+
+rank(q0):
+  [] act >= 0 && ((-1 * can_black) + (-1 * can_white)) <= -1 && (-1 * can_white) <= 0 -> (((0 + act) + can_black) + can_white)
+  [] act < 0 -> inf
+  [] act >= 0 && ((-1 * can_black) + (-1 * can_white)) > -1 -> inf
+  [] act >= 0 && ((-1 * can_black) + (-1 * can_white)) <= -1 && (-1 * can_white) > 0 -> inf
+
+rank(q1):
+  [] (((-1 * act) + (-1 * can_black)) + (-1 * can_white)) <= -2 && (-1 * can_white) <= 0 -> (((-1 + act) + can_black) + can_white)
+  [] (((-1 * act) + (-1 * can_black)) + (-1 * can_white)) > -2 -> inf
+  [] (((-1 * act) + (-1 * can_black)) + (-1 * can_white)) <= -2 && (-1 * can_white) > 0 -> inf

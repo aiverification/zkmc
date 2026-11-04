@@ -1,0 +1,73 @@
+// TLA+ model Prisoners_Single_Switch__Prisoner
+// 5 variables, 8 slots, 10 commands, 1 initial states
+//   count: count
+//   announced: announced
+//   signalled: signalled_Bob signalled_Eve
+//   light: light
+//   has_visited: has_visited_Alice has_visited_Bob has_visited_Eve
+//   light: 0="off", 1="on"
+//   has_visited_Alice: "Alice" in set
+//   has_visited_Bob: "Bob" in set
+//   has_visited_Eve: "Eve" in set
+
+type count: 1..3
+type announced: 0..1
+type signalled_Bob: 0..1
+type signalled_Eve: 0..1
+type light: 0..1
+type has_visited_Alice: 0..1
+type has_visited_Bob: 0..1
+type has_visited_Eve: 0..1
+
+init: count == 1 && announced == 0 && signalled_Bob == 0 && signalled_Eve == 0 && light == 0 && has_visited_Alice == 0 && has_visited_Bob == 0 && has_visited_Eve == 0
+
+// WardenAction("Alice")
+[] count >= 2 && light == 1 -> count = count + 1; announced = 1; light = 0; has_visited_Alice = 1
+// WardenAction("Alice")
+[] count == 1 && light == 1 -> count = count + 1; announced = 0; light = 0; has_visited_Alice = 1
+// WardenAction("Alice")
+[] count == 3 && light == 0 -> announced = 1; has_visited_Alice = 1
+// WardenAction("Alice")
+[] count <= 2 && light == 0 -> announced = 0; has_visited_Alice = 1
+// WardenAction("Bob")
+[] light == 0 && signalled_Bob == 0 -> signalled_Bob = signalled_Bob + 1; light = 1; has_visited_Bob = 1
+// WardenAction("Bob")
+[] light == 1 -> has_visited_Bob = 1
+// WardenAction("Bob")
+[] signalled_Bob == 1 -> has_visited_Bob = 1
+// WardenAction("Eve")
+[] light == 0 && signalled_Eve == 0 -> signalled_Eve = signalled_Eve + 1; light = 1; has_visited_Eve = 1
+// WardenAction("Eve")
+[] light == 1 -> has_visited_Eve = 1
+// WardenAction("Eve")
+[] signalled_Eve == 1 -> has_visited_Eve = 1
+// stuttering
+[] true -> count = count
+
+// VictoryOK: invariant VictoryOK
+// LTL: G(p0)
+//   p0 := (announced == 0) || (has_visited_Alice == 1 && has_visited_Bob == 1 && has_visited_Eve == 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q1
+trans!(q0, q0): true
+trans(q1, q0): announced == 1 && has_visited_Alice == 0
+trans(q1, q0): announced == 1 && has_visited_Bob == 0
+trans(q1, q0): announced == 1 && has_visited_Eve == 0
+trans(q1, q1): announced == 0
+trans(q1, q1): has_visited_Alice == 1 && has_visited_Bob == 1 && has_visited_Eve == 1
+
+rank(q1):
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) <= -1 && ((-1 * announced) + count) <= 2 && (announced + light) <= 1 && (announced + (-1 * signalled_Bob)) <= 0 && (announced + (-1 * signalled_Eve)) <= 0 && (count + (-2 * has_visited_Alice)) <= 1 && ((-1 * has_visited_Bob) + signalled_Bob) <= 0 && ((-1 * has_visited_Eve) + signalled_Eve) <= 0 -> 0
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) < -1 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) > -1 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) > -1 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) <= -1 && ((-1 * announced) + count) > 2 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) <= -1 && ((-1 * announced) + count) <= 2 && (announced + light) > 1 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) <= -1 && ((-1 * announced) + count) <= 2 && (announced + light) <= 1 && (announced + (-1 * signalled_Bob)) > 0 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) <= -1 && ((-1 * announced) + count) <= 2 && (announced + light) <= 1 && (announced + (-1 * signalled_Bob)) <= 0 && (announced + (-1 * signalled_Eve)) > 0 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) <= -1 && ((-1 * announced) + count) <= 2 && (announced + light) <= 1 && (announced + (-1 * signalled_Bob)) <= 0 && (announced + (-1 * signalled_Eve)) <= 0 && (count + (-2 * has_visited_Alice)) > 1 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) <= -1 && ((-1 * announced) + count) <= 2 && (announced + light) <= 1 && (announced + (-1 * signalled_Bob)) <= 0 && (announced + (-1 * signalled_Eve)) <= 0 && (count + (-2 * has_visited_Alice)) <= 1 && ((-1 * has_visited_Bob) + signalled_Bob) > 0 -> inf
+  [] ((((-1 * count) + (-1 * light)) + signalled_Bob) + signalled_Eve) = -1 && ((2 * announced) + (-1 * count)) <= -1 && ((-1 * announced) + count) <= 2 && (announced + light) <= 1 && (announced + (-1 * signalled_Bob)) <= 0 && (announced + (-1 * signalled_Eve)) <= 0 && (count + (-2 * has_visited_Alice)) <= 1 && ((-1 * has_visited_Bob) + signalled_Bob) <= 0 && ((-1 * has_visited_Eve) + signalled_Eve) > 0 -> inf
+
+rank(q0):
+  [] true -> inf

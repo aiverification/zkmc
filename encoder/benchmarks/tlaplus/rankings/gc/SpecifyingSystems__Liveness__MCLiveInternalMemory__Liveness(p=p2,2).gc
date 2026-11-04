@@ -1,0 +1,149 @@
+// TLA+ model SpecifyingSystems__Liveness__MCLiveInternalMemory
+// 4 variables, 9 slots, 44 commands, 8 initial states
+//   mem: mem_a1 mem_a2 mem_a3
+//   ctl: ctl_p1 ctl_p2
+//   buf: buf_p1 buf_p2
+//   memInt: memInt_1 memInt_2
+//   mem_a1: 0=v1, 1=v2
+//   mem_a2: 0=v1, 1=v2
+//   mem_a3: 0=v1, 1=v2
+//   ctl_p1: 0="rdy", 1="busy", 2="done"
+//   ctl_p2: 0="rdy", 1="busy", 2="done"
+//   buf_p1: 0=v1, 1=v2, 2=NoVal, 3=[adr |-> a1, op |-> "Rd"], 4=[adr |-> a2, op |-> "Rd"], 5=[adr |-> a3, op |-> "Rd"], 6=[adr |-> a1, op |-> "Wr", val |-> v1], 7=[adr |-> a2, op |-> "Wr", val |-> v1], 8=[adr |-> a3, op |-> "Wr", val |-> v1], 9=[adr |-> a1, op |-> "Wr", val |-> v2], 10=[adr |-> a2, op |-> "Wr", val |-> v2], 11=[adr |-> a3, op |-> "Wr", val |-> v2]
+//   buf_p2: 0=v1, 1=v2, 2=NoVal, 3=[adr |-> a1, op |-> "Rd"], 4=[adr |-> a2, op |-> "Rd"], 5=[adr |-> a3, op |-> "Rd"], 6=[adr |-> a1, op |-> "Wr", val |-> v1], 7=[adr |-> a2, op |-> "Wr", val |-> v1], 8=[adr |-> a3, op |-> "Wr", val |-> v1], 9=[adr |-> a1, op |-> "Wr", val |-> v2], 10=[adr |-> a2, op |-> "Wr", val |-> v2], 11=[adr |-> a3, op |-> "Wr", val |-> v2]
+//   memInt_1: 0=p1, 1=p2
+//   memInt_2: 0=v1, 1=v2, 2=NoVal, 3=[adr |-> a1, op |-> "Rd"], 4=[adr |-> a2, op |-> "Rd"], 5=[adr |-> a3, op |-> "Rd"], 6=[adr |-> a1, op |-> "Wr", val |-> v1], 7=[adr |-> a2, op |-> "Wr", val |-> v1], 8=[adr |-> a3, op |-> "Wr", val |-> v1], 9=[adr |-> a1, op |-> "Wr", val |-> v2], 10=[adr |-> a2, op |-> "Wr", val |-> v2], 11=[adr |-> a3, op |-> "Wr", val |-> v2]
+
+type mem_a1: 0..1
+type mem_a2: 0..1
+type mem_a3: 0..1
+type ctl_p1: 0..2
+type ctl_p2: 0..2
+type buf_p1: 0..11
+type buf_p2: 0..11
+type memInt_1: 0..1
+type memInt_2: 0..11
+type act: 0..2
+
+init: mem_a1 >= 0 && mem_a1 <= 1 && mem_a2 >= 0 && mem_a2 <= 1 && mem_a3 >= 0 && mem_a3 <= 1 && ctl_p1 == 0 && ctl_p2 == 0 && buf_p1 == 2 && buf_p2 == 2 && memInt_1 == 0 && memInt_2 == 2 && act == 0
+
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 3; memInt_1 = 0; memInt_2 = 3
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 4; memInt_1 = 0; memInt_2 = 4
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 5; memInt_1 = 0; memInt_2 = 5
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 6; memInt_1 = 0; memInt_2 = 6
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 9; memInt_1 = 0; memInt_2 = 9
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 7; memInt_1 = 0; memInt_2 = 7
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 10; memInt_1 = 0; memInt_2 = 10
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 8; memInt_1 = 0; memInt_2 = 8
+// INext
+[] ctl_p1 == 0 -> act = 0; ctl_p1 = 1; buf_p1 = 11; memInt_1 = 0; memInt_2 = 11
+// INext
+[] buf_p1 == 6 && ctl_p1 == 1 -> act = 0; mem_a1 = 0; ctl_p1 = 2; buf_p1 = 2
+// INext
+[] buf_p1 == 9 && ctl_p1 == 1 -> act = 0; mem_a1 = 1; ctl_p1 = 2; buf_p1 = 2
+// INext
+[] buf_p1 == 7 && ctl_p1 == 1 -> act = 0; mem_a2 = 0; ctl_p1 = 2; buf_p1 = 2
+// INext
+[] buf_p1 == 10 && ctl_p1 == 1 -> act = 0; mem_a2 = 1; ctl_p1 = 2; buf_p1 = 2
+// INext
+[] buf_p1 == 8 && ctl_p1 == 1 -> act = 0; mem_a3 = 0; ctl_p1 = 2; buf_p1 = 2
+// INext
+[] buf_p1 == 11 && ctl_p1 == 1 -> act = 0; mem_a3 = 1; ctl_p1 = 2; buf_p1 = 2
+// INext
+[] buf_p1 == 3 && ctl_p1 == 1 && mem_a1 == 0 -> act = 0; ctl_p1 = 2; buf_p1 = 0
+// INext
+[] buf_p1 == 4 && ctl_p1 == 1 && mem_a2 == 0 -> act = 0; ctl_p1 = 2; buf_p1 = 0
+// INext
+[] buf_p1 == 5 && ctl_p1 == 1 && mem_a3 == 0 -> act = 0; ctl_p1 = 2; buf_p1 = 0
+// INext
+[] buf_p1 == 3 && ctl_p1 == 1 && mem_a1 == 1 -> act = 0; ctl_p1 = 2; buf_p1 = 1
+// INext
+[] buf_p1 == 4 && ctl_p1 == 1 && mem_a2 == 1 -> act = 0; ctl_p1 = 2; buf_p1 = 1
+// INext
+[] buf_p1 == 5 && ctl_p1 == 1 && mem_a3 == 1 -> act = 0; ctl_p1 = 2; buf_p1 = 1
+// INext
+[] ctl_p1 == 2 -> act = 0; ctl_p1 = 0; memInt_1 = 0; memInt_2 = buf_p1
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 3; memInt_1 = 1; memInt_2 = 3
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 4; memInt_1 = 1; memInt_2 = 4
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 5; memInt_1 = 1; memInt_2 = 5
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 6; memInt_1 = 1; memInt_2 = 6
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 9; memInt_1 = 1; memInt_2 = 9
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 7; memInt_1 = 1; memInt_2 = 7
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 10; memInt_1 = 1; memInt_2 = 10
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 8; memInt_1 = 1; memInt_2 = 8
+// INext
+[] ctl_p2 == 0 -> act = 0; ctl_p2 = 1; buf_p2 = 11; memInt_1 = 1; memInt_2 = 11
+// INext
+[] buf_p2 == 6 && ctl_p2 == 1 -> act = 1; mem_a1 = 0; ctl_p2 = 2; buf_p2 = 2
+// INext
+[] buf_p2 == 9 && ctl_p2 == 1 -> act = 1; mem_a1 = 1; ctl_p2 = 2; buf_p2 = 2
+// INext
+[] buf_p2 == 7 && ctl_p2 == 1 -> act = 1; mem_a2 = 0; ctl_p2 = 2; buf_p2 = 2
+// INext
+[] buf_p2 == 10 && ctl_p2 == 1 -> act = 1; mem_a2 = 1; ctl_p2 = 2; buf_p2 = 2
+// INext
+[] buf_p2 == 8 && ctl_p2 == 1 -> act = 1; mem_a3 = 0; ctl_p2 = 2; buf_p2 = 2
+// INext
+[] buf_p2 == 11 && ctl_p2 == 1 -> act = 1; mem_a3 = 1; ctl_p2 = 2; buf_p2 = 2
+// INext
+[] buf_p2 == 3 && ctl_p2 == 1 && mem_a1 == 0 -> act = 1; ctl_p2 = 2; buf_p2 = 0
+// INext
+[] buf_p2 == 4 && ctl_p2 == 1 && mem_a2 == 0 -> act = 1; ctl_p2 = 2; buf_p2 = 0
+// INext
+[] buf_p2 == 5 && ctl_p2 == 1 && mem_a3 == 0 -> act = 1; ctl_p2 = 2; buf_p2 = 0
+// INext
+[] buf_p2 == 3 && ctl_p2 == 1 && mem_a1 == 1 -> act = 1; ctl_p2 = 2; buf_p2 = 1
+// INext
+[] buf_p2 == 4 && ctl_p2 == 1 && mem_a2 == 1 -> act = 1; ctl_p2 = 2; buf_p2 = 1
+// INext
+[] buf_p2 == 5 && ctl_p2 == 1 && mem_a3 == 1 -> act = 1; ctl_p2 = 2; buf_p2 = 1
+// INext
+[] ctl_p2 == 2 -> act = 2; ctl_p2 = 0; memInt_1 = 1; memInt_2 = buf_p2
+// stuttering
+[] true -> act = 0
+
+// Liveness[p=p2,2]: property Liveness[p=p2,2] under 1 of the 2 fairness conditions
+// LTL: !(((G(F(p0)) | G(F(p1))) & (F(G(p4)) & F(G(p3)))))
+//   p0 := (ctl_p2 == 0)
+//   p1 := (act >= 1)
+//   p2 := (act == 2)
+//   p3 := (act <= 1)
+//   p4 := (ctl_p2 == 2)
+//   p5 := (ctl_p2 <= 1)
+// Büchi automaton of the negated property (Spot ltl2tgba -B)
+automaton_init: q0
+trans(q0, q0): true
+trans(q0, q1): act == 1 && ctl_p2 == 2
+trans!(q1, q1): act == 1 && ctl_p2 == 2
+trans!(q1, q2): act == 0 && ctl_p2 == 2
+trans(q2, q1): act == 1 && ctl_p2 == 2
+trans(q2, q2): act == 0 && ctl_p2 == 2
+
+rank(q0):
+  [] true -> 1
+
+rank(q1):
+  [] ((-1 * act) + (-1 * ctl_p2)) = -2 -> 1
+  [] ((-1 * act) + (-1 * ctl_p2)) < -2 -> inf
+  [] ((-1 * act) + (-1 * ctl_p2)) > -2 -> inf
+
+rank(q2):
+  [] ((-1 * act) + (-1 * ctl_p2)) = -2 -> 0
+  [] ((-1 * act) + (-1 * ctl_p2)) < -2 -> inf
+  [] ((-1 * act) + (-1 * ctl_p2)) > -2 -> inf

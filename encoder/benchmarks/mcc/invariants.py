@@ -20,6 +20,7 @@ matrices as the Farkas-based verifier, so every invariant found here is also pro
 
 from __future__ import annotations
 
+import itertools
 import time
 from fractions import Fraction
 from typing import Dict, List, Optional
@@ -236,12 +237,93 @@ def candidate_atoms(result: ParseResult, variables: List[str], bound: Optional[i
 FALSE = Comparison(Num(0), Num(1), CompOp.GE)
 
 
-def sampled_candidates(result: ParseResult, budget: int, samples=None) -> Dict[str, List[Comparison]]:
+def _hull_2d(points) -> List[tuple]:
+    """Facets (a, b, c) meaning a*x + b*y <= c of the convex hull of 2D integer points."""
+    pts = sorted(set(points))
+    if len(pts) < 3:
+        return []
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lower, upper = [], []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    hull = lower[:-1] + upper[:-1]  # counter-clockwise
+    out = []
+    for u, v in zip(hull, hull[1:] + hull[:1]):
+        a, b = v[1] - u[1], u[0] - v[0]  # outward normal of the edge u -> v
+        g = int(np.gcd(abs(a), abs(b))) or 1
+        a, b = a // g, b // g
+        out.append((a, b, a * u[0] + b * u[1]))
+    return out
+
+
+def relational_candidates(variables: List[str], marks, max_pairs_vars: int = 40,
+                          groups: Optional[List[List[str]]] = None) -> List[Comparison]:
+    """Relational guesses from sampled markings: the equalities of their affine hull, and for
+    every pair of non-constant variables the facets of the convex hull of their joint values
+    (which includes the octagon bounds on x + y and x - y). `groups` (e.g. the slots of one
+    array-valued variable) add their sums as terms of such pairs."""
+    import random
+
+    X = np.array(sorted(marks), dtype=np.int64)
+    var = [i for i in range(len(variables)) if X[:, i].min() < X[:, i].max()]
+    out: List[Comparison] = []
+    if not var:
+        return out
+    # Affine hull, from a sample of the points (Houdini's sample filter drops wrong equalities).
+    pts = [list(map(int, x)) for x in X]
+    if len(pts) > 400:
+        pts = random.Random(0).sample(pts, 400)
+    rows = [[Fraction(p[i]) for p in pts] for i in var] + [[Fraction(1)] * len(pts)]
+    for y in _nullspace(rows):
+        den = 1
+        for f in y:
+            den = den * f.denominator // int(np.gcd(den, f.denominator))
+        yi = [int(f * den) for f in y]
+        if not any(yi[:-1]) or max(abs(c) for c in yi) > 1000:
+            continue
+        coeffs = {variables[var[j]]: yi[j] for j in range(len(var)) if yi[j]}
+        out.append(_linear_comparison(coeffs, -yi[-1], CompOp.EQ))
+    # Terms: single variables and group sums, as (coefficients by variable, column of values).
+    terms = [({variables[i]: 1}, X[:, i]) for i in var]
+    idx = {v: i for i, v in enumerate(variables)}
+    for g in groups or []:
+        cols = [idx[v] for v in g if v in idx]
+        if len(cols) >= 2:
+            col = X[:, cols].sum(axis=1)
+            if col.min() < col.max():
+                terms.append(({variables[i]: 1 for i in cols}, col))
+    if len(terms) <= max_pairs_vars + 2 * len(groups or []):
+        for (ta, xa), (tb, xb) in itertools.combinations(terms, 2):
+            for ca, cb, c in _hull_2d(zip(xa.tolist(), xb.tolist())):
+                if not (ca and cb):
+                    continue  # axis-parallel facets are bounds of a single term
+                coeffs: Dict[str, int] = {}
+                for v, k in ta.items():
+                    coeffs[v] = coeffs.get(v, 0) + ca * k
+                for v, k in tb.items():
+                    coeffs[v] = coeffs.get(v, 0) + cb * k
+                coeffs = {v: k for v, k in coeffs.items() if k}
+                if coeffs:
+                    out.append(_linear_comparison(coeffs, c, CompOp.LE))
+    return out
+
+
+def sampled_candidates(result: ParseResult, budget: int, samples=None,
+                       relational: bool = False, groups=None) -> Dict[str, List[Comparison]]:
     """Guesses from explicitly explored product states (up to `budget` of them).
 
     Per automaton state q: the bounds of every variable over the markings seen in q, and `false`
-    for automaton states never reached. These are only guesses: Houdini keeps the inductive ones,
-    so a truncated exploration (too-tight bounds, states wrongly guessed unreachable) stays sound."""
+    for automaton states never reached; with `relational`, also `relational_candidates`. These
+    are only guesses: Houdini keeps the inductive ones, so a truncated exploration (too-tight
+    bounds, states wrongly guessed unreachable) stays sound."""
     from explicit_check import sample_markings
 
     variables, per_state, fired, _complete = samples or sample_markings(result, budget)
@@ -263,6 +345,8 @@ def sampled_candidates(result: ParseResult, budget: int, samples=None) -> Dict[s
             else:
                 atoms.append(Comparison(Var(v), Num(lo), CompOp.GE))
                 atoms.append(Comparison(Var(v), Num(hi), CompOp.LE))
+        if relational:
+            atoms += relational_candidates(variables, marks, groups=groups)
         out[q] = atoms
     # Commands that never fired in the samples are guessed dead: invariants of the remaining
     # subnet become candidates everywhere (they may only hold because those commands stay dead).
@@ -298,12 +382,13 @@ class _Rows:
 def houdini(result: ParseResult, bound: Optional[int] = None, time_budget: float = 60.0,
             prune: bool = True,
             candidates: Optional[Dict[str, List[Comparison]]] = None,
-            sample_budget: int = 0) -> Dict[str, List[Comparison]]:
+            sample_budget: int = 0, relational: bool = False,
+            groups: Optional[List[List[str]]] = None) -> Dict[str, List[Comparison]]:
     """Largest inductive subset of the candidate atoms, per automaton state.
 
     `candidates` overrides the default guesses with a fixed pool per state; the result equals the
     pool exactly when the pool is already inductive. `sample_budget` > 0 adds guesses from that
-    many explicitly explored product states (see sampled_candidates)."""
+    many explicitly explored product states (see sampled_candidates, also for `relational`)."""
     deadline = time.monotonic() + time_budget
     variables = _collect_variables(result)
     n = len(variables)
@@ -316,7 +401,7 @@ def houdini(result: ParseResult, bound: Optional[int] = None, time_budget: float
         if sample_budget > 0:
             from explicit_check import sample_markings
             samples = sample_markings(result, sample_budget)
-            for q, atoms in sampled_candidates(result, sample_budget, samples).items():
+            for q, atoms in sampled_candidates(result, sample_budget, samples, relational, groups).items():
                 cands[q] = cands[q] + [_Rows(c, variables) for c in atoms]
             # Sampled product states are reachable: a guess false at one of them cannot be an
             # invariant of its automaton state, so drop it before any solver call (Daikon-style).
