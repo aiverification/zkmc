@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from zkterm_tool.farkas import FarkasDual, build_farkas_dual
-from zkterm_tool.z3_solver import solve_farkas_dual
+from zkterm_tool.z3_solver import BIG_M, solve_farkas_dual
 
 
 def test_basic_sat_case():
@@ -151,9 +151,67 @@ def test_bounded_by_max_value():
     assert sat is True
     assert witness is not None
 
-    # All multipliers should be < max_value
+    # All multipliers should be ≤ max_value
     for key, value in witness.items():
-        assert value < max_val, f"{key} = {value} >= {max_val}"
+        assert value <= max_val, f"{key} = {value} > {max_val}"
+
+
+def test_multipliers_bounded_by_big_m():
+    """
+    Test that the default bound is the provers' range-check bound:
+    2^31 · x ≤ -1 ⟹ x < 0
+
+    Valid, but every certificate has μ_s = 2^31 · λ_s > BIG_M.
+    """
+    A_s = np.array([[BIG_M + 1]], dtype=np.int64)
+    b_s = np.array([-1], dtype=np.int64)
+    C_p = np.array([[-1]], dtype=np.int64)
+    d_p = np.array([0], dtype=np.int64)
+
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
+
+    assert solve_farkas_dual(dual) == (False, None)
+    sat, witness = solve_farkas_dual(dual, max_value=2**32)
+    assert sat is True
+    assert witness["mu_s_0"] == (BIG_M + 1) * witness["lambda_s_0"]
+
+
+def test_constant_term_bounded_by_big_m():
+    """
+    Test that v = -(b_s^T λ_s + h_p^T μ_s) - 1 is bounded by BIG_M:
+    x ≤ -2^32 ⟹ x < 0
+
+    Valid, but every certificate has v = 2^32 · λ_s - 1 > BIG_M.
+    """
+    A_s = np.array([[1]], dtype=np.int64)
+    b_s = np.array([-(2**32)], dtype=np.int64)
+    C_p = np.array([[-1]], dtype=np.int64)
+    d_p = np.array([0], dtype=np.int64)
+
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
+
+    assert solve_farkas_dual(dual) == (False, None)
+    sat, witness = solve_farkas_dual(dual, max_value=2**33)
+    assert sat is True
+    assert 2**32 * witness["lambda_s_0"] - 1 <= 2**33
+
+
+def test_zero_constant_terms_unsat():
+    """
+    Test UNSAT case with all-zero constant terms: x ≤ 0 ⟹ x > 0
+
+    x = 0 is a counterexample; the zero witness must not be accepted.
+    """
+    A_s = np.array([[1]], dtype=np.int64)
+    b_s = np.array([0], dtype=np.int64)
+    C_p = np.array([[1]], dtype=np.int64)
+    d_p = np.array([0], dtype=np.int64)
+
+    dual = build_farkas_dual(A_s, b_s, C_p, d_p)
+    sat, witness = solve_farkas_dual(dual)
+
+    assert sat is False
+    assert witness is None
 
 
 def test_ranking_well_definedness():

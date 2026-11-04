@@ -159,12 +159,34 @@ def _jobs_arg(s: str) -> str | int:
 # --- worker ------------------------------------------------------------------
 
 
+def range_violation(obl: dict, big_m: int) -> str | None:
+    """Name of the first quantity the folding prover cannot range-check, or None.
+
+    The prover shows A_s, b_s ∈ [-M, M] and λ_s, μ_s, v = -b_s^T λ_s - h_p^T μ_s - 1 ∈ [0, M];
+    anything outside fails verification. The solver bounds λ_s, μ_s and v, but A_s and b_s are
+    instance data (e.g. GPPP initial markings of 4·10^9).
+    """
+    m, w, cv = obl["matrices"], obl["witness"], obl["computed_values"]
+    if any(abs(x) > big_m for row in m["A_s"] for x in row):
+        return "A_s"
+    if any(abs(x) > big_m for row in m["b_s"] for x in row):
+        return "b_s"
+    if any(not 0 <= x <= big_m for row in w["lambda_s"] for x in row):
+        return "lambda_s"
+    if any(not 0 <= x <= big_m for row in w["mu_s"] for x in row):
+        return "mu_s"
+    if not 0 <= cv["neg_b_s_T_lambda_s"] + cv["neg_h_p_T_mu_s"] - 1 <= big_m:
+        return "v"
+    return None
+
+
 def _export(path: str, out_dir: str, mem_limit_mb: int, pretty: bool, q: mp.Queue) -> None:
     """Parse + verify + dump. RLIMIT_AS is set per child for OOM isolation."""
     import resource
     resource.setrlimit(resource.RLIMIT_AS, (mem_limit_mb << 20, resource.RLIM_INFINITY))
     from zkterm_tool.farkas_cli import extract_farkas_obligations_from_result
     from zkterm_tool.parser import parse_with_constants
+    from zkterm_tool.z3_solver import BIG_M
 
     row: dict = {"file": path, "status": "error", "obligations": "", "seconds": "", "bytes": ""}
     t0 = time.time()
@@ -180,6 +202,9 @@ def _export(path: str, out_dir: str, mem_limit_mb: int, pretty: bool, q: mp.Queu
             row["status"] = "no-obligations"
         elif bad:
             row["status"] = f"bad-obligation: {bad[:3]}"
+        elif out_of_range := [(i, what) for i, o in enumerate(obls)
+                              if (what := range_violation(o, BIG_M))]:
+            row["status"] = f"out-of-range: {out_of_range[:3]}"
         else:
             out = Path(out_dir) / (Path(path).stem + ".json")
             payload = {

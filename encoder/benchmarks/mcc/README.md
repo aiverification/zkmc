@@ -83,6 +83,13 @@ The folding prover (`zkmc-symbolic/folding`) consumes JSON of shape `FullZkpData
 for the bench: one worker per file (same `Process`/`Queue` pattern as `reverify.py`), per-worker
 `RLIMIT_AS` for OOM isolation, timeout-kill, JSONL journal + resume.
 
+A JSON is only written if the prover can range-check every obligation against
+`BIG_M = 2^31 - 1` (`big_M` in the prover): `A_s`, `b_s` in `[-M, M]` and `lambda_s`, `mu_s`,
+`v = -b_s^T lambda_s - h_p^T mu_s - 1` in `[0, M]`. The Farkas solver bounds the witness accordingly,
+but `A_s`/`b_s` are instance data, so files exceeding them get status `out-of-range: [(obligation,
+quantity), ...]` instead. This applies to the 7 `GPPP-PT-C0010N1000000000` rankings, whose
+initial markings reach 4·10^9.
+
 ```bash
 uv run python benchmarks/mcc/export_farkas.py                           # full export (1907 files)
 uv run python benchmarks/mcc/export_farkas.py --range 0..100            # first 100 files
